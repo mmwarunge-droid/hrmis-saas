@@ -1,0 +1,55 @@
+name: Backend CI
+
+on:
+  push:
+    paths:
+      - 'backend/**'
+      - '.github/workflows/backend-ci.yml'
+  pull_request:
+    paths:
+      - 'backend/**'
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_USER: postgres
+          POSTGRES_DB: hrmis_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    defaults:
+      run:
+        working-directory: backend
+    env:
+      SECRET_KEY: test-secret-key-with-at-least-32-characters
+      JWT_SECRET_KEY: different-test-jwt-secret-with-at-least-32-characters
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/hrmis_test
+      CORS_ORIGINS: http://localhost:5173
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+      - run: python -m pip install --upgrade pip
+      - run: pip install -r requirements.txt
+      - run: ruff check .
+      - name: Validate PostgreSQL migrations
+        env:
+          APP_ENV: development
+          FLASK_ENV: development
+        run: flask --app run.py db upgrade
+      - name: Run application tests
+        env:
+          APP_ENV: testing
+          FLASK_ENV: testing
+        run: pytest --cov=app

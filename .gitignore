@@ -1,0 +1,32 @@
+# Environment variables and secrets
+backend/.env
+frontend/.env
+.env
+.env.*
+
+# Preserve environment templates
+!backend/.env.example
+!frontend/.env.example
+!.env.example
+
+# Python environments and generated files
+backend/.venv/
+**/.venv/
+**/__pycache__/
+**/*.py[cod]
+**/.pytest_cache/
+**/.coverage
+**/htmlcov/
+
+# Frontend generated files
+frontend/node_modules/
+frontend/dist/
+
+# Runtime-generated files
+backend/uploads/
+backend/instance/
+
+# Operating-system metadata
+*:Zone.Identifier
+.DS_Store
+Thumbs.db
