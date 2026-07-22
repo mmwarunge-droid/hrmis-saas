@@ -1,5 +1,13 @@
 from flask import Blueprint, request
-from flask_jwt_extended import current_user, create_access_token, get_jwt_identity, jwt_required
+from flask_jwt_extended import (
+    current_user,
+    create_access_token,
+    get_jwt_identity,
+    jwt_required,
+    set_access_cookies,
+    set_refresh_cookies,
+    unset_jwt_cookies,
+)
 from marshmallow import ValidationError
 
 from app.extensions import db, limiter
@@ -51,7 +59,11 @@ def login():
         return fail('VALIDATION_ERROR', err.messages, 422)
     except ValueError as exc:
         return fail('INVALID_CREDENTIALS', str(exc), 401)
-    return success({'access_token': access_token, 'refresh_token': refresh_token, 'user': user.to_dict()}, 'Login successful')
+
+    response, status = success({'user': user.to_dict()}, 'Login successful')
+    set_access_cookies(response, access_token)
+    set_refresh_cookies(response, refresh_token)
+    return response, status
 
 
 @auth_bp.post('/refresh')
@@ -60,7 +72,11 @@ def refresh():
     user = db.session.get(User, get_jwt_identity())
     if not user or not user.is_active or user.deleted_at is not None:
         return fail('INVALID_TOKEN', 'User no longer exists or is inactive', 401)
-    return success({'access_token': create_access_token(identity=str(user.id), additional_claims=claims_for(user))})
+
+    access_token = create_access_token(identity=str(user.id), additional_claims=claims_for(user))
+    response, status = success({}, 'Access session refreshed')
+    set_access_cookies(response, access_token)
+    return response, status
 
 
 @auth_bp.get('/me')
@@ -72,5 +88,6 @@ def me():
 @auth_bp.post('/logout')
 @jwt_required()
 def logout():
-    # Token revocation is introduced in the authentication-hardening phase.
-    return success({}, 'Logged out')
+    response, status = success({}, 'Logged out')
+    unset_jwt_cookies(response)
+    return response, status

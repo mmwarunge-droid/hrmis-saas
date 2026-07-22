@@ -53,10 +53,11 @@ def _initialize_extensions(app: Flask) -> None:
         resources={
             f'{api_prefix}/*': {
                 'origins': app.config['CORS_ORIGINS'],
-                'allow_headers': ['Authorization', 'Content-Type', 'X-Request-ID'],
+                'allow_headers': ['Content-Type', 'X-CSRF-TOKEN', 'X-Request-ID'],
                 'expose_headers': ['X-Request-ID'],
                 'methods': ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
                 'max_age': 600,
+                'supports_credentials': True,
             }
         },
     )

@@ -19,6 +19,8 @@ UPLOAD_FOLDER=/var/data/uploads
 MAX_CONTENT_LENGTH=10485760
 TOKEN_EXPIRY_MINUTES=60
 REFRESH_TOKEN_EXPIRY_DAYS=14
+JWT_COOKIE_SAMESITE=Lax
+JWT_COOKIE_DOMAIN=.example.com
 RATELIMIT_DEFAULT=200 per day;50 per hour
 RATELIMIT_STORAGE_URI=memory://
 ```
@@ -72,7 +74,7 @@ The committed `frontend/vercel.json` configures the SPA rewrite, immutable asset
 3. Verify `/health` and `/ready`.
 4. Provision the first `SUPER_ADMIN` with the CLI command.
 5. Remove all bootstrap environment variables.
-6. Configure exact backend CORS origins.
+6. Configure exact backend CORS origins and cookie credentials.
 7. Configure Vercel Production, Preview, and Staging variables.
 8. Deploy the frontend from a protected `main` branch.
 9. Run login, tenant isolation, employee CRUD, document, leave, onboarding, and audit-log smoke tests.
@@ -80,7 +82,6 @@ The committed `frontend/vercel.json` configures the SPA rewrite, immutable asset
 ## Remaining launch blockers
 
 - Redis-backed rate limiting and JWT revocation.
-- HttpOnly cookie authentication and CSRF protection.
 - Private object storage and secure document delivery.
 - PostgreSQL integration tests rather than SQLite-only application tests.
 - Monitoring, error tracking, backups, restore drills, and security alerting.

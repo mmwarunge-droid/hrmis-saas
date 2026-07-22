@@ -49,6 +49,8 @@ def admin_user(app, tenant):
 
 @pytest.fixture()
 def auth_headers(client, admin_user):
-    res = client.post('/api/auth/login', json={'email': 'admin@acme.test', 'password': 'StrongPass123!'})
-    token = res.get_json()['data']['access_token']
-    return {'Authorization': f'Bearer {token}'}
+    response = client.post('/api/auth/login', json={'email': 'admin@acme.test', 'password': 'StrongPass123!'})
+    assert response.status_code == 200
+    csrf_cookie = client.get_cookie('csrf_access_token')
+    assert csrf_cookie is not None
+    return {'X-CSRF-TOKEN': csrf_cookie.value}

@@ -29,6 +29,18 @@ class BaseConfig:
     JWT_SECRET_KEY = os.getenv('JWT_SECRET_KEY', SECRET_KEY)
     JWT_ACCESS_TOKEN_EXPIRES = timedelta(minutes=int(os.getenv('TOKEN_EXPIRY_MINUTES', '60')))
     JWT_REFRESH_TOKEN_EXPIRES = timedelta(days=int(os.getenv('REFRESH_TOKEN_EXPIRY_DAYS', '14')))
+    JWT_TOKEN_LOCATION = ['cookies']
+    JWT_COOKIE_CSRF_PROTECT = True
+    JWT_COOKIE_SECURE = False
+    JWT_COOKIE_SAMESITE = 'Lax'
+    JWT_COOKIE_DOMAIN = os.getenv('JWT_COOKIE_DOMAIN') or None
+    JWT_ACCESS_COOKIE_PATH = f"{API_PREFIX.rstrip('/')}/"
+    JWT_REFRESH_COOKIE_PATH = f"{API_PREFIX.rstrip('/')}/auth/refresh"
+    # The SPA reads only the random CSRF values; the JWT cookies remain HttpOnly.
+    JWT_ACCESS_CSRF_COOKIE_PATH = '/'
+    JWT_REFRESH_CSRF_COOKIE_PATH = '/'
+    JWT_ACCESS_CSRF_HEADER_NAME = 'X-CSRF-TOKEN'
+    JWT_REFRESH_CSRF_HEADER_NAME = 'X-CSRF-TOKEN'
     SQLALCHEMY_DATABASE_URI = _database_url(f"sqlite:///{BASE_DIR / 'dev.db'}")
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     CORS_ORIGINS = _csv(os.getenv('CORS_ORIGINS') or os.getenv('FRONTEND_URL'))
@@ -51,7 +63,6 @@ class TestingConfig(BaseConfig):
     ENVIRONMENT = 'testing'
     TESTING = True
     SQLALCHEMY_DATABASE_URI = 'sqlite:///:memory:'
-    WTF_CSRF_ENABLED = False
     JWT_ACCESS_TOKEN_EXPIRES = timedelta(minutes=5)
 
 
@@ -59,6 +70,8 @@ class ProductionConfig(BaseConfig):
     ENVIRONMENT = 'production'
     DEBUG = False
     FLASK_ENV = 'production'
+    JWT_COOKIE_SECURE = True
+    JWT_COOKIE_SAMESITE = os.getenv('JWT_COOKIE_SAMESITE', 'Lax')
 
     @classmethod
     def validate(cls):
@@ -72,6 +85,8 @@ class ProductionConfig(BaseConfig):
             raise RuntimeError('SECRET_KEY and JWT_SECRET_KEY must each contain at least 32 characters')
         if secret_key == jwt_secret:
             raise RuntimeError('SECRET_KEY and JWT_SECRET_KEY must be different values')
+        if cls.JWT_COOKIE_SAMESITE.lower() == 'none' and not cls.JWT_COOKIE_SECURE:
+            raise RuntimeError('JWT_COOKIE_SECURE must be enabled when JWT_COOKIE_SAMESITE=None')
 
 
 config_by_name = {

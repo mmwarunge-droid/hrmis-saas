@@ -28,8 +28,8 @@ Validation status:
 
 ## Step 2 — Authentication and session security
 
-- Replace browser `localStorage` tokens with Secure, HttpOnly cookies.
-- Add CSRF defenses.
+- Completed in Step 2A: replaced browser `localStorage` tokens with Secure, HttpOnly cookies.
+- Completed in Step 2A: added double-submit CSRF defenses for mutating requests.
 - Add refresh-token rotation and Redis-backed JTI revocation.
 - Add password reset, email verification, session listing, forced logout, and account lockout.
 - Add MFA for privileged roles.
