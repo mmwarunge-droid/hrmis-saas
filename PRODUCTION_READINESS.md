@@ -34,7 +34,8 @@ Validation status:
 - Completed in Step 2B: session listing, individual forced logout, and logout-all controls.
 - Completed in Step 2C: account lockout with configurable failure windows and recovery.
 - Completed in Step 2C: privacy-safe authentication audit events and suspicious-login flags.
-- Add password reset and email verification.
+- Completed in Step 2D: single-use password reset and email verification tokens with expiring database records.
+- Completed in Step 2D: enumeration-resistant recovery requests, SMTP delivery abstraction, audit events, and forced session revocation after password changes.
 - Add MFA for privileged roles.
 
 ## Step 3 — Document security and storage

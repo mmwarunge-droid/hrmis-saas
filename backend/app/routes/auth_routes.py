@@ -10,8 +10,24 @@ from flask_jwt_extended import (
 from marshmallow import ValidationError
 
 from app.extensions import db, limiter
-from app.models import AuthSession
-from app.schemas.auth_schema import LoginSchema, RegisterSchema
+from app.models import AuthSession, User
+from app.schemas.auth_schema import (
+    ForgotPasswordSchema,
+    LoginSchema,
+    RegisterSchema,
+    ResetPasswordSchema,
+    VerifyEmailSchema,
+)
+from app.services.account_recovery_service import (
+    AccountTokenError,
+    PasswordReuseError,
+    issue_account_token,
+    reset_password_with_token,
+    send_email_verification_email,
+    send_password_reset_email,
+    token_fingerprint,
+    verify_email_with_token,
+)
 from app.services.audit_service import identifier_fingerprint, log_event
 from app.services.auth_service import AuthenticationError, authenticate, register_user
 from app.services.rbac_service import validate_role_assignment
@@ -26,6 +42,7 @@ from app.services.session_service import (
     revoke_session_from_token,
     rotate_auth_session,
 )
+from app.utils.email import EmailDeliveryError
 from app.utils.request_security import request_ip_address
 from app.utils.response import fail, success
 
@@ -59,6 +76,164 @@ def register():
         db.session.rollback()
         return fail('REGISTRATION_FAILED', str(exc), 400)
     return success(user.to_dict(), 'User registered', 201)
+
+
+@auth_bp.post('/password/forgot')
+@limiter.limit('5 per hour;2 per minute')
+def forgot_password():
+    raw_payload = request.get_json(silent=True) or {}
+    try:
+        payload = ForgotPasswordSchema().load(raw_payload)
+    except ValidationError as err:
+        return fail('VALIDATION_ERROR', err.messages, 422)
+
+    normalized_email = payload['email'].strip().lower()
+    fingerprint = identifier_fingerprint(normalized_email)
+    user = User.query.filter(
+        User.email == normalized_email,
+        User.is_active.is_(True),
+        User.deleted_at.is_(None),
+    ).first()
+
+    if not user:
+        log_event(
+            'auth.password_reset_requested',
+            'Authentication',
+            actor=None,
+            metadata={'identifier_fingerprint': fingerprint},
+        )
+        db.session.commit()
+        return success({}, 'If the account exists, password reset instructions will be sent', 202)
+
+    user_id = user.id
+    tenant_id = user.tenant_id
+    try:
+        account_token, raw_token = issue_account_token(user, 'password_reset')
+        send_password_reset_email(user, raw_token)
+        log_event(
+            'auth.password_reset_requested',
+            'AccountToken',
+            entity_id=account_token.id,
+            tenant_id=tenant_id,
+            actor=None,
+            metadata={'identifier_fingerprint': fingerprint},
+        )
+        db.session.commit()
+    except EmailDeliveryError:
+        db.session.rollback()
+        log_event(
+            'auth.password_reset_delivery_failed',
+            'User',
+            entity_id=user_id,
+            tenant_id=tenant_id,
+            actor=None,
+            metadata={'identifier_fingerprint': fingerprint},
+        )
+        db.session.commit()
+
+    return success({}, 'If the account exists, password reset instructions will be sent', 202)
+
+
+@auth_bp.post('/password/reset')
+@limiter.limit('10 per hour')
+def reset_password():
+    try:
+        payload = ResetPasswordSchema().load(request.get_json(silent=True) or {})
+    except ValidationError as err:
+        return fail('VALIDATION_ERROR', err.messages, 422)
+
+    try:
+        user, revoked_count = reset_password_with_token(payload['token'], payload['password'])
+    except PasswordReuseError as exc:
+        db.session.rollback()
+        return fail('PASSWORD_REUSE_NOT_ALLOWED', str(exc), 422)
+    except AccountTokenError:
+        db.session.rollback()
+        log_event(
+            'auth.password_reset_rejected',
+            'AccountToken',
+            actor=None,
+            metadata={'token_fingerprint': token_fingerprint(payload.get('token'))},
+        )
+        db.session.commit()
+        return fail('INVALID_OR_EXPIRED_TOKEN', AccountTokenError.public_message, 400)
+
+    log_event(
+        'auth.password_reset_completed',
+        'User',
+        entity_id=user.id,
+        tenant_id=user.tenant_id,
+        actor=None,
+        metadata={'revoked_sessions': revoked_count},
+    )
+    db.session.commit()
+
+    response, status = success({}, 'Password reset completed')
+    unset_jwt_cookies(response)
+    return response, status
+
+
+@auth_bp.post('/email-verification/request')
+@jwt_required()
+@limiter.limit('3 per hour')
+def request_email_verification():
+    if current_user.email_verified_at is not None:
+        return success({}, 'Email address is already verified')
+
+    try:
+        account_token, raw_token = issue_account_token(current_user, 'email_verification')
+        send_email_verification_email(current_user, raw_token)
+        log_event(
+            'auth.email_verification_requested',
+            'AccountToken',
+            entity_id=account_token.id,
+            actor=current_user,
+        )
+        db.session.commit()
+    except EmailDeliveryError:
+        db.session.rollback()
+        log_event(
+            'auth.email_verification_delivery_failed',
+            'User',
+            entity_id=current_user.id,
+            actor=current_user,
+        )
+        db.session.commit()
+        return fail('EMAIL_DELIVERY_FAILED', 'Verification email could not be delivered', 503)
+
+    return success({}, 'Verification instructions sent', 202)
+
+
+@auth_bp.post('/email-verification/confirm')
+@limiter.limit('10 per hour')
+def confirm_email_verification():
+    try:
+        payload = VerifyEmailSchema().load(request.get_json(silent=True) or {})
+    except ValidationError as err:
+        return fail('VALIDATION_ERROR', err.messages, 422)
+
+    try:
+        user = verify_email_with_token(payload['token'])
+    except AccountTokenError:
+        db.session.rollback()
+        log_event(
+            'auth.email_verification_rejected',
+            'AccountToken',
+            actor=None,
+            metadata={'token_fingerprint': token_fingerprint(payload.get('token'))},
+        )
+        db.session.commit()
+        return fail('INVALID_OR_EXPIRED_TOKEN', AccountTokenError.public_message, 400)
+
+    log_event(
+        'auth.email_verified',
+        'User',
+        entity_id=user.id,
+        tenant_id=user.tenant_id,
+        actor=None,
+    )
+    db.session.commit()
+    return success({'email_verified': True}, 'Email address verified')
 
 
 @auth_bp.post('/login')

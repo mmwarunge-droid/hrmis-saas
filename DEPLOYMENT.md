@@ -12,6 +12,8 @@ FLASK_ENV=production
 SECRET_KEY=<different random value of at least 32 characters>
 JWT_SECRET_KEY=<different random value of at least 32 characters>
 DATABASE_URL=postgresql://...
+REDIS_URL=rediss://...
+REDIS_KEY_PREFIX=hrmis:auth
 FRONTEND_URL=https://app.example.com
 CORS_ORIGINS=https://app.example.com
 API_PREFIX=/api
@@ -21,6 +23,23 @@ TOKEN_EXPIRY_MINUTES=60
 REFRESH_TOKEN_EXPIRY_DAYS=14
 JWT_COOKIE_SAMESITE=Lax
 JWT_COOKIE_DOMAIN=.example.com
+AUTH_MAX_FAILED_ATTEMPTS=5
+AUTH_FAILURE_WINDOW_MINUTES=15
+AUTH_LOCKOUT_MINUTES=15
+AUTH_SUSPICIOUS_LOGIN_ENABLED=true
+TRUST_PROXY_HEADERS=false
+PASSWORD_RESET_TOKEN_MINUTES=30
+EMAIL_VERIFICATION_TOKEN_HOURS=24
+PASSWORD_RESET_URL=https://app.example.com/reset-password
+EMAIL_VERIFICATION_URL=https://app.example.com/verify-email
+MAIL_TRANSPORT=smtp
+MAIL_FROM=no-reply@example.com
+MAIL_SMTP_HOST=smtp.example.com
+MAIL_SMTP_PORT=587
+MAIL_SMTP_USERNAME=<smtp username>
+MAIL_SMTP_PASSWORD=<smtp secret>
+MAIL_SMTP_USE_TLS=true
+MAIL_SMTP_TIMEOUT_SECONDS=10
 RATELIMIT_DEFAULT=200 per day;50 per hour
 RATELIMIT_STORAGE_URI=memory://
 ```
@@ -81,7 +100,7 @@ The committed `frontend/vercel.json` configures the SPA rewrite, immutable asset
 
 ## Remaining launch blockers
 
-- Redis-backed rate limiting and JWT revocation.
+- Redis-backed distributed rate limiting.
 - Private object storage and secure document delivery.
 - PostgreSQL integration tests rather than SQLite-only application tests.
 - Monitoring, error tracking, backups, restore drills, and security alerting.
@@ -94,3 +113,9 @@ Set `REDIS_URL` to a private Redis instance. Production readiness checks require
 ## Authentication lockout and audit controls
 
 Configure `AUTH_MAX_FAILED_ATTEMPTS`, `AUTH_FAILURE_WINDOW_MINUTES`, and `AUTH_LOCKOUT_MINUTES` for the deployment risk profile. Keep `AUTH_SUSPICIOUS_LOGIN_ENABLED=true` to record new-network and new-user-agent risk flags. `TRUST_PROXY_HEADERS` must remain false unless the application is behind a trusted reverse proxy that strips and overwrites `X-Forwarded-For`; enabling it behind an untrusted proxy permits client IP spoofing. Authentication audit records store reduced IP networks and keyed user-agent or identifier fingerprints rather than raw identifiers.
+
+## Account recovery and email verification
+
+Password reset and email verification tokens are random, single use, stored only as hashes, and expire according to `PASSWORD_RESET_TOKEN_MINUTES` and `EMAIL_VERIFICATION_TOKEN_HOURS`. Configure `PASSWORD_RESET_URL` and `EMAIL_VERIFICATION_URL` as HTTPS frontend routes that read the URL-fragment token and submit it to the API with `POST`; do not consume account tokens from `GET` links because security scanners and mail clients may prefetch them. URL fragments keep the raw token out of HTTP request lines and referrer headers.
+
+Development may use `MAIL_TRANSPORT=console`, which writes the complete message and one-time link to backend logs. Production validation requires `MAIL_TRANSPORT=smtp`, `MAIL_FROM`, and `MAIL_SMTP_HOST`. Protect SMTP credentials as secrets, enable TLS, and avoid logging email bodies in production. A successful password reset revokes all active sessions for the account.

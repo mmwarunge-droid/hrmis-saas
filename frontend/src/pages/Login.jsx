@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Navigate, useLocation, useNavigate } from 'react-router-dom';
+import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import Alert from '../components/ui/Alert.jsx';
 import Button from '../components/ui/Button.jsx';
 import Card from '../components/ui/Card.jsx';
@@ -28,6 +28,7 @@ export default function Login() {
         {error && <Alert type="error">{error}</Alert>}
         <Input label="Email" type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} required />
         <Input label="Password" type="password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} required />
+        <div className="text-right"><Link className="text-sm font-medium text-slate-700 underline" to="/forgot-password">Forgot password?</Link></div>
         <Button className="w-full" disabled={loading}>{loading ? 'Signing in...' : 'Sign in'}</Button>
       </form>
     </Card>

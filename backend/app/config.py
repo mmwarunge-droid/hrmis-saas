@@ -50,7 +50,8 @@ class BaseConfig:
     JWT_REFRESH_CSRF_HEADER_NAME = 'X-CSRF-TOKEN'
     SQLALCHEMY_DATABASE_URI = _database_url(f"sqlite:///{BASE_DIR / 'dev.db'}")
     SQLALCHEMY_TRACK_MODIFICATIONS = False
-    CORS_ORIGINS = _csv(os.getenv('CORS_ORIGINS') or os.getenv('FRONTEND_URL'))
+    FRONTEND_URL = os.getenv('FRONTEND_URL', 'http://localhost:5173').rstrip('/')
+    CORS_ORIGINS = _csv(os.getenv('CORS_ORIGINS') or FRONTEND_URL)
     UPLOAD_FOLDER = os.getenv('UPLOAD_FOLDER', str(BASE_DIR / 'uploads'))
     MAX_CONTENT_LENGTH = int(os.getenv('MAX_CONTENT_LENGTH', str(10 * 1024 * 1024)))
     JSON_SORT_KEYS = False
@@ -61,6 +62,18 @@ class BaseConfig:
     AUTH_FAILURE_WINDOW_MINUTES = int(os.getenv('AUTH_FAILURE_WINDOW_MINUTES', '15'))
     AUTH_LOCKOUT_MINUTES = int(os.getenv('AUTH_LOCKOUT_MINUTES', '15'))
     AUTH_SUSPICIOUS_LOGIN_ENABLED = _bool_env('AUTH_SUSPICIOUS_LOGIN_ENABLED', True)
+    PASSWORD_RESET_TOKEN_MINUTES = int(os.getenv('PASSWORD_RESET_TOKEN_MINUTES', '30'))
+    EMAIL_VERIFICATION_TOKEN_HOURS = int(os.getenv('EMAIL_VERIFICATION_TOKEN_HOURS', '24'))
+    PASSWORD_RESET_URL = os.getenv('PASSWORD_RESET_URL', f'{FRONTEND_URL}/reset-password')
+    EMAIL_VERIFICATION_URL = os.getenv('EMAIL_VERIFICATION_URL', f'{FRONTEND_URL}/verify-email')
+    MAIL_TRANSPORT = os.getenv('MAIL_TRANSPORT', 'console')
+    MAIL_FROM = os.getenv('MAIL_FROM', 'no-reply@localhost')
+    MAIL_SMTP_HOST = os.getenv('MAIL_SMTP_HOST', '127.0.0.1')
+    MAIL_SMTP_PORT = int(os.getenv('MAIL_SMTP_PORT', '587'))
+    MAIL_SMTP_USERNAME = os.getenv('MAIL_SMTP_USERNAME') or None
+    MAIL_SMTP_PASSWORD = os.getenv('MAIL_SMTP_PASSWORD') or None
+    MAIL_SMTP_USE_TLS = _bool_env('MAIL_SMTP_USE_TLS', True)
+    MAIL_SMTP_TIMEOUT_SECONDS = int(os.getenv('MAIL_SMTP_TIMEOUT_SECONDS', '10'))
     TRUST_PROXY_HEADERS = _bool_env('TRUST_PROXY_HEADERS', False)
     RATELIMIT_DEFAULT = os.getenv('RATELIMIT_DEFAULT', '200 per day;50 per hour')
     RATELIMIT_STORAGE_URI = os.getenv('RATELIMIT_STORAGE_URI', 'memory://')
@@ -79,6 +92,9 @@ class TestingConfig(BaseConfig):
     SQLALCHEMY_DATABASE_URI = 'sqlite:///:memory:'
     JWT_ACCESS_TOKEN_EXPIRES = timedelta(minutes=5)
     REDIS_URL = 'memory://testing'
+    MAIL_TRANSPORT = 'memory'
+    PASSWORD_RESET_URL = 'https://frontend.test/reset-password'
+    EMAIL_VERIFICATION_URL = 'https://frontend.test/verify-email'
 
 
 class ProductionConfig(BaseConfig):
@@ -102,6 +118,20 @@ class ProductionConfig(BaseConfig):
             raise RuntimeError('SECRET_KEY and JWT_SECRET_KEY must be different values')
         if cls.JWT_COOKIE_SAMESITE.lower() == 'none' and not cls.JWT_COOKIE_SECURE:
             raise RuntimeError('JWT_COOKIE_SECURE must be enabled when JWT_COOKIE_SAMESITE=None')
+        if cls.MAIL_TRANSPORT.lower() != 'smtp':
+            raise RuntimeError('MAIL_TRANSPORT must be smtp in production')
+        if not cls.MAIL_SMTP_USE_TLS:
+            raise RuntimeError('MAIL_SMTP_USE_TLS must be enabled in production')
+        mail_missing = [key for key in ('MAIL_FROM', 'MAIL_SMTP_HOST') if not os.getenv(key)]
+        if mail_missing:
+            raise RuntimeError(f"Missing required production email variables: {', '.join(mail_missing)}")
+        account_urls = {
+            'PASSWORD_RESET_URL': cls.PASSWORD_RESET_URL,
+            'EMAIL_VERIFICATION_URL': cls.EMAIL_VERIFICATION_URL,
+        }
+        insecure_urls = [name for name, value in account_urls.items() if not value.startswith('https://')]
+        if insecure_urls:
+            raise RuntimeError(f"Production account URLs must use HTTPS: {', '.join(insecure_urls)}")
 
 
 config_by_name = {

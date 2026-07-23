@@ -288,3 +288,136 @@ def test_new_network_and_user_agent_generate_suspicious_login_event(client, app,
         assert set(event.metadata_json['risk_flags']) == {'new_network', 'new_user_agent'}
         assert event.ip_address == '198.51.100.0/24'
         assert event.user_agent.startswith('curl:')
+
+
+def _token_from_latest_email(app):
+    from urllib.parse import parse_qs, urlparse
+
+    message = app.extensions['mail_outbox'][-1]
+    link = next(line for line in message['text'].splitlines() if line.startswith('https://'))
+    return parse_qs(urlparse(link).fragment)['token'][0]
+
+
+def test_password_reset_request_is_enumeration_safe_and_stores_only_token_hash(client, app, admin_user):
+    import hashlib
+
+    from app.models import AccountToken, AuditLog
+
+    known = client.post('/api/auth/password/forgot', json={'email': 'admin@acme.test'})
+    unknown = client.post('/api/auth/password/forgot', json={'email': 'missing@acme.test'})
+
+    assert known.status_code == 202
+    assert unknown.status_code == 202
+    assert known.get_json() == unknown.get_json()
+    assert len(app.extensions['mail_outbox']) == 1
+
+    raw_token = _token_from_latest_email(app)
+    with app.app_context():
+        account_token = AccountToken.query.one()
+        assert account_token.purpose == AccountToken.PURPOSE_PASSWORD_RESET
+        assert account_token.token_hash == hashlib.sha256(raw_token.encode('utf-8')).hexdigest()
+        assert raw_token not in account_token.token_hash
+        assert account_token.consumed_at is None
+        assert AuditLog.query.filter_by(action='auth.password_reset_requested').count() == 2
+
+
+def test_password_reset_is_single_use_and_revokes_existing_sessions(client, app, admin_user):
+    from app.models import AccountToken, AuditLog, AuthSession, User
+    from app.utils.security import verify_password
+
+    assert _login(client).status_code == 200
+    request_response = client.post('/api/auth/password/forgot', json={'email': 'admin@acme.test'})
+    assert request_response.status_code == 202
+    raw_token = _token_from_latest_email(app)
+
+    reset = client.post(
+        '/api/auth/password/reset',
+        json={'token': raw_token, 'password': 'DifferentStrongPass456!'},
+    )
+
+    assert reset.status_code == 200
+    assert client.get('/api/auth/me').status_code == 401
+    with app.app_context():
+        user = User.query.filter_by(email='admin@acme.test').one()
+        account_token = AccountToken.query.one()
+        auth_session = AuthSession.query.one()
+        assert verify_password('DifferentStrongPass456!', user.password_hash)
+        assert account_token.consumed_at is not None
+        assert auth_session.revoked_at is not None
+        assert auth_session.revoked_reason == 'password_reset'
+        assert AuditLog.query.filter_by(action='auth.password_reset_completed').count() == 1
+
+    replay = client.post(
+        '/api/auth/password/reset',
+        json={'token': raw_token, 'password': 'AnotherStrongPass789!'},
+    )
+    assert replay.status_code == 400
+    assert replay.get_json()['error']['code'] == 'INVALID_OR_EXPIRED_TOKEN'
+
+    old_password = client.post(
+        '/api/auth/login',
+        json={'email': 'admin@acme.test', 'password': 'StrongPass123!'},
+    )
+    new_password = client.post(
+        '/api/auth/login',
+        json={'email': 'admin@acme.test', 'password': 'DifferentStrongPass456!'},
+    )
+    assert old_password.status_code == 401
+    assert new_password.status_code == 200
+
+
+def test_email_verification_request_and_confirmation_are_single_use(client, app, admin_user):
+    from app.models import AccountToken, AuditLog, User
+
+    assert _login(client).status_code == 200
+    request_response = client.post(
+        '/api/auth/email-verification/request',
+        headers=_csrf_header(client),
+    )
+    assert request_response.status_code == 202
+    raw_token = _token_from_latest_email(app)
+
+    confirmation = client.post(
+        '/api/auth/email-verification/confirm',
+        json={'token': raw_token},
+    )
+    assert confirmation.status_code == 200
+    assert confirmation.get_json()['data']['email_verified'] is True
+
+    with app.app_context():
+        user = User.query.filter_by(email='admin@acme.test').one()
+        account_token = AccountToken.query.one()
+        assert user.email_verified_at is not None
+        assert account_token.consumed_at is not None
+        assert AuditLog.query.filter_by(action='auth.email_verified').count() == 1
+
+    me = client.get('/api/auth/me')
+    assert me.status_code == 200
+    assert me.get_json()['data']['email_verified'] is True
+
+    replay = client.post('/api/auth/email-verification/confirm', json={'token': raw_token})
+    assert replay.status_code == 400
+    assert replay.get_json()['error']['code'] == 'INVALID_OR_EXPIRED_TOKEN'
+
+
+def test_expired_password_reset_token_is_rejected(client, app, admin_user):
+    from datetime import timedelta
+
+    from app.extensions import db
+    from app.models import AccountToken
+    from app.models.base import utcnow
+
+    assert client.post('/api/auth/password/forgot', json={'email': 'admin@acme.test'}).status_code == 202
+    raw_token = _token_from_latest_email(app)
+    with app.app_context():
+        account_token = AccountToken.query.one()
+        account_token.expires_at = utcnow() - timedelta(seconds=1)
+        db.session.commit()
+
+    response = client.post(
+        '/api/auth/password/reset',
+        json={'token': raw_token, 'password': 'DifferentStrongPass456!'},
+    )
+
+    assert response.status_code == 400
+    assert response.get_json()['error']['code'] == 'INVALID_OR_EXPIRED_TOKEN'

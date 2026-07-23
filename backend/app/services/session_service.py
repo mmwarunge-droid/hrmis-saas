@@ -140,7 +140,7 @@ def revoke_session_from_token(jwt_data: dict, reason: str):
     return auth_session
 
 
-def revoke_all_user_sessions(user: User, reason: str, jwt_data=None) -> int:
+def revoke_all_user_sessions(user: User, reason: str, jwt_data=None, commit: bool = True) -> int:
     sessions = AuthSession.query.filter(
         AuthSession.user_id == user.id,
         AuthSession.revoked_at.is_(None),
@@ -154,7 +154,8 @@ def revoke_all_user_sessions(user: User, reason: str, jwt_data=None) -> int:
         token_expires_at = datetime.fromtimestamp(jwt_data['exp'], tz=timezone.utc).replace(tzinfo=None)
         _redis_set(_redis_key('jti', jwt_data['jti']), reason, token_expires_at)
 
-    db.session.commit()
+    if commit:
+        db.session.commit()
     return len(sessions)
 
 

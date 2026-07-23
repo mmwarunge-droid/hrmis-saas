@@ -40,6 +40,7 @@ def register_user(payload: dict, actor=None) -> User:
         first_name=payload['first_name'],
         last_name=payload['last_name'],
         password_hash=hash_password(payload['password']),
+        email_verified_at=payload.get('email_verified_at'),
     )
     db.session.add(user)
     db.session.flush()

@@ -81,12 +81,14 @@ class User(db.Model, TimestampMixin, SoftDeleteMixin, ReprMixin):
     failed_login_attempts = db.Column(db.Integer, nullable=False, default=0)
     last_failed_login_at = db.Column(db.DateTime, nullable=True)
     locked_until = db.Column(db.DateTime, nullable=True, index=True)
+    email_verified_at = db.Column(db.DateTime, nullable=True, index=True)
 
     tenant = db.relationship('Tenant', back_populates='users')
     role_links = db.relationship('UserRole', back_populates='user', cascade='all, delete-orphan', foreign_keys=[UserRole.user_id])
     employee_profile = db.relationship('Employee', back_populates='user', uselist=False, foreign_keys='Employee.user_id')
     notifications = db.relationship('Notification', back_populates='user', passive_deletes=True)
     auth_sessions = db.relationship('AuthSession', back_populates='user', cascade='all, delete-orphan')
+    account_tokens = db.relationship('AccountToken', back_populates='user', cascade='all, delete-orphan')
 
     @property
     def full_name(self):
@@ -127,6 +129,8 @@ class User(db.Model, TimestampMixin, SoftDeleteMixin, ReprMixin):
             'last_name': self.last_name,
             'full_name': self.full_name,
             'is_active': self.is_active,
+            'email_verified': self.email_verified_at is not None,
+            'email_verified_at': self.email_verified_at.isoformat() if self.email_verified_at else None,
             'roles': self.role_names,
             'permissions': self.permission_codes,
         }
