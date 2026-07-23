@@ -90,3 +90,7 @@ The committed `frontend/vercel.json` configures the SPA rewrite, immutable asset
 ## Authentication session store
 
 Set `REDIS_URL` to a private Redis instance. Production readiness checks require both PostgreSQL and Redis connectivity. Redis must use persistence and must not be exposed to the public internet.
+
+## Authentication lockout and audit controls
+
+Configure `AUTH_MAX_FAILED_ATTEMPTS`, `AUTH_FAILURE_WINDOW_MINUTES`, and `AUTH_LOCKOUT_MINUTES` for the deployment risk profile. Keep `AUTH_SUSPICIOUS_LOGIN_ENABLED=true` to record new-network and new-user-agent risk flags. `TRUST_PROXY_HEADERS` must remain false unless the application is behind a trusted reverse proxy that strips and overwrites `X-Forwarded-For`; enabling it behind an untrusted proxy permits client IP spoofing. Authentication audit records store reduced IP networks and keyed user-agent or identifier fingerprints rather than raw identifiers.

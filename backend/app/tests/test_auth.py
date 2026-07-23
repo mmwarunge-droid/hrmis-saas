@@ -1,4 +1,4 @@
-from app.models import AuthSession
+from app.models import AuditLog, AuthSession
 
 
 def _set_cookie_headers(response):
@@ -106,6 +106,7 @@ def test_refresh_token_reuse_revokes_the_session(client, app, admin_user):
         auth_session = AuthSession.query.one()
         assert auth_session.revoked_at is not None
         assert auth_session.revoked_reason == 'refresh_token_reuse'
+        assert AuditLog.query.filter_by(action='auth.refresh_token_reuse').count() == 1
 
 
 def test_session_listing_marks_current_session(client, admin_user):
@@ -142,6 +143,8 @@ def test_user_can_revoke_another_session(client, app, admin_user):
     assert revoke.status_code == 200
     assert client.get('/api/auth/me').status_code == 401
     assert other_client.get('/api/auth/me').status_code == 200
+    with app.app_context():
+        assert AuditLog.query.filter_by(action='auth.session_revoked').count() == 1
 
 
 def test_logout_all_revokes_every_session(client, app, admin_user):
@@ -155,6 +158,8 @@ def test_logout_all_revokes_every_session(client, app, admin_user):
     assert response.get_json()['data']['revoked_sessions'] == 2
     assert client.get('/api/auth/me').status_code == 401
     assert other_client.get('/api/auth/me').status_code == 401
+    with app.app_context():
+        assert AuditLog.query.filter_by(action='auth.logout_all').count() == 1
 
 
 def test_logout_clears_authentication_cookies_and_revokes_session(client, app, admin_user):
@@ -171,3 +176,115 @@ def test_logout_clears_authentication_cookies_and_revokes_session(client, app, a
         auth_session = AuthSession.query.one()
         assert auth_session.revoked_at is not None
         assert auth_session.revoked_reason == 'user_logout'
+        assert AuditLog.query.filter_by(action='auth.logout').count() == 1
+
+
+def test_failed_logins_lock_account_with_enumeration_safe_response(client, app, admin_user):
+    from app.models import AuditLog, User
+
+    app.config.update(
+        AUTH_MAX_FAILED_ATTEMPTS=3,
+        AUTH_FAILURE_WINDOW_MINUTES=15,
+        AUTH_LOCKOUT_MINUTES=10,
+    )
+
+    known_responses = [
+        client.post('/api/auth/login', json={'email': 'admin@acme.test', 'password': 'WrongPass123!'})
+        for _ in range(3)
+    ]
+    unknown = client.post(
+        '/api/auth/login',
+        json={'email': 'missing@acme.test', 'password': 'WrongPass123!'},
+    )
+    locked = client.post(
+        '/api/auth/login',
+        json={'email': 'admin@acme.test', 'password': 'StrongPass123!'},
+    )
+
+    expected_error = {
+        'code': 'INVALID_CREDENTIALS',
+        'message': 'Invalid email or password',
+    }
+    for response in [*known_responses, unknown, locked]:
+        assert response.status_code == 401
+        assert response.get_json()['error'] == expected_error
+
+    with app.app_context():
+        user = User.query.filter_by(email='admin@acme.test').one()
+        assert user.failed_login_attempts == 3
+        assert user.locked_until is not None
+        assert AuditLog.query.filter_by(action='auth.login_failed').count() == 5
+        assert AuditLog.query.filter_by(action='auth.account_locked').count() == 1
+
+
+def test_successful_login_after_lock_expiry_resets_failure_state(client, app, admin_user):
+    from datetime import timedelta
+
+    from app.extensions import db
+    from app.models import User
+    from app.models.base import utcnow
+
+    with app.app_context():
+        user = User.query.filter_by(email='admin@acme.test').one()
+        user.failed_login_attempts = 5
+        user.last_failed_login_at = utcnow() - timedelta(minutes=20)
+        user.locked_until = utcnow() - timedelta(seconds=1)
+        db.session.commit()
+
+    response = _login(client)
+
+    assert response.status_code == 200
+    with app.app_context():
+        user = User.query.filter_by(email='admin@acme.test').one()
+        assert user.failed_login_attempts == 0
+        assert user.last_failed_login_at is None
+        assert user.locked_until is None
+
+
+def test_auth_audit_metadata_is_privacy_safe(client, app, admin_user):
+    from app.models import AuditLog
+
+    response = client.post(
+        '/api/auth/login',
+        json={'email': 'admin@acme.test', 'password': 'WrongPass123!'},
+        headers={'User-Agent': 'curl/8.5.0 secret-fingerprint'},
+        environ_base={'REMOTE_ADDR': '203.0.113.44'},
+    )
+
+    assert response.status_code == 401
+    with app.app_context():
+        event = AuditLog.query.filter_by(action='auth.login_failed').one()
+        assert event.ip_address == '203.0.113.0/24'
+        assert event.user_agent.startswith('curl:')
+        assert '203.0.113.44' not in event.user_agent
+        assert 'secret-fingerprint' not in event.user_agent
+        fingerprint = event.metadata_json['identifier_fingerprint']
+        assert len(fingerprint) == 24
+        assert 'admin@acme.test' not in str(event.metadata_json)
+
+
+def test_new_network_and_user_agent_generate_suspicious_login_event(client, app, admin_user):
+    from app.models import AuditLog
+
+    first = client.post(
+        '/api/auth/login',
+        json={'email': 'admin@acme.test', 'password': 'StrongPass123!'},
+        headers={'User-Agent': 'Mozilla/5.0 Chrome/126.0'},
+        environ_base={'REMOTE_ADDR': '192.0.2.10'},
+    )
+    assert first.status_code == 200
+
+    other_client = app.test_client()
+    second = other_client.post(
+        '/api/auth/login',
+        json={'email': 'admin@acme.test', 'password': 'StrongPass123!'},
+        headers={'User-Agent': 'curl/8.5.0'},
+        environ_base={'REMOTE_ADDR': '198.51.100.20'},
+    )
+    assert second.status_code == 200
+
+    with app.app_context():
+        event = AuditLog.query.filter_by(action='auth.suspicious_login').one()
+        assert set(event.metadata_json['risk_flags']) == {'new_network', 'new_user_agent'}
+        assert event.ip_address == '198.51.100.0/24'
+        assert event.user_agent.startswith('curl:')

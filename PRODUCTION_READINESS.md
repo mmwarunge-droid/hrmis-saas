@@ -32,9 +32,10 @@ Validation status:
 - Completed in Step 2A: added double-submit CSRF defenses for mutating requests.
 - Completed in Step 2B: refresh-token rotation, reuse detection, persistent sessions, and Redis-backed JTI/session revocation.
 - Completed in Step 2B: session listing, individual forced logout, and logout-all controls.
-- Add password reset, email verification, and account lockout.
+- Completed in Step 2C: account lockout with configurable failure windows and recovery.
+- Completed in Step 2C: privacy-safe authentication audit events and suspicious-login flags.
+- Add password reset and email verification.
 - Add MFA for privileged roles.
-- Add authentication audit events and suspicious-login controls.
 
 ## Step 3 — Document security and storage
 

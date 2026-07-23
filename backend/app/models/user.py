@@ -78,6 +78,9 @@ class User(db.Model, TimestampMixin, SoftDeleteMixin, ReprMixin):
     password_hash = db.Column(db.String(255), nullable=False)
     is_active = db.Column(db.Boolean, nullable=False, default=True)
     last_login_at = db.Column(db.DateTime)
+    failed_login_attempts = db.Column(db.Integer, nullable=False, default=0)
+    last_failed_login_at = db.Column(db.DateTime, nullable=True)
+    locked_until = db.Column(db.DateTime, nullable=True, index=True)
 
     tenant = db.relationship('Tenant', back_populates='users')
     role_links = db.relationship('UserRole', back_populates='user', cascade='all, delete-orphan', foreign_keys=[UserRole.user_id])

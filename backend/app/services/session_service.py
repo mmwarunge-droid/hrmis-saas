@@ -11,6 +11,7 @@ from app.extensions import db, redis_store
 from app.models import AuthSession, User
 from app.models.base import utcnow
 from app.services.auth_service import claims_for
+from app.utils.request_security import anonymize_ip_address, user_agent_family
 
 logger = logging.getLogger(__name__)
 
@@ -169,6 +170,33 @@ def get_session_for_token(jwt_data: dict, lock=False):
 
 def list_user_sessions(user: User):
     return AuthSession.query.filter_by(user_id=user.id).order_by(AuthSession.created_at.desc()).limit(100).all()
+
+
+def detect_login_risk(user: User, ip_address=None, user_agent=None) -> list[str]:
+    if not current_app.config.get('AUTH_SUSPICIOUS_LOGIN_ENABLED'):
+        return []
+
+    previous_sessions = (
+        AuthSession.query.filter(AuthSession.user_id == user.id)
+        .order_by(AuthSession.created_at.desc())
+        .limit(20)
+        .all()
+    )
+    if not previous_sessions:
+        return []
+
+    flags = []
+    current_network = anonymize_ip_address(ip_address)
+    known_networks = {anonymize_ip_address(session.ip_address) for session in previous_sessions if session.ip_address}
+    if current_network and known_networks and current_network not in known_networks:
+        flags.append('new_network')
+
+    current_agent = user_agent_family(user_agent)
+    known_agents = {user_agent_family(session.user_agent) for session in previous_sessions if session.user_agent}
+    if current_agent != 'unknown' and known_agents and current_agent not in known_agents:
+        flags.append('new_user_agent')
+
+    return flags
 
 
 def is_token_revoked(jwt_data: dict) -> bool:

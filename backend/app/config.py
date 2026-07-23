@@ -14,6 +14,13 @@ def _csv(value: str | None) -> list[str]:
     return [item.strip() for item in value.split(',') if item.strip()]
 
 
+def _bool_env(name: str, default: bool = False) -> bool:
+    value = os.getenv(name)
+    if value is None:
+        return default
+    return value.strip().lower() in {'1', 'true', 'yes', 'on'}
+
+
 def _database_url(default: str) -> str:
     url = os.getenv('DATABASE_URL', default)
     # Render sometimes exposes postgres://; SQLAlchemy requires postgresql://.
@@ -50,6 +57,11 @@ class BaseConfig:
     ERROR_INCLUDE_MESSAGE = False
     REDIS_URL = os.getenv('REDIS_URL', 'redis://127.0.0.1:6379/0')
     REDIS_KEY_PREFIX = os.getenv('REDIS_KEY_PREFIX', 'hrmis:auth')
+    AUTH_MAX_FAILED_ATTEMPTS = int(os.getenv('AUTH_MAX_FAILED_ATTEMPTS', '5'))
+    AUTH_FAILURE_WINDOW_MINUTES = int(os.getenv('AUTH_FAILURE_WINDOW_MINUTES', '15'))
+    AUTH_LOCKOUT_MINUTES = int(os.getenv('AUTH_LOCKOUT_MINUTES', '15'))
+    AUTH_SUSPICIOUS_LOGIN_ENABLED = _bool_env('AUTH_SUSPICIOUS_LOGIN_ENABLED', True)
+    TRUST_PROXY_HEADERS = _bool_env('TRUST_PROXY_HEADERS', False)
     RATELIMIT_DEFAULT = os.getenv('RATELIMIT_DEFAULT', '200 per day;50 per hour')
     RATELIMIT_STORAGE_URI = os.getenv('RATELIMIT_STORAGE_URI', 'memory://')
     RATELIMIT_HEADERS_ENABLED = True

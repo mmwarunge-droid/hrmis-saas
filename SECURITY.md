@@ -2,7 +2,7 @@
 
 ## Authentication
 
-The backend uses JWT access and refresh tokens. Access tokens include tenant id, roles, and permissions as claims. Passwords are hashed using Flask-Bcrypt. No raw passwords or secrets are hardcoded.
+The backend uses short-lived JWT access tokens and rotating refresh tokens in Secure, HttpOnly cookies with double-submit CSRF protection. Access tokens include tenant id, roles, permissions, and a persistent session id. Redis and the `auth_sessions` table enforce JTI/session revocation and refresh-token reuse detection. Passwords are hashed using Flask-Bcrypt. Configurable failure windows and temporary lockouts slow password guessing while login responses remain account-enumeration resistant. No raw passwords or secrets are hardcoded.
 
 ## Authorization and RBAC
 
@@ -27,11 +27,11 @@ Use environment variables for `SECRET_KEY`, `JWT_SECRET_KEY`, `DATABASE_URL`, CO
 
 ## Audit logging
 
-Sensitive actions create audit entries: tenant creation/update, user creation/role changes, employee create/update/delete, document upload/update, leave decisions, attendance check-in/out, and onboarding workflow activity.
+Sensitive actions create audit entries: authentication success/failure, account lockout, suspicious login, refresh-token replay, logout and forced session revocation, tenant creation/update, user creation/role changes, employee create/update/delete, document upload/update, leave decisions, attendance check-in/out, and onboarding workflow activity. Authentication audit entries reduce IP precision and store keyed user-agent and identifier fingerprints rather than raw values.
 
 ## Production recommendations
 
-- Add Redis-backed JWT denylist for logout and compromised-token revocation.
+- Use a private, persistent Redis deployment for session and JTI revocation state.
 - Use object storage with signed URLs instead of persistent local disk for larger deployments.
 - Enable PostgreSQL Row Level Security.
 - Add SAST/dependency scanning in CI.
