@@ -59,3 +59,9 @@ def test_bootstrap_admin_cli_creates_first_platform_admin(app, monkeypatch):
 
     assert result.exit_code == 0
     assert 'Created SUPER_ADMIN user platform@example.com' in result.output
+
+
+def test_readiness_checks_redis(client, app):
+    assert app.extensions['redis_client'].ping() is True
+    response = client.get('/ready')
+    assert response.status_code == 200

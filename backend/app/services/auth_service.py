@@ -1,5 +1,3 @@
-from flask_jwt_extended import create_access_token, create_refresh_token
-
 from app.extensions import db
 from app.models import User
 from app.services.rbac_service import seed_roles_permissions, set_user_roles
@@ -29,10 +27,10 @@ def register_user(payload: dict, actor=None) -> User:
     return user
 
 
-def authenticate(email: str, password: str) -> tuple[User, str, str]:
+def authenticate(email: str, password: str) -> User:
     user = User.query.filter(User.email == email.lower(), User.deleted_at.is_(None)).first()
     if not user or not user.is_active or not verify_password(password, user.password_hash):
         raise ValueError('Invalid email or password')
     user.last_login_at = utcnow()
     db.session.commit()
-    return user, create_access_token(identity=str(user.id), additional_claims=claims_for(user)), create_refresh_token(identity=str(user.id), additional_claims=claims_for(user))
+    return user

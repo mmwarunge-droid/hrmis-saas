@@ -85,3 +85,8 @@ The committed `frontend/vercel.json` configures the SPA rewrite, immutable asset
 - Private object storage and secure document delivery.
 - PostgreSQL integration tests rather than SQLite-only application tests.
 - Monitoring, error tracking, backups, restore drills, and security alerting.
+
+
+## Authentication session store
+
+Set `REDIS_URL` to a private Redis instance. Production readiness checks require both PostgreSQL and Redis connectivity. Redis must use persistence and must not be exposed to the public internet.

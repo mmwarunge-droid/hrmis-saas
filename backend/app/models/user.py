@@ -83,6 +83,7 @@ class User(db.Model, TimestampMixin, SoftDeleteMixin, ReprMixin):
     role_links = db.relationship('UserRole', back_populates='user', cascade='all, delete-orphan', foreign_keys=[UserRole.user_id])
     employee_profile = db.relationship('Employee', back_populates='user', uselist=False, foreign_keys='Employee.user_id')
     notifications = db.relationship('Notification', back_populates='user', passive_deletes=True)
+    auth_sessions = db.relationship('AuthSession', back_populates='user', cascade='all, delete-orphan')
 
     @property
     def full_name(self):

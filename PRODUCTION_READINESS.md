@@ -30,8 +30,9 @@ Validation status:
 
 - Completed in Step 2A: replaced browser `localStorage` tokens with Secure, HttpOnly cookies.
 - Completed in Step 2A: added double-submit CSRF defenses for mutating requests.
-- Add refresh-token rotation and Redis-backed JTI revocation.
-- Add password reset, email verification, session listing, forced logout, and account lockout.
+- Completed in Step 2B: refresh-token rotation, reuse detection, persistent sessions, and Redis-backed JTI/session revocation.
+- Completed in Step 2B: session listing, individual forced logout, and logout-all controls.
+- Add password reset, email verification, and account lockout.
 - Add MFA for privileged roles.
 - Add authentication audit events and suspicious-login controls.
 

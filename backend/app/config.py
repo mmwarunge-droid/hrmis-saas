@@ -48,6 +48,8 @@ class BaseConfig:
     MAX_CONTENT_LENGTH = int(os.getenv('MAX_CONTENT_LENGTH', str(10 * 1024 * 1024)))
     JSON_SORT_KEYS = False
     ERROR_INCLUDE_MESSAGE = False
+    REDIS_URL = os.getenv('REDIS_URL', 'redis://127.0.0.1:6379/0')
+    REDIS_KEY_PREFIX = os.getenv('REDIS_KEY_PREFIX', 'hrmis:auth')
     RATELIMIT_DEFAULT = os.getenv('RATELIMIT_DEFAULT', '200 per day;50 per hour')
     RATELIMIT_STORAGE_URI = os.getenv('RATELIMIT_STORAGE_URI', 'memory://')
     RATELIMIT_HEADERS_ENABLED = True
@@ -64,6 +66,7 @@ class TestingConfig(BaseConfig):
     TESTING = True
     SQLALCHEMY_DATABASE_URI = 'sqlite:///:memory:'
     JWT_ACCESS_TOKEN_EXPIRES = timedelta(minutes=5)
+    REDIS_URL = 'memory://testing'
 
 
 class ProductionConfig(BaseConfig):
@@ -75,7 +78,7 @@ class ProductionConfig(BaseConfig):
 
     @classmethod
     def validate(cls):
-        missing = [key for key in ('SECRET_KEY', 'JWT_SECRET_KEY', 'DATABASE_URL') if not os.getenv(key)]
+        missing = [key for key in ('SECRET_KEY', 'JWT_SECRET_KEY', 'DATABASE_URL', 'REDIS_URL') if not os.getenv(key)]
         if missing:
             raise RuntimeError(f"Missing required production environment variables: {', '.join(missing)}")
 

@@ -1,8 +1,7 @@
 from flask import Blueprint, request
 from flask_jwt_extended import (
     current_user,
-    create_access_token,
-    get_jwt_identity,
+    get_jwt,
     jwt_required,
     set_access_cookies,
     set_refresh_cookies,
@@ -11,13 +10,27 @@ from flask_jwt_extended import (
 from marshmallow import ValidationError
 
 from app.extensions import db, limiter
-from app.models import User
+from app.models import AuthSession
 from app.schemas.auth_schema import LoginSchema, RegisterSchema
-from app.services.auth_service import authenticate, claims_for, register_user
+from app.services.auth_service import authenticate, register_user
 from app.services.rbac_service import validate_role_assignment
+from app.services.session_service import (
+    RefreshTokenReuseError,
+    SessionRevokedError,
+    create_auth_session,
+    list_user_sessions,
+    revoke_all_user_sessions,
+    revoke_session,
+    revoke_session_from_token,
+    rotate_auth_session,
+)
 from app.utils.response import fail, success
 
 auth_bp = Blueprint('auth', __name__, url_prefix='/auth')
+
+
+def _request_ip():
+    return request.remote_addr
 
 
 @auth_bp.post('/register')
@@ -54,10 +67,16 @@ def register():
 def login():
     try:
         payload = LoginSchema().load(request.get_json() or {})
-        user, access_token, refresh_token = authenticate(payload['email'], payload['password'])
+        user = authenticate(payload['email'], payload['password'])
+        _, access_token, refresh_token = create_auth_session(
+            user,
+            ip_address=_request_ip(),
+            user_agent=request.headers.get('User-Agent'),
+        )
     except ValidationError as err:
         return fail('VALIDATION_ERROR', err.messages, 422)
     except ValueError as exc:
+        db.session.rollback()
         return fail('INVALID_CREDENTIALS', str(exc), 401)
 
     response, status = success({'user': user.to_dict()}, 'Login successful')
@@ -69,13 +88,20 @@ def login():
 @auth_bp.post('/refresh')
 @jwt_required(refresh=True)
 def refresh():
-    user = db.session.get(User, get_jwt_identity())
-    if not user or not user.is_active or user.deleted_at is not None:
-        return fail('INVALID_TOKEN', 'User no longer exists or is inactive', 401)
+    try:
+        _, access_token, refresh_token = rotate_auth_session(current_user, get_jwt())
+    except RefreshTokenReuseError as exc:
+        response, status = fail('REFRESH_TOKEN_REUSED', str(exc), 401)
+        unset_jwt_cookies(response)
+        return response, status
+    except SessionRevokedError as exc:
+        response, status = fail('SESSION_REVOKED', str(exc), 401)
+        unset_jwt_cookies(response)
+        return response, status
 
-    access_token = create_access_token(identity=str(user.id), additional_claims=claims_for(user))
-    response, status = success({}, 'Access session refreshed')
+    response, status = success({}, 'Authentication session rotated')
     set_access_cookies(response, access_token)
+    set_refresh_cookies(response, refresh_token)
     return response, status
 
 
@@ -85,9 +111,43 @@ def me():
     return success(current_user.to_dict())
 
 
+@auth_bp.get('/sessions')
+@jwt_required()
+def sessions():
+    current_session_id = get_jwt().get('sid')
+    data = [session.to_dict(current_session_id) for session in list_user_sessions(current_user)]
+    return success(data)
+
+
+@auth_bp.delete('/sessions/<uuid:session_id>')
+@jwt_required()
+def revoke_user_session(session_id):
+    auth_session = db.session.get(AuthSession, session_id)
+    if not auth_session or auth_session.user_id != current_user.id:
+        return fail('SESSION_NOT_FOUND', 'Authentication session was not found', 404)
+
+    revoke_session(auth_session, 'user_forced_logout')
+    db.session.commit()
+
+    response, status = success({}, 'Authentication session revoked')
+    if str(auth_session.id) == str(get_jwt().get('sid')):
+        unset_jwt_cookies(response)
+    return response, status
+
+
+@auth_bp.post('/logout-all')
+@jwt_required()
+def logout_all():
+    revoked_count = revoke_all_user_sessions(current_user, 'user_logout_all', get_jwt())
+    response, status = success({'revoked_sessions': revoked_count}, 'All authentication sessions revoked')
+    unset_jwt_cookies(response)
+    return response, status
+
+
 @auth_bp.post('/logout')
 @jwt_required()
 def logout():
+    revoke_session_from_token(get_jwt(), 'user_logout')
     response, status = success({}, 'Logged out')
     unset_jwt_cookies(response)
     return response, status
