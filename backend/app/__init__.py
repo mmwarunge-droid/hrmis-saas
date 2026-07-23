@@ -7,7 +7,7 @@ from sqlalchemy import text
 from werkzeug.exceptions import HTTPException
 
 from app.config import config_by_name
-from app.extensions import bcrypt, cors, db, jwt, limiter, migrate
+from app.extensions import bcrypt, cors, db, jwt, limiter, migrate, redis_store
 from app.routes import register_blueprints
 from app.utils.response import fail, success
 
@@ -46,6 +46,7 @@ def _initialize_extensions(app: Flask) -> None:
     bcrypt.init_app(app)
     jwt.init_app(app)
     limiter.init_app(app)
+    redis_store.init_app(app)
 
     api_prefix = app.config['API_PREFIX'].rstrip('/')
     cors.init_app(
@@ -53,10 +54,11 @@ def _initialize_extensions(app: Flask) -> None:
         resources={
             f'{api_prefix}/*': {
                 'origins': app.config['CORS_ORIGINS'],
-                'allow_headers': ['Authorization', 'Content-Type', 'X-Request-ID'],
+                'allow_headers': ['Content-Type', 'X-CSRF-TOKEN', 'X-Request-ID'],
                 'expose_headers': ['X-Request-ID'],
                 'methods': ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
                 'max_age': 600,
+                'supports_credentials': True,
             }
         },
     )
@@ -64,6 +66,7 @@ def _initialize_extensions(app: Flask) -> None:
 
 def _register_jwt_callbacks() -> None:
     from app.models import User
+    from app.services.session_service import is_token_revoked
 
     @jwt.user_lookup_loader
     def load_user(_jwt_header, jwt_data):
@@ -87,6 +90,10 @@ def _register_jwt_callbacks() -> None:
     @jwt.expired_token_loader
     def expired_token(_jwt_header, _jwt_data):
         return fail('TOKEN_EXPIRED', 'The token has expired', 401)
+
+    @jwt.token_in_blocklist_loader
+    def token_in_blocklist(_jwt_header, jwt_data):
+        return is_token_revoked(jwt_data)
 
     @jwt.revoked_token_loader
     def revoked_token(_jwt_header, _jwt_data):
@@ -126,10 +133,11 @@ def _register_health_endpoints(app: Flask) -> None:
     def readiness():
         try:
             db.session.execute(text('SELECT 1'))
+            redis_store.client.ping()
         except Exception:
             db.session.rollback()
             app.logger.exception('Readiness database check failed')
-            return fail('NOT_READY', 'Database connectivity check failed', 503)
+            return fail('NOT_READY', 'Database or Redis connectivity check failed', 503)
         return success({'status': 'ready'})
 
 

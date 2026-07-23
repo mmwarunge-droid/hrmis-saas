@@ -4,6 +4,7 @@ import click
 from flask import Flask
 
 from app.models import User
+from app.models.base import utcnow
 from app.services.auth_service import register_user
 from app.services.rbac_service import seed_roles_permissions
 
@@ -35,6 +36,7 @@ def register_commands(app: Flask) -> None:
                 'last_name': values['last_name'],
                 'password': values['password'],
                 'roles': ['SUPER_ADMIN'],
+                'email_verified_at': utcnow(),
             }
         )
         click.echo(f'Created SUPER_ADMIN user {user.email}')

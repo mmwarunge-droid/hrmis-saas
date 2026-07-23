@@ -1,5 +1,8 @@
 from app.models.tenant import Tenant
 from app.models.user import Permission, Role, RolePermission, User, UserRole
+from app.models.auth_session import AuthSession
+from app.models.account_token import AccountToken
+from app.models.mfa_recovery_code import MfaRecoveryCode
 from app.models.department import Department
 from app.models.employee import Employee
 from app.models.emergency_contact import EmergencyContact
@@ -11,7 +14,7 @@ from app.models.onboarding import EmployeeOnboardingTask, OnboardingTask, Onboar
 from app.models.audit_log import AuditLog, Notification
 
 __all__ = [
-    'Tenant', 'Permission', 'Role', 'RolePermission', 'User', 'UserRole', 'Department', 'Employee',
+    'Tenant', 'AuthSession', 'AccountToken', 'MfaRecoveryCode', 'Permission', 'Role', 'RolePermission', 'User', 'UserRole', 'Department', 'Employee',
     'EmergencyContact', 'JobHistory', 'Document', 'LeaveType', 'LeaveBalance', 'LeaveRequest',
     'AttendanceRecord', 'OnboardingTemplate', 'OnboardingTask', 'EmployeeOnboardingTask', 'AuditLog', 'Notification',
 ]

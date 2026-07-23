@@ -28,12 +28,15 @@ Validation status:
 
 ## Step 2 — Authentication and session security
 
-- Replace browser `localStorage` tokens with Secure, HttpOnly cookies.
-- Add CSRF defenses.
-- Add refresh-token rotation and Redis-backed JTI revocation.
-- Add password reset, email verification, session listing, forced logout, and account lockout.
-- Add MFA for privileged roles.
-- Add authentication audit events and suspicious-login controls.
+- Completed in Step 2A: replaced browser `localStorage` tokens with Secure, HttpOnly cookies.
+- Completed in Step 2A: added double-submit CSRF defenses for mutating requests.
+- Completed in Step 2B: refresh-token rotation, reuse detection, persistent sessions, and Redis-backed JTI/session revocation.
+- Completed in Step 2B: session listing, individual forced logout, and logout-all controls.
+- Completed in Step 2C: account lockout with configurable failure windows and recovery.
+- Completed in Step 2C: privacy-safe authentication audit events and suspicious-login flags.
+- Completed in Step 2D: single-use password reset and email verification tokens with expiring database records.
+- Completed in Step 2D: enumeration-resistant recovery requests, SMTP delivery abstraction, audit events, and forced session revocation after password changes.
+- Completed in Step 2E: privileged-role TOTP enrollment, encrypted secrets, one-time recovery codes, and pre-session login challenges.
 
 ## Step 3 — Document security and storage
 
