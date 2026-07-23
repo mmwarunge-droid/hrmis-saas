@@ -126,10 +126,12 @@ def _register_error_handlers(app: Flask) -> None:
 
 def _register_health_endpoints(app: Flask) -> None:
     @app.get('/health')
+    @limiter.exempt
     def health():
         return success({'status': 'ok', 'environment': app.config['ENVIRONMENT']})
 
     @app.get('/ready')
+    @limiter.exempt
     def readiness():
         try:
             db.session.execute(text('SELECT 1'))
