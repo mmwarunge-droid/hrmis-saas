@@ -10,6 +10,7 @@ import Employees from './pages/Employees.jsx';
 import LeaveRequests from './pages/LeaveRequests.jsx';
 import ForgotPassword from './pages/ForgotPassword.jsx';
 import Login from './pages/Login.jsx';
+import MfaChallenge from './pages/MfaChallenge.jsx';
 import ResetPassword from './pages/ResetPassword.jsx';
 import VerifyEmail from './pages/VerifyEmail.jsx';
 import Onboarding from './pages/Onboarding.jsx';
@@ -22,6 +23,7 @@ export default function App() {
     <Routes>
       <Route element={<AuthLayout />}>
         <Route path="/login" element={<Login />} />
+        <Route path="/mfa" element={<MfaChallenge />} />
         <Route path="/forgot-password" element={<ForgotPassword />} />
         <Route path="/reset-password" element={<ResetPassword />} />
         <Route path="/verify-email" element={<VerifyEmail />} />

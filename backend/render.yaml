@@ -33,6 +33,14 @@ services:
         value: "60"
       - key: MAX_CONTENT_LENGTH
         value: "10485760"
+      - key: MFA_ENCRYPTION_KEYS
+        sync: false
+      - key: MFA_RECOVERY_CODE_PEPPER
+        sync: false
+      - key: MFA_REQUIRED_ROLES
+        value: SUPER_ADMIN,CLIENT_ADMIN
+      - key: MFA_TOTP_ISSUER
+        value: HRMIS
       - key: PASSWORD_RESET_URL
         sync: false
       - key: EMAIL_VERIFICATION_URL

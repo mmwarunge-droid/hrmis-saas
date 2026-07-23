@@ -14,6 +14,10 @@ JWT_SECRET_KEY=<different random value of at least 32 characters>
 DATABASE_URL=postgresql://...
 REDIS_URL=rediss://...
 REDIS_KEY_PREFIX=hrmis:auth
+MFA_REQUIRED_ROLES=SUPER_ADMIN,CLIENT_ADMIN
+MFA_ENCRYPTION_KEYS=<comma-separated Fernet keys, newest first>
+MFA_RECOVERY_CODE_PEPPER=<different random value of at least 32 characters>
+MFA_TOTP_ISSUER=HRMIS
 FRONTEND_URL=https://app.example.com
 CORS_ORIGINS=https://app.example.com
 API_PREFIX=/api
@@ -45,6 +49,14 @@ RATELIMIT_STORAGE_URI=memory://
 ```
 
 `RATELIMIT_STORAGE_URI=memory://` is acceptable only during the current foundation phase. Replace it with Redis before production launch.
+
+Generate an MFA encryption key with:
+
+```bash
+python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+```
+
+Store the newest key first in `MFA_ENCRYPTION_KEYS`. Keep previous keys during rotation so existing TOTP secrets remain decryptable. `MFA_RECOVERY_CODE_PEPPER` must be a separate random secret and must not be rotated without invalidating all existing recovery codes.
 
 Build and release commands:
 

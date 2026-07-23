@@ -30,3 +30,16 @@ class ResetPasswordSchema(Schema):
 
 class VerifyEmailSchema(Schema):
     token = fields.Str(required=True, validate=validate.Length(min=20, max=512))
+
+
+class MfaChallengeSchema(Schema):
+    challenge_token = fields.Str(required=True, validate=validate.Length(min=20, max=512))
+    code = fields.Str(required=True, validate=validate.Length(min=6, max=32))
+
+
+class MfaEnrollmentStartSchema(Schema):
+    challenge_token = fields.Str(required=True, validate=validate.Length(min=20, max=512))
+
+
+class MfaRecoveryCodesSchema(Schema):
+    code = fields.Str(required=True, validate=validate.Length(min=6, max=32))

@@ -8,6 +8,8 @@ vi.mock('../api/authApi.js', () => ({
     me: vi.fn(),
     login: vi.fn(),
     logout: vi.fn(),
+    confirmMfaEnrollment: vi.fn(),
+    verifyMfaChallenge: vi.fn(),
   },
 }));
 

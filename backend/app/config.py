@@ -1,3 +1,5 @@
+import base64
+import hashlib
 import os
 from datetime import timedelta
 from pathlib import Path
@@ -12,6 +14,17 @@ def _csv(value: str | None) -> list[str]:
     if not value:
         return ['http://localhost:5173']
     return [item.strip() for item in value.split(',') if item.strip()]
+
+
+def _csv_or_default(value: str | None, default: list[str]) -> list[str]:
+    if not value:
+        return list(default)
+    return [item.strip() for item in value.split(',') if item.strip()]
+
+
+def _derived_fernet_key(secret: str) -> str:
+    digest = hashlib.sha256(f'hrmis-mfa:{secret}'.encode('utf-8')).digest()
+    return base64.urlsafe_b64encode(digest).decode('ascii')
 
 
 def _bool_env(name: str, default: bool = False) -> bool:
@@ -64,6 +77,20 @@ class BaseConfig:
     AUTH_SUSPICIOUS_LOGIN_ENABLED = _bool_env('AUTH_SUSPICIOUS_LOGIN_ENABLED', True)
     PASSWORD_RESET_TOKEN_MINUTES = int(os.getenv('PASSWORD_RESET_TOKEN_MINUTES', '30'))
     EMAIL_VERIFICATION_TOKEN_HOURS = int(os.getenv('EMAIL_VERIFICATION_TOKEN_HOURS', '24'))
+    MFA_REQUIRED_ROLES = _csv_or_default(os.getenv('MFA_REQUIRED_ROLES'), ['SUPER_ADMIN', 'CLIENT_ADMIN'])
+    MFA_CHALLENGE_MINUTES = int(os.getenv('MFA_CHALLENGE_MINUTES', '5'))
+    MFA_MAX_CHALLENGE_ATTEMPTS = int(os.getenv('MFA_MAX_CHALLENGE_ATTEMPTS', '5'))
+    MFA_TOTP_ISSUER = os.getenv('MFA_TOTP_ISSUER', 'HRMIS')
+    MFA_TOTP_VALID_WINDOW = int(os.getenv('MFA_TOTP_VALID_WINDOW', '1'))
+    MFA_RECOVERY_CODE_COUNT = int(os.getenv('MFA_RECOVERY_CODE_COUNT', '10'))
+    MFA_ENCRYPTION_KEYS = _csv_or_default(
+        os.getenv('MFA_ENCRYPTION_KEYS'),
+        [_derived_fernet_key(SECRET_KEY)],
+    )
+    MFA_RECOVERY_CODE_PEPPER = os.getenv(
+        'MFA_RECOVERY_CODE_PEPPER',
+        hashlib.sha256(f'hrmis-mfa-recovery:{SECRET_KEY}'.encode('utf-8')).hexdigest(),
+    )
     PASSWORD_RESET_URL = os.getenv('PASSWORD_RESET_URL', f'{FRONTEND_URL}/reset-password')
     EMAIL_VERIFICATION_URL = os.getenv('EMAIL_VERIFICATION_URL', f'{FRONTEND_URL}/verify-email')
     MAIL_TRANSPORT = os.getenv('MAIL_TRANSPORT', 'console')
@@ -95,6 +122,7 @@ class TestingConfig(BaseConfig):
     MAIL_TRANSPORT = 'memory'
     PASSWORD_RESET_URL = 'https://frontend.test/reset-password'
     EMAIL_VERIFICATION_URL = 'https://frontend.test/verify-email'
+    MFA_REQUIRED_ROLES = []
 
 
 class ProductionConfig(BaseConfig):
@@ -106,7 +134,18 @@ class ProductionConfig(BaseConfig):
 
     @classmethod
     def validate(cls):
-        missing = [key for key in ('SECRET_KEY', 'JWT_SECRET_KEY', 'DATABASE_URL', 'REDIS_URL') if not os.getenv(key)]
+        missing = [
+            key
+            for key in (
+                'SECRET_KEY',
+                'JWT_SECRET_KEY',
+                'DATABASE_URL',
+                'REDIS_URL',
+                'MFA_ENCRYPTION_KEYS',
+                'MFA_RECOVERY_CODE_PEPPER',
+            )
+            if not os.getenv(key)
+        ]
         if missing:
             raise RuntimeError(f"Missing required production environment variables: {', '.join(missing)}")
 
@@ -116,6 +155,17 @@ class ProductionConfig(BaseConfig):
             raise RuntimeError('SECRET_KEY and JWT_SECRET_KEY must each contain at least 32 characters')
         if secret_key == jwt_secret:
             raise RuntimeError('SECRET_KEY and JWT_SECRET_KEY must be different values')
+        try:
+            from cryptography.fernet import Fernet
+
+            for key in cls.MFA_ENCRYPTION_KEYS:
+                Fernet(key.encode('ascii'))
+        except (ValueError, TypeError) as exc:
+            raise RuntimeError('MFA_ENCRYPTION_KEYS must contain valid Fernet keys') from exc
+        if len(cls.MFA_RECOVERY_CODE_PEPPER) < 32:
+            raise RuntimeError('MFA_RECOVERY_CODE_PEPPER must contain at least 32 characters')
+        if cls.MFA_RECOVERY_CODE_PEPPER in {secret_key, jwt_secret}:
+            raise RuntimeError('MFA_RECOVERY_CODE_PEPPER must differ from SECRET_KEY and JWT_SECRET_KEY')
         if cls.JWT_COOKIE_SAMESITE.lower() == 'none' and not cls.JWT_COOKIE_SECURE:
             raise RuntimeError('JWT_COOKIE_SECURE must be enabled when JWT_COOKIE_SAMESITE=None')
         if cls.MAIL_TRANSPORT.lower() != 'smtp':

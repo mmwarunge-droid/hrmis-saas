@@ -82,6 +82,10 @@ class User(db.Model, TimestampMixin, SoftDeleteMixin, ReprMixin):
     last_failed_login_at = db.Column(db.DateTime, nullable=True)
     locked_until = db.Column(db.DateTime, nullable=True, index=True)
     email_verified_at = db.Column(db.DateTime, nullable=True, index=True)
+    mfa_secret_encrypted = db.Column(db.Text, nullable=True)
+    mfa_pending_secret_encrypted = db.Column(db.Text, nullable=True)
+    mfa_enabled_at = db.Column(db.DateTime, nullable=True, index=True)
+    mfa_last_used_timecode = db.Column(db.BigInteger, nullable=True)
 
     tenant = db.relationship('Tenant', back_populates='users')
     role_links = db.relationship('UserRole', back_populates='user', cascade='all, delete-orphan', foreign_keys=[UserRole.user_id])
@@ -89,6 +93,7 @@ class User(db.Model, TimestampMixin, SoftDeleteMixin, ReprMixin):
     notifications = db.relationship('Notification', back_populates='user', passive_deletes=True)
     auth_sessions = db.relationship('AuthSession', back_populates='user', cascade='all, delete-orphan')
     account_tokens = db.relationship('AccountToken', back_populates='user', cascade='all, delete-orphan')
+    mfa_recovery_codes = db.relationship('MfaRecoveryCode', back_populates='user', cascade='all, delete-orphan')
 
     @property
     def full_name(self):
@@ -131,6 +136,8 @@ class User(db.Model, TimestampMixin, SoftDeleteMixin, ReprMixin):
             'is_active': self.is_active,
             'email_verified': self.email_verified_at is not None,
             'email_verified_at': self.email_verified_at.isoformat() if self.email_verified_at else None,
+            'mfa_enabled': self.mfa_enabled_at is not None,
+            'mfa_enabled_at': self.mfa_enabled_at.isoformat() if self.mfa_enabled_at else None,
             'roles': self.role_names,
             'permissions': self.permission_codes,
         }

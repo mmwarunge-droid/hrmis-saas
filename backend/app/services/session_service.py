@@ -59,13 +59,14 @@ def _redis_set(key: str, value: str, expires_at: datetime) -> None:
 def _issue_tokens(user: User, auth_session: AuthSession) -> tuple[str, str, str]:
     claims = claims_for(user)
     claims['sid'] = str(auth_session.id)
+    claims['mfa_verified'] = auth_session.mfa_verified_at is not None
     access_token = create_access_token(identity=str(user.id), additional_claims=claims)
     refresh_token = create_refresh_token(identity=str(user.id), additional_claims=claims)
     refresh_jti = decode_token(refresh_token)['jti']
     return access_token, refresh_token, refresh_jti
 
 
-def create_auth_session(user: User, ip_address=None, user_agent=None):
+def create_auth_session(user: User, ip_address=None, user_agent=None, mfa_verified: bool = False):
     provisional_hash = secrets.token_hex(32)
     auth_session = AuthSession(
         tenant_id=user.tenant_id,
@@ -75,6 +76,7 @@ def create_auth_session(user: User, ip_address=None, user_agent=None):
         last_seen_at=utcnow(),
         ip_address=(ip_address or '')[:80] or None,
         user_agent=(user_agent or '')[:255] or None,
+        mfa_verified_at=utcnow() if mfa_verified else None,
     )
     db.session.add(auth_session)
     db.session.flush()
@@ -216,4 +218,16 @@ def is_token_revoked(jwt_data: dict) -> bool:
         return True
     if str(auth_session.user_id) != str(jwt_data.get('sub')):
         return True
-    return auth_session.revoked_at is not None or auth_session.expires_at <= utcnow()
+    if auth_session.revoked_at is not None or auth_session.expires_at <= utcnow():
+        return True
+
+    user = db.session.get(User, auth_session.user_id)
+    if not user or not user.is_active or user.deleted_at is not None:
+        return True
+
+    from app.services.mfa_service import is_mfa_required
+
+    mfa_needed = user.mfa_enabled_at is not None or is_mfa_required(user)
+    if mfa_needed and (not jwt_data.get('mfa_verified') or auth_session.mfa_verified_at is None):
+        return True
+    return False

@@ -1,4 +1,4 @@
-from flask import Blueprint, request
+from flask import Blueprint, current_app, request
 from flask_jwt_extended import (
     current_user,
     get_jwt,
@@ -14,6 +14,9 @@ from app.models import AuthSession, User
 from app.schemas.auth_schema import (
     ForgotPasswordSchema,
     LoginSchema,
+    MfaChallengeSchema,
+    MfaEnrollmentStartSchema,
+    MfaRecoveryCodesSchema,
     RegisterSchema,
     ResetPasswordSchema,
     VerifyEmailSchema,
@@ -29,7 +32,23 @@ from app.services.account_recovery_service import (
     verify_email_with_token,
 )
 from app.services.audit_service import identifier_fingerprint, log_event
-from app.services.auth_service import AuthenticationError, authenticate, register_user
+from app.services.auth_service import (
+    AuthenticationError,
+    authenticate,
+    record_successful_login,
+    register_user,
+)
+from app.services.mfa_service import (
+    MfaError,
+    confirm_mfa_enrollment,
+    generate_recovery_codes,
+    is_mfa_required,
+    issue_mfa_challenge,
+    mfa_status,
+    start_mfa_enrollment,
+    verify_current_totp,
+    verify_mfa_challenge,
+)
 from app.services.rbac_service import validate_role_assignment
 from app.services.session_service import (
     RefreshTokenReuseError,
@@ -236,6 +255,47 @@ def confirm_email_verification():
     return success({'email_verified': True}, 'Email address verified')
 
 
+def _mfa_error_response(exc: MfaError):
+    status = 429 if exc.attempts_remaining == 0 else 401
+    return fail('MFA_VERIFICATION_FAILED', MfaError.public_message, status)
+
+
+def _complete_login(user, ip_address, user_agent, *, mfa_verified: bool, extra_data=None):
+    risk_flags = detect_login_risk(user, ip_address=ip_address, user_agent=user_agent)
+    auth_session, access_token, refresh_token = create_auth_session(
+        user,
+        ip_address=ip_address,
+        user_agent=user_agent,
+        mfa_verified=mfa_verified,
+    )
+    record_successful_login(user)
+    log_event(
+        'auth.login_succeeded',
+        'AuthSession',
+        entity_id=auth_session.id,
+        tenant_id=user.tenant_id,
+        actor=user,
+        metadata={'risk_flags': risk_flags, 'mfa_verified': mfa_verified},
+    )
+    if risk_flags:
+        log_event(
+            'auth.suspicious_login',
+            'AuthSession',
+            entity_id=auth_session.id,
+            tenant_id=user.tenant_id,
+            actor=user,
+            metadata={'risk_flags': risk_flags},
+        )
+    db.session.commit()
+
+    data = {'user': user.to_dict()}
+    data.update(extra_data or {})
+    response, status = success(data, 'Login successful')
+    set_access_cookies(response, access_token)
+    set_refresh_cookies(response, refresh_token)
+    return response, status
+
+
 @auth_bp.post('/login')
 @limiter.limit('10 per minute')
 def login():
@@ -289,35 +349,179 @@ def login():
 
     ip_address = request_ip_address()
     user_agent = request.headers.get('User-Agent')
-    risk_flags = detect_login_risk(user, ip_address=ip_address, user_agent=user_agent)
-    auth_session, access_token, refresh_token = create_auth_session(
-        user,
-        ip_address=ip_address,
-        user_agent=user_agent,
-    )
-    log_event(
-        'auth.login_succeeded',
-        'AuthSession',
-        entity_id=auth_session.id,
-        tenant_id=user.tenant_id,
-        actor=user,
-        metadata={'risk_flags': risk_flags},
-    )
-    if risk_flags:
-        log_event(
-            'auth.suspicious_login',
-            'AuthSession',
-            entity_id=auth_session.id,
-            tenant_id=user.tenant_id,
-            actor=user,
-            metadata={'risk_flags': risk_flags},
-        )
-    db.session.commit()
+    mfa_enrollment_required = is_mfa_required(user) and user.mfa_enabled_at is None
+    mfa_verification_required = user.mfa_enabled_at is not None
 
-    response, status = success({'user': user.to_dict()}, 'Login successful')
-    set_access_cookies(response, access_token)
-    set_refresh_cookies(response, refresh_token)
-    return response, status
+    if mfa_enrollment_required or mfa_verification_required:
+        if mfa_enrollment_required and user.email_verified_at is None:
+            try:
+                account_token, raw_token = issue_account_token(user, 'email_verification')
+                send_email_verification_email(user, raw_token)
+                log_event(
+                    'auth.email_verification_requested',
+                    'AccountToken',
+                    entity_id=account_token.id,
+                    actor=user,
+                    metadata={'trigger': 'mfa_enrollment'},
+                )
+                db.session.commit()
+            except EmailDeliveryError:
+                db.session.rollback()
+                log_event(
+                    'auth.email_verification_delivery_failed',
+                    'User',
+                    entity_id=user.id,
+                    actor=user,
+                    metadata={'trigger': 'mfa_enrollment'},
+                )
+                db.session.commit()
+            log_event(
+                'auth.mfa_enrollment_blocked',
+                'User',
+                entity_id=user.id,
+                actor=user,
+                metadata={'reason': 'email_not_verified'},
+            )
+            db.session.commit()
+            return fail(
+                'EMAIL_VERIFICATION_REQUIRED',
+                'Verify your email address before enrolling in multi-factor authentication',
+                403,
+            )
+
+        purpose = 'enroll' if mfa_enrollment_required else 'verify'
+        challenge_token = issue_mfa_challenge(
+            user,
+            purpose,
+            ip_address=ip_address,
+            user_agent=user_agent,
+        )
+        log_event(
+            'auth.mfa_challenge_issued',
+            'User',
+            entity_id=user.id,
+            actor=user,
+            metadata={'purpose': purpose},
+        )
+        db.session.commit()
+        return success(
+            {
+                'mfa_required': True,
+                'mfa_enrollment_required': mfa_enrollment_required,
+                'challenge_token': challenge_token,
+                'challenge_expires_seconds': current_app.config['MFA_CHALLENGE_MINUTES'] * 60,
+            },
+            'Multi-factor authentication required',
+            202,
+        )
+
+    return _complete_login(user, ip_address, user_agent, mfa_verified=False)
+
+
+@auth_bp.post('/mfa/enrollment/start')
+@limiter.limit('10 per hour')
+def mfa_enrollment_start():
+    try:
+        payload = MfaEnrollmentStartSchema().load(request.get_json(silent=True) or {})
+        user, enrollment = start_mfa_enrollment(payload['challenge_token'])
+    except ValidationError as err:
+        return fail('VALIDATION_ERROR', err.messages, 422)
+    except MfaError as exc:
+        return _mfa_error_response(exc)
+
+    log_event('auth.mfa_enrollment_started', 'User', entity_id=user.id, actor=user)
+    db.session.commit()
+    return success(enrollment, 'Authenticator enrollment started')
+
+
+@auth_bp.post('/mfa/enrollment/confirm')
+@limiter.limit('10 per hour')
+def mfa_enrollment_confirm():
+    try:
+        payload = MfaChallengeSchema().load(request.get_json(silent=True) or {})
+        user, recovery_codes, challenge = confirm_mfa_enrollment(
+            payload['challenge_token'],
+            payload['code'],
+        )
+    except ValidationError as err:
+        return fail('VALIDATION_ERROR', err.messages, 422)
+    except MfaError as exc:
+        log_event('auth.mfa_enrollment_failed', 'Authentication', actor=None, metadata={'reason': exc.reason})
+        db.session.commit()
+        return _mfa_error_response(exc)
+
+    log_event(
+        'auth.mfa_enabled',
+        'User',
+        entity_id=user.id,
+        actor=user,
+        metadata={'recovery_codes_issued': len(recovery_codes)},
+    )
+    return _complete_login(
+        user,
+        challenge.get('ip_address') or request_ip_address(),
+        challenge.get('user_agent') or request.headers.get('User-Agent'),
+        mfa_verified=True,
+        extra_data={'recovery_codes': recovery_codes},
+    )
+
+
+@auth_bp.post('/mfa/challenge/verify')
+@limiter.limit('10 per minute')
+def mfa_challenge_verify():
+    try:
+        payload = MfaChallengeSchema().load(request.get_json(silent=True) or {})
+        user, method, challenge = verify_mfa_challenge(payload['challenge_token'], payload['code'])
+    except ValidationError as err:
+        return fail('VALIDATION_ERROR', err.messages, 422)
+    except MfaError as exc:
+        log_event('auth.mfa_verification_failed', 'Authentication', actor=None, metadata={'reason': exc.reason})
+        db.session.commit()
+        return _mfa_error_response(exc)
+
+    log_event(
+        'auth.mfa_verified',
+        'User',
+        entity_id=user.id,
+        actor=user,
+        metadata={'method': method},
+    )
+    return _complete_login(
+        user,
+        challenge.get('ip_address') or request_ip_address(),
+        challenge.get('user_agent') or request.headers.get('User-Agent'),
+        mfa_verified=True,
+    )
+
+
+@auth_bp.get('/mfa/status')
+@jwt_required()
+def get_mfa_status():
+    return success(mfa_status(current_user))
+
+
+@auth_bp.post('/mfa/recovery-codes/regenerate')
+@jwt_required()
+@limiter.limit('5 per hour')
+def regenerate_mfa_recovery_codes():
+    try:
+        payload = MfaRecoveryCodesSchema().load(request.get_json(silent=True) or {})
+        verify_current_totp(current_user, payload['code'])
+    except ValidationError as err:
+        return fail('VALIDATION_ERROR', err.messages, 422)
+    except MfaError as exc:
+        return _mfa_error_response(exc)
+
+    recovery_codes = generate_recovery_codes(current_user)
+    log_event(
+        'auth.mfa_recovery_codes_regenerated',
+        'User',
+        entity_id=current_user.id,
+        actor=current_user,
+        metadata={'recovery_codes_issued': len(recovery_codes)},
+    )
+    db.session.commit()
+    return success({'recovery_codes': recovery_codes}, 'Recovery codes regenerated')
 
 
 @auth_bp.post('/refresh')

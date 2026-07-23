@@ -36,7 +36,7 @@ Validation status:
 - Completed in Step 2C: privacy-safe authentication audit events and suspicious-login flags.
 - Completed in Step 2D: single-use password reset and email verification tokens with expiring database records.
 - Completed in Step 2D: enumeration-resistant recovery requests, SMTP delivery abstraction, audit events, and forced session revocation after password changes.
-- Add MFA for privileged roles.
+- Completed in Step 2E: privileged-role TOTP enrollment, encrypted secrets, one-time recovery codes, and pre-session login challenges.
 
 ## Step 3 — Document security and storage
 

@@ -16,8 +16,22 @@ export default function Login() {
   if (user) return <Navigate to="/dashboard" replace />;
   const submit = async (e) => {
     e.preventDefault(); setError(''); setLoading(true);
-    try { await login(form); navigate(location.state?.from?.pathname || '/dashboard', { replace: true }); }
-    catch (err) { setError(err.error?.message || 'Login failed'); }
+    try {
+      const result = await login(form);
+      const destination = location.state?.from?.pathname || '/dashboard';
+      if (result.mfa_required) {
+        navigate('/mfa', {
+          replace: true,
+          state: {
+            challengeToken: result.challenge_token,
+            enrollmentRequired: result.mfa_enrollment_required,
+            destination,
+          },
+        });
+        return;
+      }
+      navigate(destination, { replace: true });
+    } catch (err) { setError(err.error?.message || 'Login failed'); }
     finally { setLoading(false); }
   };
   return (

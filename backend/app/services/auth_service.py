@@ -101,6 +101,9 @@ def authenticate(email: str, password: str) -> User:
     user.failed_login_attempts = 0
     user.last_failed_login_at = None
     user.locked_until = None
-    user.last_login_at = now
     db.session.commit()
     return user
+
+
+def record_successful_login(user: User) -> None:
+    user.last_login_at = utcnow()

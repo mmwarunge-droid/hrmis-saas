@@ -29,6 +29,10 @@ Use environment variables for `SECRET_KEY`, `JWT_SECRET_KEY`, `DATABASE_URL`, CO
 
 Sensitive actions create audit entries: authentication success/failure, account lockout, suspicious login, password reset and email verification, refresh-token replay, logout and forced session revocation, tenant creation/update, user creation/role changes, employee create/update/delete, document upload/update, leave decisions, attendance check-in/out, and onboarding workflow activity. Authentication audit entries reduce IP precision and store keyed user-agent and identifier fingerprints rather than raw values.
 
+## Privileged-role MFA
+
+`SUPER_ADMIN` and `CLIENT_ADMIN` accounts complete a short-lived Redis-backed challenge before JWT cookies are issued. TOTP seeds are encrypted with rotatable Fernet keys, recovery codes are stored as keyed hashes, and verified sessions carry an MFA assurance claim. Rotate encryption keys by prepending the new key to `MFA_ENCRYPTION_KEYS`, retaining previous keys until stored secrets are re-encrypted.
+
 ## Production recommendations
 
 - Use a private, persistent Redis deployment for session and JTI revocation state.

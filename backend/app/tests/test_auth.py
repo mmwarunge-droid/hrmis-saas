@@ -421,3 +421,141 @@ def test_expired_password_reset_token_is_rejected(client, app, admin_user):
 
     assert response.status_code == 400
     assert response.get_json()['error']['code'] == 'INVALID_OR_EXPIRED_TOKEN'
+
+
+def _enable_required_mfa(client, app):
+    import pyotp
+
+    from app.extensions import db
+    from app.models import User
+    from app.models.base import utcnow
+
+    app.config['MFA_REQUIRED_ROLES'] = ['CLIENT_ADMIN']
+    with app.app_context():
+        user = User.query.filter_by(email='admin@acme.test').one()
+        user.email_verified_at = utcnow()
+        db.session.commit()
+
+    login = _login(client)
+    assert login.status_code == 202
+    challenge_token = login.get_json()['data']['challenge_token']
+    enrollment = client.post('/api/auth/mfa/enrollment/start', json={'challenge_token': challenge_token})
+    assert enrollment.status_code == 200
+    secret = enrollment.get_json()['data']['manual_key']
+    confirmation = client.post(
+        '/api/auth/mfa/enrollment/confirm',
+        json={'challenge_token': challenge_token, 'code': pyotp.TOTP(secret).now()},
+    )
+    assert confirmation.status_code == 200
+    return secret, confirmation.get_json()['data']['recovery_codes']
+
+
+def test_privileged_login_requires_mfa_enrollment_before_session_cookies(client, app, admin_user):
+    from app.extensions import db
+    from app.models import User
+    from app.models.base import utcnow
+
+    app.config['MFA_REQUIRED_ROLES'] = ['CLIENT_ADMIN']
+    with app.app_context():
+        user = User.query.filter_by(email='admin@acme.test').one()
+        user.email_verified_at = utcnow()
+        db.session.commit()
+
+    response = _login(client)
+
+    assert response.status_code == 202
+    assert response.get_json()['data']['mfa_required'] is True
+    assert response.get_json()['data']['mfa_enrollment_required'] is True
+    assert response.get_json()['data']['challenge_token']
+    assert client.get_cookie('access_token_cookie', path='/api/') is None
+    assert client.get_cookie('refresh_token_cookie', path='/api/auth/refresh') is None
+
+
+def test_mfa_enrollment_encrypts_secret_issues_codes_and_creates_verified_session(client, app, admin_user):
+    import pyotp
+
+    from app.models import AuditLog, AuthSession, MfaRecoveryCode, User
+
+    app.config['MFA_REQUIRED_ROLES'] = ['CLIENT_ADMIN']
+    with app.app_context():
+        from app.extensions import db
+        from app.models.base import utcnow
+
+        user = User.query.filter_by(email='admin@acme.test').one()
+        user.email_verified_at = utcnow()
+        db.session.commit()
+
+    login = _login(client)
+    challenge_token = login.get_json()['data']['challenge_token']
+    enrollment = client.post('/api/auth/mfa/enrollment/start', json={'challenge_token': challenge_token})
+    assert enrollment.status_code == 200
+    data = enrollment.get_json()['data']
+    assert data['provisioning_uri'].startswith('otpauth://totp/')
+    assert data['qr_code_data_uri'].startswith('data:image/svg+xml;base64,')
+
+    confirmation = client.post(
+        '/api/auth/mfa/enrollment/confirm',
+        json={'challenge_token': challenge_token, 'code': pyotp.TOTP(data['manual_key']).now()},
+    )
+
+    assert confirmation.status_code == 200
+    recovery_codes = confirmation.get_json()['data']['recovery_codes']
+    assert len(recovery_codes) == app.config['MFA_RECOVERY_CODE_COUNT']
+    assert client.get_cookie('access_token_cookie', path='/api/') is not None
+    with app.app_context():
+        user = User.query.filter_by(email='admin@acme.test').one()
+        assert user.mfa_enabled_at is not None
+        assert user.mfa_pending_secret_encrypted is None
+        assert data['manual_key'] not in user.mfa_secret_encrypted
+        assert MfaRecoveryCode.query.filter_by(user_id=user.id).count() == len(recovery_codes)
+        assert AuthSession.query.one().mfa_verified_at is not None
+        assert AuditLog.query.filter_by(action='auth.mfa_enabled').count() == 1
+
+
+def test_enabled_mfa_login_accepts_one_recovery_code_once(client, app, admin_user):
+    _, recovery_codes = _enable_required_mfa(client, app)
+    client.post('/api/auth/logout', headers=_csrf_header(client))
+
+    login = _login(client)
+    assert login.status_code == 202
+    challenge_token = login.get_json()['data']['challenge_token']
+    verified = client.post(
+        '/api/auth/mfa/challenge/verify',
+        json={'challenge_token': challenge_token, 'code': recovery_codes[0]},
+    )
+    assert verified.status_code == 200
+
+    client.post('/api/auth/logout', headers=_csrf_header(client))
+    second_login = _login(client)
+    replay = client.post(
+        '/api/auth/mfa/challenge/verify',
+        json={
+            'challenge_token': second_login.get_json()['data']['challenge_token'],
+            'code': recovery_codes[0],
+        },
+    )
+    assert replay.status_code == 401
+    assert replay.get_json()['error']['code'] == 'MFA_VERIFICATION_FAILED'
+
+
+def test_privileged_session_without_mfa_claim_is_revoked_when_policy_is_enabled(client, app, admin_user):
+    assert _login(client).status_code == 200
+    assert client.get('/api/auth/me').status_code == 200
+
+    app.config['MFA_REQUIRED_ROLES'] = ['CLIENT_ADMIN']
+
+    response = client.get('/api/auth/me')
+    assert response.status_code == 401
+    assert response.get_json()['error']['code'] == 'TOKEN_REVOKED'
+
+
+def test_unverified_privileged_login_sends_verification_and_blocks_enrollment(client, app, admin_user):
+    app.config['MFA_REQUIRED_ROLES'] = ['CLIENT_ADMIN']
+
+    response = _login(client)
+
+    assert response.status_code == 403
+    assert response.get_json()['error']['code'] == 'EMAIL_VERIFICATION_REQUIRED'
+    assert len(app.extensions['mail_outbox']) == 1
+    assert 'Verify your HRMIS email address' in app.extensions['mail_outbox'][0]['subject']
+    assert client.get_cookie('access_token_cookie', path='/api/') is None

@@ -20,23 +20,44 @@ export function AuthProvider({ children }) {
 
   useEffect(() => { loadUser(); }, [loadUser]);
 
-  const login = async (credentials) => {
+  const login = useCallback(async (credentials) => {
     const response = await authApi.login(credentials);
+    if (response.data.mfa_required) return response.data;
     setUser(response.data.user);
-    return response.data.user;
-  };
+    return response.data;
+  }, []);
 
-  const logout = async () => {
+  const confirmMfaEnrollment = useCallback(async (payload) => {
+    const response = await authApi.confirmMfaEnrollment(payload);
+    setUser(response.data.user);
+    return response.data;
+  }, []);
+
+  const verifyMfaChallenge = useCallback(async (payload) => {
+    const response = await authApi.verifyMfaChallenge(payload);
+    setUser(response.data.user);
+    return response.data;
+  }, []);
+
+  const logout = useCallback(async () => {
     try {
       await authApi.logout();
     } finally {
       setUser(null);
     }
-  };
+  }, []);
 
   const value = useMemo(
-    () => ({ user, loading, login, logout, reloadUser: loadUser }),
-    [user, loading, loadUser],
+    () => ({
+      user,
+      loading,
+      login,
+      logout,
+      reloadUser: loadUser,
+      confirmMfaEnrollment,
+      verifyMfaChallenge,
+    }),
+    [user, loading, loadUser, login, logout, confirmMfaEnrollment, verifyMfaChallenge],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

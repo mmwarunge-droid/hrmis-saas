@@ -15,6 +15,7 @@ class AuthSession(db.Model, TimestampMixin, ReprMixin):
     revoked_reason = db.Column(db.String(120), nullable=True)
     ip_address = db.Column(db.String(80), nullable=True)
     user_agent = db.Column(db.String(255), nullable=True)
+    mfa_verified_at = db.Column(db.DateTime, nullable=True, index=True)
 
     user = db.relationship('User', back_populates='auth_sessions')
     tenant = db.relationship('Tenant')
@@ -35,4 +36,6 @@ class AuthSession(db.Model, TimestampMixin, ReprMixin):
             'revoked_reason': self.revoked_reason,
             'ip_address': self.ip_address,
             'user_agent': self.user_agent,
+            'mfa_verified': self.mfa_verified_at is not None,
+            'mfa_verified_at': self.mfa_verified_at.isoformat() if self.mfa_verified_at else None,
         }
