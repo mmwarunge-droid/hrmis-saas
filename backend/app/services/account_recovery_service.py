@@ -8,7 +8,7 @@ from sqlalchemy import select
 
 from app.extensions import db
 from app.models import AccountToken, User
-from app.models.base import utcnow
+from app.models.base import to_utc_naive, utcnow
 from app.services.session_service import revoke_all_user_sessions
 from app.utils.email import send_email
 from app.utils.security import hash_password, verify_password
@@ -113,7 +113,7 @@ def _valid_account_token(raw_token: str, purpose: str) -> AccountToken:
     if (
         not account_token
         or account_token.consumed_at is not None
-        or account_token.expires_at <= utcnow()
+        or to_utc_naive(account_token.expires_at) <= utcnow()
         or not account_token.user
         or not account_token.user.is_active
         or account_token.user.deleted_at is not None

@@ -11,6 +11,13 @@ def utcnow():
     return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
+def to_utc_naive(value: datetime) -> datetime:
+    """Normalize aware or naive datetimes to naive UTC."""
+    if value.tzinfo is None:
+        return value
+    return value.astimezone(timezone.utc).replace(tzinfo=None)
+
+
 class GUID(TypeDecorator):
     """Platform-independent UUID type: native UUID on PostgreSQL, CHAR(36) elsewhere."""
     impl = CHAR
