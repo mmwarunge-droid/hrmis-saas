@@ -1,3 +1,4 @@
+import { ArrowRight, LockKeyhole } from 'lucide-react';
 import { useState } from 'react';
 import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import Alert from '../components/ui/Alert.jsx';
@@ -13,9 +14,13 @@ export default function Login() {
   const [form, setForm] = useState({ email: '', password: '' });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+
   if (user) return <Navigate to="/dashboard" replace />;
-  const submit = async (e) => {
-    e.preventDefault(); setError(''); setLoading(true);
+
+  const submit = async (event) => {
+    event.preventDefault();
+    setError('');
+    setLoading(true);
     try {
       const result = await login(form);
       const destination = location.state?.from?.pathname || '/dashboard';
@@ -31,20 +36,26 @@ export default function Login() {
         return;
       }
       navigate(destination, { replace: true });
-    } catch (err) { setError(err.error?.message || 'Login failed'); }
-    finally { setLoading(false); }
+    } catch (err) {
+      setError(err.error?.message || 'Login failed');
+    } finally {
+      setLoading(false);
+    }
   };
+
   return (
-    <Card className="w-full max-w-md">
-      <h1 className="text-2xl font-bold">Sign in</h1>
-      <p className="mt-1 text-sm text-slate-500">Access your consulting-led HRMIS workspace.</p>
-      <form onSubmit={submit} className="mt-6 space-y-4">
+    <Card className="w-full border-white/80 p-7 shadow-2xl">
+      <span className="grid h-11 w-11 place-items-center rounded-2xl bg-cyan-50 text-cyan-700"><LockKeyhole size={20} /></span>
+      <h1 className="mt-5 text-3xl font-bold tracking-tight text-slate-950">Welcome back</h1>
+      <p className="mt-2 text-sm leading-6 text-slate-500">Sign in to your organization’s people workspace.</p>
+      <form onSubmit={submit} className="mt-7 space-y-4">
         {error && <Alert type="error">{error}</Alert>}
-        <Input label="Email" type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} required />
-        <Input label="Password" type="password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} required />
-        <div className="text-right"><Link className="text-sm font-medium text-slate-700 underline" to="/forgot-password">Forgot password?</Link></div>
-        <Button className="w-full" disabled={loading}>{loading ? 'Signing in...' : 'Sign in'}</Button>
+        <Input label="Work email" type="email" value={form.email} onChange={(event) => setForm({ ...form, email: event.target.value })} autoComplete="email" required />
+        <Input label="Password" type="password" value={form.password} onChange={(event) => setForm({ ...form, password: event.target.value })} autoComplete="current-password" required />
+        <div className="text-right"><Link className="text-sm font-semibold text-cyan-700 hover:text-cyan-900" to="/forgot-password">Forgot password?</Link></div>
+        <Button variant="accent" className="w-full" size="lg" disabled={loading}>{loading ? 'Signing in...' : <>Sign in <ArrowRight size={17} /></>}</Button>
       </form>
+      <p className="mt-5 text-center text-xs text-slate-400">Protected by secure cookies, CSRF controls and privileged-role MFA.</p>
     </Card>
   );
 }

@@ -15,6 +15,7 @@ def test_blueprint_prefixes_preserve_resource_paths(app):
     assert '/api/users' in rules
     assert '/api/employees' in rules
     assert '/api/documents' in rules
+    assert '/api/tenants/provision' in rules
 
 
 def test_public_first_user_bootstrap_is_disabled(client):

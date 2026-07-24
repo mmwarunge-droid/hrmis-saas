@@ -1,12 +1,14 @@
 from flask import Blueprint, request
 from flask_jwt_extended import current_user, jwt_required
 from marshmallow import ValidationError
+from sqlalchemy.exc import IntegrityError
 
 from app.extensions import db
 from app.models import User
 from app.schemas.user_schema import UserCreateSchema, UserRoleUpdateSchema, UserUpdateSchema
 from app.services.auth_service import register_user
 from app.services.audit_service import log_event
+from app.services.employee_service import create_employee
 from app.services.rbac_service import set_user_roles, validate_role_assignment
 from app.utils.decorators import permission_required, tenant_query
 from app.utils.pagination import get_pagination, paginated_response
@@ -32,16 +34,42 @@ def create_user():
         payload = UserCreateSchema().load(request.get_json() or {})
     except ValidationError as err:
         return fail('VALIDATION_ERROR', err.messages, 422)
+
+    employee_payload = payload.pop('employee_profile', None)
     if not current_user.has_role('SUPER_ADMIN'):
         payload['tenant_id'] = current_user.tenant_id
+
     try:
         validate_role_assignment(current_user, payload['roles'], payload.get('tenant_id'))
-        user = register_user(payload, actor=current_user)
+        user = register_user(payload, actor=current_user, commit=False)
+        employee = None
+
+        if employee_payload:
+            if not user.tenant_id:
+                raise ValueError('An organization is required when creating an employee profile')
+            employee_payload = {
+                **employee_payload,
+                'user_id': user.id,
+                'first_name': user.first_name,
+                'last_name': user.last_name,
+                'email': user.email,
+            }
+            employee = create_employee(employee_payload, user.tenant_id, commit=False)
+
         log_event('user.create', 'User', user.id, tenant_id=user.tenant_id)
-    except ValueError as exc:
+        db.session.commit()
+    except (ValueError, IntegrityError) as exc:
         db.session.rollback()
-        return fail('USER_CREATE_FAILED', str(exc), 400)
-    return success(user.to_dict(), 'User created', 201)
+        message = 'User or employee identifier is already in use' if isinstance(exc, IntegrityError) else str(exc)
+        return fail('USER_CREATE_FAILED', message, 400)
+    except Exception:
+        db.session.rollback()
+        raise
+
+    data = user.to_dict()
+    if employee:
+        data['employee_profile'] = employee.to_dict()
+    return success(data, 'User created', 201)
 
 
 @user_bp.get('/<user_id>')
@@ -75,8 +103,9 @@ def update_roles(user_id):
     try:
         payload = UserRoleUpdateSchema().load(request.get_json() or {})
         validate_role_assignment(current_user, payload['roles'], user.tenant_id)
-        set_user_roles(user, payload['roles'], assigned_by_id=current_user.id, commit=True)
+        set_user_roles(user, payload['roles'], assigned_by_id=current_user.id, commit=False)
         log_event('user.roles_update', 'User', user.id, tenant_id=user.tenant_id, metadata={'roles': payload['roles']})
+        db.session.commit()
     except (ValidationError, ValueError) as err:
         db.session.rollback()
         return fail('ROLE_UPDATE_FAILED', getattr(err, 'messages', str(err)), 400)

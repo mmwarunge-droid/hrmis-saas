@@ -26,7 +26,7 @@ PERMISSIONS = {
 
 
 
-TENANT_ASSIGNABLE_ROLES = {'CLIENT_ADMIN', 'MANAGER', 'EMPLOYEE'}
+TENANT_ASSIGNABLE_ROLES = {'MANAGER', 'EMPLOYEE'}
 
 
 def validate_role_assignment(actor, role_names, tenant_id=None):

@@ -11,7 +11,7 @@ def _assert_tenant_fk(model, object_id, tenant_id, field_name):
         raise ValueError(f'{field_name} is invalid for this tenant')
 
 
-def create_employee(payload, tenant_id):
+def create_employee(payload, tenant_id, commit: bool = True):
     _assert_tenant_fk(Department, payload.get('department_id'), tenant_id, 'department_id')
     _assert_tenant_fk(Employee, payload.get('manager_id'), tenant_id, 'manager_id')
     employee = Employee(tenant_id=tenant_id, **payload)
@@ -28,7 +28,8 @@ def create_employee(payload, tenant_id):
             reason='Initial hire',
         ))
     log_event('employee.create', 'Employee', employee.id, tenant_id=tenant_id)
-    db.session.commit()
+    if commit:
+        db.session.commit()
     return employee
 
 

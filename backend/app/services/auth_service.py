@@ -30,7 +30,7 @@ def claims_for(user: User) -> dict:
     }
 
 
-def register_user(payload: dict, actor=None) -> User:
+def register_user(payload: dict, actor=None, commit: bool = True) -> User:
     if User.query.filter_by(email=payload['email'].lower()).first():
         raise ValueError('Email is already registered')
     seed_roles_permissions(commit=False)
@@ -45,7 +45,8 @@ def register_user(payload: dict, actor=None) -> User:
     db.session.add(user)
     db.session.flush()
     set_user_roles(user, payload.get('roles') or ['EMPLOYEE'], assigned_by_id=getattr(actor, 'id', None))
-    db.session.commit()
+    if commit:
+        db.session.commit()
     return user
 
 

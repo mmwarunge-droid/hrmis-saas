@@ -19,7 +19,7 @@ function readCookie(name) {
 }
 
 const apiClient = axios.create({
-  baseURL: configuredBaseUrl || 'http://localhost:5000/api',
+  baseURL: configuredBaseUrl || '/api',
   headers: { 'Content-Type': 'application/json' },
   timeout: 30000,
   withCredentials: true,
