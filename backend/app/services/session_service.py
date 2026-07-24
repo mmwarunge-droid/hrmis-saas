@@ -9,7 +9,7 @@ from sqlalchemy import select
 
 from app.extensions import db, redis_store
 from app.models import AuthSession, User
-from app.models.base import utcnow
+from app.models.base import to_utc_naive, utcnow
 from app.services.auth_service import claims_for
 from app.utils.request_security import anonymize_ip_address, user_agent_family
 
@@ -38,7 +38,7 @@ def _redis_key(kind: str, value: str) -> str:
 
 
 def _ttl_seconds(expires_at: datetime) -> int:
-    return max(int((expires_at - utcnow()).total_seconds()), 1)
+    return max(int((to_utc_naive(expires_at) - utcnow()).total_seconds()), 1)
 
 
 def _redis_get(key: str):
@@ -102,7 +102,7 @@ def rotate_auth_session(user: User, jwt_data: dict):
         not auth_session
         or str(auth_session.user_id) != str(user.id)
         or auth_session.revoked_at is not None
-        or auth_session.expires_at <= utcnow()
+        or to_utc_naive(auth_session.expires_at) <= utcnow()
     ):
         raise SessionRevokedError('The authentication session is no longer active')
 
@@ -218,7 +218,7 @@ def is_token_revoked(jwt_data: dict) -> bool:
         return True
     if str(auth_session.user_id) != str(jwt_data.get('sub')):
         return True
-    if auth_session.revoked_at is not None or auth_session.expires_at <= utcnow():
+    if auth_session.revoked_at is not None or to_utc_naive(auth_session.expires_at) <= utcnow():
         return True
 
     user = db.session.get(User, auth_session.user_id)

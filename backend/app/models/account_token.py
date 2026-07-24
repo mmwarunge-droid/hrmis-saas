@@ -1,5 +1,5 @@
 from app.extensions import db
-from app.models.base import GUID, ReprMixin, TimestampMixin, utcnow, uuid_pk
+from app.models.base import GUID, ReprMixin, TimestampMixin, to_utc_naive, utcnow, uuid_pk
 
 
 class AccountToken(db.Model, TimestampMixin, ReprMixin):
@@ -35,4 +35,4 @@ class AccountToken(db.Model, TimestampMixin, ReprMixin):
 
     @property
     def active(self) -> bool:
-        return self.consumed_at is None and self.expires_at > utcnow()
+        return self.consumed_at is None and to_utc_naive(self.expires_at) > utcnow()
