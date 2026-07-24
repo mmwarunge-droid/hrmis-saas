@@ -36,3 +36,88 @@ textarea {
   scrollbar-width: thin;
   scrollbar-color: #cbd5e1 transparent;
 }
+
+.org-tree {
+  min-width: max-content;
+}
+
+.org-tree ul {
+  position: relative;
+  display: flex;
+  justify-content: center;
+  margin: 0;
+  padding-top: 2rem;
+}
+
+.org-tree > ul {
+  min-width: 100%;
+  padding-top: 0;
+}
+
+.org-tree li {
+  position: relative;
+  list-style: none;
+  padding: 2rem 0.75rem 0;
+  text-align: center;
+}
+
+.org-tree > ul > li {
+  padding-top: 0;
+}
+
+.org-tree li::before,
+.org-tree li::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 50%;
+  width: 50%;
+  height: 2rem;
+  border-top: 1px solid #cbd5e1;
+}
+
+.org-tree li::after {
+  right: auto;
+  left: 50%;
+  border-left: 1px solid #cbd5e1;
+}
+
+.org-tree li:first-child::before,
+.org-tree li:last-child::after {
+  border: 0;
+}
+
+.org-tree li:last-child::before {
+  border-right: 1px solid #cbd5e1;
+  border-radius: 0 0.75rem 0 0;
+}
+
+.org-tree li:first-child::after {
+  border-radius: 0.75rem 0 0 0;
+}
+
+.org-tree li:only-child::before {
+  display: none;
+}
+
+.org-tree li:only-child::after {
+  left: 50%;
+  width: 0;
+  border-top: 0;
+}
+
+.org-tree ul ul::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 50%;
+  width: 0;
+  height: 2rem;
+  border-left: 1px solid #cbd5e1;
+}
+
+.org-tree > ul::before,
+.org-tree > ul > li::before,
+.org-tree > ul > li::after {
+  display: none;
+}

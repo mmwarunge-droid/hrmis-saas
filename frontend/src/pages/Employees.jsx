@@ -20,6 +20,7 @@ import usePermissions from '../hooks/usePermissions';
 export default function Employees() {
   const [employees, setEmployees] = useState([]);
   const [departments, setDepartments] = useState([]);
+  const [employeeOptions, setEmployeeOptions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [open, setOpen] = useState(false);
@@ -32,9 +33,14 @@ export default function Employees() {
 
   const load = async () => {
     try {
-      const [employeeResponse, departmentResponse] = await Promise.all([employeeApi.list(), employeeApi.departments()]);
+      const [employeeResponse, departmentResponse, optionResponse] = await Promise.all([
+        employeeApi.list(),
+        employeeApi.departments(),
+        employeeApi.options(),
+      ]);
       setEmployees(employeeResponse.data.items || []);
       setDepartments(departmentResponse.data.items || []);
+      setEmployeeOptions(optionResponse.data.items || []);
     } catch (err) {
       setError(err.error?.message || 'Unable to load people directory');
     } finally {
@@ -133,7 +139,7 @@ export default function Employees() {
       )}
 
       <Modal title="Create employee" open={open} onClose={() => setOpen(false)}>
-        <EmployeeForm onSubmit={create} loading={saving} />
+        <EmployeeForm onSubmit={create} loading={saving} employees={employeeOptions} departments={departments} />
       </Modal>
     </div>
   );
