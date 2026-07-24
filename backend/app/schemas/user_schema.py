@@ -20,6 +20,20 @@ class TenantUpdateSchema(Schema):
     billing_plan = fields.Str(required=False)
 
 
+class EmployeeAccountProfileSchema(Schema):
+    employee_number = fields.Str(required=True, validate=validate.Length(min=1, max=80))
+    hire_date = fields.Date(required=True)
+    job_title = fields.Str(required=False, allow_none=True)
+    department_id = fields.UUID(required=False, allow_none=True)
+    manager_id = fields.UUID(required=False, allow_none=True)
+    work_location = fields.Str(required=False, allow_none=True)
+    employment_type = fields.Str(
+        required=False,
+        load_default='full_time',
+        validate=validate.OneOf(['full_time', 'part_time', 'contractor', 'intern', 'temporary']),
+    )
+
+
 class UserCreateSchema(Schema):
     tenant_id = fields.UUID(required=False, allow_none=True)
     email = fields.Email(required=True)
@@ -27,6 +41,19 @@ class UserCreateSchema(Schema):
     last_name = fields.Str(required=True, validate=validate.Length(min=1, max=120))
     password = fields.Str(required=True, validate=validate.Length(min=10, max=128), load_only=True)
     roles = fields.List(fields.Str(), required=True, validate=validate.Length(min=1))
+    employee_profile = fields.Nested(EmployeeAccountProfileSchema, required=False, allow_none=True)
+
+
+class OrganizationAdminSchema(Schema):
+    email = fields.Email(required=True)
+    first_name = fields.Str(required=True, validate=validate.Length(min=1, max=120))
+    last_name = fields.Str(required=True, validate=validate.Length(min=1, max=120))
+    password = fields.Str(required=True, validate=validate.Length(min=10, max=128), load_only=True)
+
+
+class OrganizationProvisionSchema(Schema):
+    organization = fields.Nested(TenantCreateSchema, required=True)
+    admin = fields.Nested(OrganizationAdminSchema, required=True)
 
 
 class UserUpdateSchema(Schema):
