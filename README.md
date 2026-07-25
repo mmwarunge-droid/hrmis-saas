@@ -34,6 +34,11 @@ cp .env.example .env
 npm run dev
 ```
 
+
+## Existing employee access
+
+For a person already present in the People directory, open the employee record and choose **Provision access**. The workflow creates a tenant-scoped `EMPLOYEE` or `MANAGER` account, links it to the existing employee profile, and rolls back the entire operation if the email or employee link conflicts.
+
 ## Administrator provisioning
 
 `python seed.py` creates local demo data only and is intentionally blocked in production.

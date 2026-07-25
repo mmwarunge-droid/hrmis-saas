@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
-import { CalendarClock, History, Pencil, UserRoundCheck } from 'lucide-react';
+import { CalendarClock, History, KeyRound, Pencil, UserRoundCheck } from 'lucide-react';
 import { useParams } from 'react-router-dom';
 import { employeeApi } from '../api/employeeApi';
+import EmployeeAccessForm from '../components/employees/EmployeeAccessForm.jsx';
 import EmployeeForm from '../components/employees/EmployeeForm.jsx';
 import Alert from '../components/ui/Alert.jsx';
 import Avatar from '../components/ui/Avatar.jsx';
@@ -19,8 +20,11 @@ export default function EmployeeDetails() {
   const [departments, setDepartments] = useState([]);
   const [history, setHistory] = useState([]);
   const [open, setOpen] = useState(false);
+  const [accessOpen, setAccessOpen] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [accessSaving, setAccessSaving] = useState(false);
   const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
   const { hasPermission } = usePermissions();
 
   const load = async () => {
@@ -75,11 +79,13 @@ export default function EmployeeDetails() {
   const update = async (payload) => {
     setSaving(true);
     setError('');
+    setSuccess('');
 
     try {
       await employeeApi.update(id, payload);
       await load();
       setOpen(false);
+      setSuccess('Employment details updated.');
     } catch (err) {
       setError(err.error?.message || 'Employee update failed');
     } finally {
@@ -87,12 +93,32 @@ export default function EmployeeDetails() {
     }
   };
 
+  const provisionAccess = async (payload) => {
+    setAccessSaving(true);
+    setError('');
+    setSuccess('');
+
+    try {
+      const response = await employeeApi.provisionAccess(id, payload);
+      setEmployee(response.data.employee);
+      setAccessOpen(false);
+      setSuccess(`Access was provisioned for ${response.data.user.email}.`);
+    } catch (err) {
+      setError(err.error?.message || 'Access provisioning failed');
+    } finally {
+      setAccessSaving(false);
+    }
+  };
+
   if (error && !employee) return <Alert type="error">{error}</Alert>;
   if (!employee) return <Spinner />;
+
+  const canProvisionAccess = hasPermission('user:create') && hasPermission('employee:update');
 
   return (
     <div className="space-y-6">
       {error && <Alert type="error">{error}</Alert>}
+      {success && <Alert type="success">{success}</Alert>}
 
       <Card>
         <div className="flex flex-wrap items-start justify-between gap-4">
@@ -104,16 +130,26 @@ export default function EmployeeDetails() {
                 <Badge tone={employee.employment_status === 'active' ? 'green' : 'amber'}>
                   {employee.employment_status}
                 </Badge>
+                <Badge tone={employee.user_id ? 'blue' : 'slate'}>
+                  {employee.user_id ? 'Access enabled' : 'No user access'}
+                </Badge>
               </div>
               <p className="mt-1 font-medium text-cyan-700">{employee.job_title || 'Role not assigned'}</p>
             </div>
           </div>
 
-          {hasPermission('employee:update') && (
-            <Button variant="secondary" onClick={() => setOpen(true)}>
-              <Pencil size={16} /> Edit employment details
-            </Button>
-          )}
+          <div className="flex flex-wrap gap-2">
+            {!employee.user_id && canProvisionAccess && employee.employment_status !== 'terminated' && (
+              <Button variant="accent" onClick={() => setAccessOpen(true)}>
+                <KeyRound size={16} /> Provision access
+              </Button>
+            )}
+            {hasPermission('employee:update') && (
+              <Button variant="secondary" onClick={() => setOpen(true)}>
+                <Pencil size={16} /> Edit employment details
+              </Button>
+            )}
+          </div>
         </div>
 
         <div className="mt-6 grid gap-4 text-sm md:grid-cols-2 xl:grid-cols-3">
@@ -179,6 +215,19 @@ export default function EmployeeDetails() {
           excludeEmployeeId={employee.id}
           submitLabel="Update employee"
           showChangeContext
+        />
+      </Modal>
+
+      <Modal
+        title={`Provision access for ${employee.full_name}`}
+        open={accessOpen}
+        onClose={() => setAccessOpen(false)}
+        size="lg"
+      >
+        <EmployeeAccessForm
+          employee={employee}
+          onSubmit={provisionAccess}
+          loading={accessSaving}
         />
       </Modal>
     </div>

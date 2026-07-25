@@ -38,6 +38,7 @@ class Employee(db.Model, TenantMixin, TimestampMixin, SoftDeleteMixin, ReprMixin
     onboarding_assignments = db.relationship('EmployeeOnboardingTask', back_populates='employee', cascade='all, delete-orphan')
 
     __table_args__ = (
+        db.UniqueConstraint('user_id', name='uq_employees_user_id'),
         db.UniqueConstraint('tenant_id', 'employee_number', name='uq_employees_tenant_employee_number'),
         db.UniqueConstraint('tenant_id', 'email', name='uq_employees_tenant_email'),
         db.CheckConstraint("employment_status IN ('active','probation','suspended','terminated')", name='ck_employees_status'),

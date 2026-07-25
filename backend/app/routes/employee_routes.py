@@ -12,8 +12,13 @@ from app.schemas.employee_schema import (
     DepartmentArchiveSchema,
     DepartmentSchema,
     DepartmentUpdateSchema,
+    EmployeeAccessProvisionSchema,
     EmployeeCreateSchema,
     EmployeeUpdateSchema,
+)
+from app.services.access_provisioning_service import (
+    AccessProvisioningError,
+    provision_employee_access,
 )
 from app.services.department_service import (
     archive_department,
@@ -375,6 +380,43 @@ def bulk_department_transfer():
             'items': [employee.to_dict() for employee in changed],
         },
         f'{len(changed)} employee(s) transferred',
+    )
+
+
+@employee_bp.post('/<employee_id>/provision-access')
+@jwt_required()
+@permission_required('user:create', 'employee:update')
+def provision_access(employee_id):
+    employee = tenant_query(Employee).filter_by(id=employee_id, deleted_at=None).first_or_404()
+    try:
+        payload = EmployeeAccessProvisionSchema().load(request.get_json() or {})
+        user = provision_employee_access(employee, payload, current_user)
+    except ValidationError as err:
+        return fail('VALIDATION_ERROR', err.messages, 422)
+    except AccessProvisioningError as exc:
+        db.session.rollback()
+        return fail(exc.code, str(exc), exc.status_code)
+    except IntegrityError:
+        db.session.rollback()
+        return fail(
+            'ACCESS_PROVISION_CONFLICT',
+            'A user account with this email or employee link already exists',
+            409,
+        )
+    except ValueError as exc:
+        db.session.rollback()
+        return fail('ACCESS_PROVISION_FAILED', str(exc), 400)
+    except Exception:
+        db.session.rollback()
+        raise
+
+    return success(
+        {
+            'user': user.to_dict(),
+            'employee': employee.to_dict(),
+        },
+        'Employee access provisioned',
+        201,
     )
 
 

@@ -80,7 +80,7 @@ export default function UserProvisionForm({ onSubmit, loading = false, isSuperAd
         <section className="rounded-3xl border border-slate-100 bg-white p-5 shadow-sm">
           <div className="mb-4 flex items-center gap-3">
             <span className="grid h-9 w-9 place-items-center rounded-xl bg-violet-100 text-violet-800"><BriefcaseBusiness size={18} /></span>
-            <div><h3 className="font-bold text-slate-950">Employee profile</h3><p className="text-xs text-slate-500">Creates the employee record in the same transaction.</p></div>
+            <div><h3 className="font-bold text-slate-950">Employee profile</h3><p className="text-xs text-slate-500">Creates a new employee record in the same transaction. For an existing employee, use Provision access from their employee page.</p></div>
           </div>
           <div className="grid gap-4 md:grid-cols-2">
             <Input label="Employee number" name="employee_number" value={form.employee_number} onChange={update} required />
