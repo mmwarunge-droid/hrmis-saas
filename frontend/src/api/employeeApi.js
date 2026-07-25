@@ -7,4 +7,6 @@ export const employeeApi = {
   update: (id, payload) => apiClient.patch(`/employees/${id}`, payload),
   remove: (id) => apiClient.delete(`/employees/${id}`),
   departments: () => apiClient.get('/employees/departments'),
+  options: () => apiClient.get('/employees/options'),
+  orgChart: () => apiClient.get('/employees/org-chart'),
 };

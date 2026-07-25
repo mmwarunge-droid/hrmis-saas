@@ -1,16 +1,145 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { Pencil, UserRoundCheck } from 'lucide-react';
 import { useParams } from 'react-router-dom';
 import { employeeApi } from '../api/employeeApi';
+import EmployeeForm from '../components/employees/EmployeeForm.jsx';
 import Alert from '../components/ui/Alert.jsx';
+import Avatar from '../components/ui/Avatar.jsx';
+import Badge from '../components/ui/Badge.jsx';
+import Button from '../components/ui/Button.jsx';
 import Card from '../components/ui/Card.jsx';
+import Modal from '../components/ui/Modal.jsx';
 import Spinner from '../components/ui/Spinner.jsx';
+import usePermissions from '../hooks/usePermissions.js';
 
 export default function EmployeeDetails() {
   const { id } = useParams();
   const [employee, setEmployee] = useState(null);
+  const [employeeOptions, setEmployeeOptions] = useState([]);
+  const [departments, setDepartments] = useState([]);
+  const [open, setOpen] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
-  useEffect(() => { employeeApi.get(id).then((res) => setEmployee(res.data)).catch((err) => setError(err.error?.message || 'Employee not found')); }, [id]);
-  if (error) return <Alert type="error">{error}</Alert>;
+  const { hasPermission } = usePermissions();
+
+  const load = async () => {
+    const [employeeResponse, optionResponse, departmentResponse] = await Promise.all([
+      employeeApi.get(id),
+      employeeApi.options(),
+      employeeApi.departments(),
+    ]);
+    setEmployee(employeeResponse.data);
+    setEmployeeOptions(optionResponse.data.items || []);
+    setDepartments(departmentResponse.data.items || []);
+  };
+
+  useEffect(() => {
+    let cancelled = false;
+
+    Promise.all([
+      employeeApi.get(id),
+      employeeApi.options(),
+      employeeApi.departments(),
+    ])
+      .then(([employeeResponse, optionResponse, departmentResponse]) => {
+        if (cancelled) return;
+        setEmployee(employeeResponse.data);
+        setEmployeeOptions(optionResponse.data.items || []);
+        setDepartments(departmentResponse.data.items || []);
+      })
+      .catch((err) => {
+        if (!cancelled) {
+          setError(err.error?.message || 'Employee not found');
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [id]);
+
+  const employeeNames = useMemo(
+    () => Object.fromEntries(employeeOptions.map((item) => [item.id, item.full_name])),
+    [employeeOptions],
+  );
+  const departmentNames = useMemo(
+    () => Object.fromEntries(departments.map((item) => [item.id, item.name])),
+    [departments],
+  );
+
+  const update = async (payload) => {
+    setSaving(true);
+    setError('');
+
+    try {
+      await employeeApi.update(id, payload);
+      await load();
+      setOpen(false);
+    } catch (err) {
+      setError(err.error?.message || 'Employee update failed');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (error && !employee) return <Alert type="error">{error}</Alert>;
   if (!employee) return <Spinner />;
-  return <Card><h1 className="text-2xl font-bold">{employee.full_name}</h1><div className="mt-4 grid gap-3 text-sm md:grid-cols-2"><p><b>Email:</b> {employee.email}</p><p><b>Employee no:</b> {employee.employee_number}</p><p><b>Job title:</b> {employee.job_title || '-'}</p><p><b>Status:</b> {employee.employment_status}</p><p><b>Hire date:</b> {employee.hire_date}</p></div></Card>;
+
+  return (
+    <div className="space-y-6">
+      {error && <Alert type="error">{error}</Alert>}
+
+      <Card>
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div className="flex items-center gap-4">
+            <Avatar name={employee.full_name} size="lg" />
+            <div>
+              <div className="flex flex-wrap items-center gap-2">
+                <h1 className="text-2xl font-bold">{employee.full_name}</h1>
+                <Badge tone={employee.employment_status === 'active' ? 'green' : 'amber'}>
+                  {employee.employment_status}
+                </Badge>
+              </div>
+              <p className="mt-1 font-medium text-cyan-700">{employee.job_title || 'Role not assigned'}</p>
+            </div>
+          </div>
+
+          {hasPermission('employee:update') && (
+            <Button variant="secondary" onClick={() => setOpen(true)}>
+              <Pencil size={16} /> Edit reporting line
+            </Button>
+          )}
+        </div>
+
+        <div className="mt-6 grid gap-4 text-sm md:grid-cols-2 xl:grid-cols-3">
+          <p><b>Email:</b> {employee.email}</p>
+          <p><b>Employee no:</b> {employee.employee_number}</p>
+          <p><b>Hire date:</b> {employee.hire_date}</p>
+          <p><b>Department:</b> {departmentNames[employee.department_id] || 'Unassigned'}</p>
+          <p><b>Work location:</b> {employee.work_location || 'Not set'}</p>
+          <p className="flex items-center gap-2">
+            <UserRoundCheck size={16} className="text-cyan-700" />
+            <b>Reports to:</b> {employeeNames[employee.manager_id] || 'Top level'}
+          </p>
+        </div>
+      </Card>
+
+      <Modal
+        title={`Edit ${employee.full_name}`}
+        open={open}
+        onClose={() => setOpen(false)}
+        size="xl"
+      >
+        <EmployeeForm
+          onSubmit={update}
+          loading={saving}
+          initialValues={employee}
+          employees={employeeOptions}
+          departments={departments}
+          excludeEmployeeId={employee.id}
+          submitLabel="Update employee"
+        />
+      </Modal>
+    </div>
+  );
 }
