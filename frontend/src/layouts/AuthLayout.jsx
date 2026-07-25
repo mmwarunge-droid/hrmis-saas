@@ -3,8 +3,8 @@ import { Outlet } from 'react-router-dom';
 
 export default function AuthLayout() {
   return (
-    <main className="min-h-screen bg-slate-950 lg:grid lg:grid-cols-[minmax(0,0.9fr)_minmax(520px,1.1fr)]">
-      <section className="relative grid min-h-screen place-items-center overflow-hidden bg-slate-50 px-4 py-10 sm:px-8">
+    <main className="min-h-dvh bg-slate-950 xl:grid xl:grid-cols-[minmax(420px,0.78fr)_minmax(0,1.22fr)]">
+      <section className="relative grid min-h-dvh place-items-center overflow-hidden bg-slate-50 px-4 py-8 sm:px-8 sm:py-10">
         <div className="absolute -left-32 top-16 h-72 w-72 rounded-full bg-cyan-200/40 blur-3xl" />
         <div className="absolute -bottom-28 right-0 h-72 w-72 rounded-full bg-violet-200/40 blur-3xl" />
         <div className="relative w-full max-w-md">
@@ -16,7 +16,7 @@ export default function AuthLayout() {
         </div>
       </section>
 
-      <section className="relative hidden overflow-hidden bg-gradient-to-br from-slate-950 via-blue-950 to-cyan-950 p-12 text-white lg:flex lg:flex-col lg:justify-between">
+      <section className="relative hidden min-h-dvh overflow-y-auto bg-gradient-to-br from-slate-950 via-blue-950 to-cyan-950 p-10 text-white xl:flex xl:flex-col xl:justify-between 2xl:p-12">
         <div className="absolute -right-20 -top-20 h-80 w-80 rounded-full bg-cyan-400/20 blur-3xl" />
         <div className="absolute bottom-20 left-10 h-64 w-64 rounded-full bg-violet-500/15 blur-3xl" />
         <div className="relative">
@@ -24,7 +24,7 @@ export default function AuthLayout() {
           <h1 className="mt-6 max-w-2xl text-5xl font-bold leading-[1.08] tracking-tight">One connected home for people, time, documents and decisions.</h1>
           <p className="mt-5 max-w-xl text-base leading-7 text-slate-300">A people-first workspace with the operational depth administrators need and the clarity employees expect.</p>
         </div>
-        <div className="relative grid grid-cols-2 gap-4">
+        <div className="relative mt-10 grid grid-cols-2 gap-4">
           {[
             [Network, 'Living org structure', 'See teams, reporting lines and roles at a glance.'],
             [BarChart3, 'People analytics', 'Turn workforce data into clear operational signals.'],

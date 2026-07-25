@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
-import { KeyRound, Plus, ShieldCheck, UserCheck, UsersRound } from 'lucide-react';
+import { KeyRound, Plus, ShieldCheck, UserCheck, UserRoundPlus, UsersRound } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import { tenantApi } from '../api/tenantApi';
 import { userApi } from '../api/userApi';
 import UserProvisionForm from '../components/users/UserProvisionForm.jsx';
@@ -123,9 +124,23 @@ export default function Users() {
         <div className="flex items-start gap-3"><KeyRound className="mt-0.5 shrink-0" size={18} /><div><p className="font-semibold">Least-privilege administration</p><p className="mt-1 text-amber-800">Organization administrators can create managers and employees, but only platform super administrators can appoint another organization administrator.</p></div></div>
       </div>
 
+      {!isSuperAdmin && (
+        <div className="rounded-3xl border border-cyan-200 bg-cyan-50/80 px-5 py-4 text-sm text-cyan-950">
+          <div className="flex items-start gap-3">
+            <UserRoundPlus className="mt-0.5 shrink-0" size={18} />
+            <div>
+              <p className="font-semibold">Employee already exists?</p>
+              <p className="mt-1 text-cyan-800">
+                Open the employee in the <Link className="font-semibold underline" to="/employees">People directory</Link> and choose Provision access. This links the account without creating a duplicate employee record.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
       <Table columns={columns} rows={users} empty="No user accounts found." />
 
-      <Modal open={open} onClose={() => setOpen(false)} title="Create user and employee profile" size="xl">
+      <Modal open={open} onClose={() => setOpen(false)} title="Create new user and employee profile" size="xl">
         <UserProvisionForm onSubmit={create} loading={saving} isSuperAdmin={isSuperAdmin} tenants={tenants} />
       </Modal>
     </div>

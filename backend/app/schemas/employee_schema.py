@@ -41,6 +41,15 @@ class BulkDepartmentTransferSchema(Schema):
     reason = fields.Str(required=True, validate=validate.Length(min=3, max=255))
 
 
+class EmployeeAccessProvisionSchema(Schema):
+    password = fields.Str(required=True, validate=validate.Length(min=10, max=128), load_only=True)
+    roles = fields.List(
+        fields.Str(validate=validate.OneOf(['EMPLOYEE', 'MANAGER'])),
+        required=True,
+        validate=validate.Length(equal=1),
+    )
+
+
 class EmployeeCreateSchema(Schema):
     tenant_id = fields.UUID(required=False, allow_none=True)
     user_id = fields.UUID(required=False, allow_none=True)

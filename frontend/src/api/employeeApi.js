@@ -4,6 +4,7 @@ export const employeeApi = {
   list: (params = {}) => apiClient.get('/employees', { params }),
   get: (id) => apiClient.get(`/employees/${id}`),
   history: (id) => apiClient.get(`/employees/${id}/job-history`),
+  provisionAccess: (id, payload) => apiClient.post(`/employees/${id}/provision-access`, payload),
   create: (payload) => apiClient.post('/employees', payload),
   update: (id, payload) => apiClient.patch(`/employees/${id}`, payload),
   remove: (id) => apiClient.delete(`/employees/${id}`),
