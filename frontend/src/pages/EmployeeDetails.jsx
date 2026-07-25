@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Pencil, UserRoundCheck } from 'lucide-react';
+import { CalendarClock, History, Pencil, UserRoundCheck } from 'lucide-react';
 import { useParams } from 'react-router-dom';
 import { employeeApi } from '../api/employeeApi';
 import EmployeeForm from '../components/employees/EmployeeForm.jsx';
@@ -17,20 +17,24 @@ export default function EmployeeDetails() {
   const [employee, setEmployee] = useState(null);
   const [employeeOptions, setEmployeeOptions] = useState([]);
   const [departments, setDepartments] = useState([]);
+  const [history, setHistory] = useState([]);
   const [open, setOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const { hasPermission } = usePermissions();
 
   const load = async () => {
-    const [employeeResponse, optionResponse, departmentResponse] = await Promise.all([
+    const responses = await Promise.all([
       employeeApi.get(id),
       employeeApi.options(),
       employeeApi.departments(),
+      employeeApi.history(id),
     ]);
+    const [employeeResponse, optionResponse, departmentResponse, historyResponse] = responses;
     setEmployee(employeeResponse.data);
     setEmployeeOptions(optionResponse.data.items || []);
     setDepartments(departmentResponse.data.items || []);
+    setHistory(historyResponse.data.items || []);
   };
 
   useEffect(() => {
@@ -40,17 +44,18 @@ export default function EmployeeDetails() {
       employeeApi.get(id),
       employeeApi.options(),
       employeeApi.departments(),
+      employeeApi.history(id),
     ])
-      .then(([employeeResponse, optionResponse, departmentResponse]) => {
+      .then((responses) => {
         if (cancelled) return;
+        const [employeeResponse, optionResponse, departmentResponse, historyResponse] = responses;
         setEmployee(employeeResponse.data);
         setEmployeeOptions(optionResponse.data.items || []);
         setDepartments(departmentResponse.data.items || []);
+        setHistory(historyResponse.data.items || []);
       })
       .catch((err) => {
-        if (!cancelled) {
-          setError(err.error?.message || 'Employee not found');
-        }
+        if (!cancelled) setError(err.error?.message || 'Employee not found');
       });
 
     return () => {
@@ -106,7 +111,7 @@ export default function EmployeeDetails() {
 
           {hasPermission('employee:update') && (
             <Button variant="secondary" onClick={() => setOpen(true)}>
-              <Pencil size={16} /> Edit reporting line
+              <Pencil size={16} /> Edit employment details
             </Button>
           )}
         </div>
@@ -124,6 +129,41 @@ export default function EmployeeDetails() {
         </div>
       </Card>
 
+      <Card>
+        <div className="flex items-center gap-3">
+          <span className="grid h-10 w-10 place-items-center rounded-2xl bg-violet-50 text-violet-700">
+            <History size={19} />
+          </span>
+          <div>
+            <h2 className="text-lg font-bold text-slate-950">Employment history</h2>
+            <p className="text-sm text-slate-500">Promotions, reporting changes and department transfers.</p>
+          </div>
+        </div>
+
+        <div className="mt-5 space-y-3">
+          {history.length === 0 ? (
+            <p className="rounded-2xl bg-slate-50 p-4 text-sm text-slate-500">No employment changes recorded yet.</p>
+          ) : history.map((item) => (
+            <div key={item.id} className="rounded-2xl border border-slate-100 bg-slate-50/70 p-4">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <p className="font-semibold text-slate-900">{item.job_title || 'Unassigned role'}</p>
+                  <p className="mt-1 text-sm text-slate-600">
+                    {item.department_name || 'No department'}
+                    {item.manager_name ? ` · Reports to ${item.manager_name}` : ' · Top level'}
+                  </p>
+                </div>
+                <span className="flex items-center gap-1.5 text-xs font-medium text-slate-500">
+                  <CalendarClock size={14} />
+                  {item.start_date}{item.end_date ? ` – ${item.end_date}` : ' – Present'}
+                </span>
+              </div>
+              {item.reason && <p className="mt-3 text-sm text-slate-500">{item.reason}</p>}
+            </div>
+          ))}
+        </div>
+      </Card>
+
       <Modal
         title={`Edit ${employee.full_name}`}
         open={open}
@@ -138,6 +178,7 @@ export default function EmployeeDetails() {
           departments={departments}
           excludeEmployeeId={employee.id}
           submitLabel="Update employee"
+          showChangeContext
         />
       </Modal>
     </div>

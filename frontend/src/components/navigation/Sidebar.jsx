@@ -1,5 +1,6 @@
 import {
   BarChart3,
+  Briefcase,
   Building2,
   CalendarDays,
   CheckSquare2,
@@ -46,6 +47,7 @@ const groups = [
     label: 'Administration',
     links: [
       { to: '/organizations', label: 'Organizations', icon: Building2, role: 'SUPER_ADMIN' },
+      { to: '/departments', label: 'Departments', icon: Briefcase, permission: 'employee:update' },
       { to: '/users', label: 'Access & users', icon: Users, permission: 'user:read' },
       { to: '/settings', label: 'Settings', icon: Settings },
     ],

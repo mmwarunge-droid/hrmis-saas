@@ -1,10 +1,44 @@
+from datetime import date
+
 from marshmallow import Schema, fields, validate
 
 
 class DepartmentSchema(Schema):
+    tenant_id = fields.UUID(required=False, allow_none=True)
     name = fields.Str(required=True, validate=validate.Length(min=2, max=140))
-    code = fields.Str(required=False, allow_none=True)
+    code = fields.Str(required=False, allow_none=True, validate=validate.Length(max=40))
     parent_department_id = fields.UUID(required=False, allow_none=True)
+    head_employee_id = fields.UUID(required=False, allow_none=True)
+
+
+class DepartmentUpdateSchema(Schema):
+    tenant_id = fields.UUID(required=False, allow_none=True)
+    name = fields.Str(required=False, validate=validate.Length(min=2, max=140))
+    code = fields.Str(required=False, allow_none=True, validate=validate.Length(max=40))
+    parent_department_id = fields.UUID(required=False, allow_none=True)
+    head_employee_id = fields.UUID(required=False, allow_none=True)
+
+
+class DepartmentArchiveSchema(Schema):
+    replacement_department_id = fields.UUID(required=False, allow_none=True)
+    effective_date = fields.Date(required=False, load_default=date.today)
+    reason = fields.Str(
+        required=False,
+        load_default='Department archived',
+        validate=validate.Length(min=3, max=255),
+    )
+
+
+class BulkDepartmentTransferSchema(Schema):
+    tenant_id = fields.UUID(required=False, allow_none=True)
+    employee_ids = fields.List(
+        fields.UUID(),
+        required=True,
+        validate=validate.Length(min=1, max=500),
+    )
+    department_id = fields.UUID(required=True, allow_none=True)
+    effective_date = fields.Date(required=False, load_default=date.today)
+    reason = fields.Str(required=True, validate=validate.Length(min=3, max=255))
 
 
 class EmployeeCreateSchema(Schema):
@@ -36,3 +70,5 @@ class EmployeeUpdateSchema(EmployeeCreateSchema):
     last_name = fields.Str(required=False)
     email = fields.Email(required=False)
     hire_date = fields.Date(required=False)
+    change_effective_date = fields.Date(required=False, allow_none=True)
+    change_reason = fields.Str(required=False, allow_none=True, validate=validate.Length(max=255))

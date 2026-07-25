@@ -12,6 +12,8 @@ This implementation translates the supplied HR platform references into an origi
 ### People and organization
 - Searchable people directory with card/list views, quick filters, department and location context.
 - Interactive-style organization chart generated from employee manager relationships.
+- Department administration with leadership, parent-team, archive and restore controls.
+- Atomic bulk department transfers with effective dates, reasons and employment-history records.
 - Modern employee cards and clearer status signals.
 
 ### Time, documents and tasks

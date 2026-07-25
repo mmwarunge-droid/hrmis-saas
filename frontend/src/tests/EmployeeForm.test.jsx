@@ -65,3 +65,33 @@ test('does not submit response-only fields while editing', () => {
   expect(payload).not.toHaveProperty('tenant_id');
   expect(payload).not.toHaveProperty('full_name');
 });
+
+
+test('submits change context while editing employment details', () => {
+  const onSubmit = vi.fn();
+  render(
+    <EmployeeForm
+      onSubmit={onSubmit}
+      initialValues={{
+        employee_number: 'EMP-003',
+        first_name: 'Carol',
+        last_name: 'Njeri',
+        email: 'carol@acme.test',
+        hire_date: '2026-01-01',
+        employment_status: 'active',
+        employment_type: 'full_time',
+      }}
+      showChangeContext
+      submitLabel="Update employee"
+    />,
+  );
+
+  fireEvent.change(screen.getByLabelText(/reason for employment change/i), {
+    target: { value: 'Promotion to team lead' },
+  });
+  fireEvent.click(screen.getByRole('button', { name: /update employee/i }));
+
+  expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({
+    change_reason: 'Promotion to team lead',
+  }));
+});

@@ -3,6 +3,8 @@ import Button from '../ui/Button.jsx';
 import Input from '../ui/Input.jsx';
 import Select from '../ui/Select.jsx';
 
+const today = new Date().toISOString().slice(0, 10);
+
 const emptyForm = {
   employee_number: '',
   first_name: '',
@@ -15,6 +17,8 @@ const emptyForm = {
   department_id: '',
   manager_id: '',
   work_location: '',
+  change_effective_date: today,
+  change_reason: '',
 };
 
 function initialForm(values) {
@@ -31,6 +35,7 @@ export default function EmployeeForm({
   departments = [],
   excludeEmployeeId = null,
   submitLabel = 'Save employee',
+  showChangeContext = false,
 }) {
   const [form, setForm] = useState(() => initialForm(initialValues));
 
@@ -43,7 +48,7 @@ export default function EmployeeForm({
 
   const submit = (event) => {
     event.preventDefault();
-    onSubmit({
+    const payload = {
       employee_number: form.employee_number,
       first_name: form.first_name,
       last_name: form.last_name,
@@ -55,13 +60,20 @@ export default function EmployeeForm({
       department_id: form.department_id || null,
       manager_id: form.manager_id || null,
       work_location: form.work_location || null,
-    });
+    };
+
+    if (showChangeContext) {
+      payload.change_effective_date = form.change_effective_date || null;
+      payload.change_reason = form.change_reason.trim() || null;
+    }
+    onSubmit(payload);
   };
 
   const managerOptions = employees.filter(
     (employee) => employee.id !== excludeEmployeeId
       && employee.employment_status !== 'terminated',
   );
+  const activeDepartments = departments.filter((department) => !department.archived);
 
   return (
     <form onSubmit={submit} className="grid gap-4 md:grid-cols-2">
@@ -74,7 +86,7 @@ export default function EmployeeForm({
 
       <Select label="Department" name="department_id" value={form.department_id} onChange={update}>
         <option value="">No department</option>
-        {departments.map((department) => (
+        {activeDepartments.map((department) => (
           <option key={department.id} value={department.id}>{department.name}</option>
         ))}
       </Select>
@@ -104,6 +116,30 @@ export default function EmployeeForm({
       </Select>
 
       <Input label="Work location" name="work_location" value={form.work_location} onChange={update} />
+
+      {showChangeContext && (
+        <>
+          <Input
+            label="Change effective date"
+            type="date"
+            name="change_effective_date"
+            max={today}
+            value={form.change_effective_date}
+            onChange={update}
+          />
+          <label className="block space-y-1 md:col-span-2">
+            <span className="text-sm font-medium text-slate-700">Reason for employment change</span>
+            <textarea
+              className="min-h-24 w-full rounded-2xl border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none transition focus:border-cyan-400 focus:ring-4 focus:ring-cyan-100"
+              name="change_reason"
+              value={form.change_reason}
+              onChange={update}
+              maxLength={255}
+              placeholder="e.g. Promotion, team transfer or organizational restructure"
+            />
+          </label>
+        </>
+      )}
 
       <div className="md:col-span-2">
         <Button disabled={loading}>{loading ? 'Saving...' : submitLabel}</Button>

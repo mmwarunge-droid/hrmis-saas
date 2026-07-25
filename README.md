@@ -3,7 +3,7 @@
 
 ## People experience upgrade
 
-The current interface includes a people-first home workspace, people directory, org chart, calendar-led time off, document library, task center and a super-admin organization provisioning flow. See [`PRODUCT_UI_UPGRADE.md`](PRODUCT_UI_UPGRADE.md) for the delivered scope and follow-on roadmap.
+The current interface includes a people-first home workspace, people directory, org chart, department administration, bulk workforce transfers, calendar-led time off, document library, task center and a super-admin organization provisioning flow. See [`PRODUCT_UI_UPGRADE.md`](PRODUCT_UI_UPGRADE.md) and [`DEPARTMENT_MANAGEMENT.md`](DEPARTMENT_MANAGEMENT.md) for the delivered scope and operating workflows.
 
 A multi-tenant HRMIS SaaS platform designed as the digital operating layer for high-touch HR consulting services. The MVP covers employee system of record, secure documents, leave and attendance, onboarding, RBAC, audit logs, and tenant isolation.
 

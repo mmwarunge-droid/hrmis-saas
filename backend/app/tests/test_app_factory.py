@@ -14,6 +14,9 @@ def test_blueprint_prefixes_preserve_resource_paths(app):
     assert '/api/auth/login' in rules
     assert '/api/users' in rules
     assert '/api/employees' in rules
+    assert '/api/employees/departments' in rules
+    assert '/api/employees/bulk-department-transfer' in rules
+    assert '/api/employees/<employee_id>/job-history' in rules
     assert '/api/documents' in rules
     assert '/api/tenants/provision' in rules
 
