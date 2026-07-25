@@ -16,10 +16,22 @@ class JobHistory(db.Model, TenantMixin, TimestampMixin, ReprMixin):
     compensation_band = db.Column(db.String(80))
 
     employee = db.relationship('Employee', back_populates='job_histories', foreign_keys=[employee_id])
-    department = db.relationship('Department')
+    department = db.relationship('Department', foreign_keys=[department_id])
     manager = db.relationship('Employee', foreign_keys=[manager_id])
 
     __table_args__ = (db.CheckConstraint('end_date IS NULL OR end_date >= start_date', name='ck_job_history_date_range'),)
 
     def to_dict(self):
-        return {'id': str(self.id), 'employee_id': str(self.employee_id), 'job_title': self.job_title, 'start_date': self.start_date.isoformat() if self.start_date else None, 'end_date': self.end_date.isoformat() if self.end_date else None}
+        return {
+            'id': str(self.id),
+            'employee_id': str(self.employee_id),
+            'job_title': self.job_title,
+            'department_id': str(self.department_id) if self.department_id else None,
+            'department_name': self.department.name if self.department else None,
+            'manager_id': str(self.manager_id) if self.manager_id else None,
+            'manager_name': self.manager.full_name if self.manager else None,
+            'start_date': self.start_date.isoformat() if self.start_date else None,
+            'end_date': self.end_date.isoformat() if self.end_date else None,
+            'reason': self.reason,
+            'compensation_band': self.compensation_band,
+        }

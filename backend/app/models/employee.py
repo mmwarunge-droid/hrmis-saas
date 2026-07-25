@@ -27,7 +27,7 @@ class Employee(db.Model, TenantMixin, TimestampMixin, SoftDeleteMixin, ReprMixin
     external_hris_id = db.Column(db.String(120), index=True)
 
     user = db.relationship('User', back_populates='employee_profile', foreign_keys=[user_id])
-    department = db.relationship('Department', back_populates='employees')
+    department = db.relationship('Department', back_populates='employees', foreign_keys=[department_id])
     manager = db.relationship('Employee', remote_side=[id], foreign_keys=[manager_id])
     emergency_contacts = db.relationship('EmergencyContact', back_populates='employee', cascade='all, delete-orphan')
     job_histories = db.relationship('JobHistory', back_populates='employee', cascade='all, delete-orphan', foreign_keys='JobHistory.employee_id')
