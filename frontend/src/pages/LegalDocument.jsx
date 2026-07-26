@@ -2,7 +2,7 @@ import { Link } from 'react-router-dom';
 
 const COMPANY = {
   platform: 'Ace',
-  legalEntity: 'Ace HRMIS Platform',
+  legalEntity: 'ACE Platform',
   contactEmail: 'privacy@acehr.app',
   supportEmail: 'support@acehr.app',
   address: 'Nairobi, Kenya',
@@ -87,7 +87,7 @@ export function PrivacyPolicy() {
   return (
     <LegalLayout
       title="Privacy Policy"
-      subtitle="This Privacy Policy explains how Ace collects, uses, stores, protects, shares, and retains personal data processed through the Ace HRMIS platform."
+      subtitle="This Privacy Policy explains how ACE collects, uses, stores, protects, shares, and retains personal data processed through the ACE platform."
     >
       <Section title="1. Introduction">
         <p>
@@ -169,7 +169,7 @@ export function PrivacyPolicy() {
           items={[
             'Create and manage user accounts.',
             'Authenticate users and maintain secure sessions.',
-            'Provide HRMIS features such as employee records, documents, leave, attendance, onboarding, dashboards, and compliance alerts.',
+            'Provide people-management features such as employee records, documents, leave, attendance, onboarding, dashboards, and compliance alerts.',
             'Enable platform hierarchy: Super Admin, Client Admin, Manager, and Employee access.',
             'Enforce tenant isolation and role-based permissions.',
             'Generate audit logs for security, compliance, and accountability.',
@@ -360,7 +360,7 @@ export function TermsOfService() {
   return (
     <LegalLayout
       title="Terms of Service"
-      subtitle="These Terms of Service govern access to and use of the Ace HRMIS platform by client organisations, administrators, managers, employees, consultants, and authorised users."
+      subtitle="These Terms of Service govern access to and use of the ACE platform by client organisations, administrators, managers, employees, consultants, and authorised users."
     >
       <Section title="1. Agreement to Terms">
         <p>
@@ -376,7 +376,7 @@ export function TermsOfService() {
 
       <Section title="2. About Ace">
         <p>
-          Ace is a consulting-led HRMIS platform that helps organisations manage
+          ACE is a consulting-led people operations platform that helps organisations manage
           employee records, documents, leave, attendance, onboarding, HR
           workflows, compliance alerts, and role-based HR administration.
         </p>
