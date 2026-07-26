@@ -1,29 +1,82 @@
 import { render, screen } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, test } from 'vitest';
 import AuthLayout from '../layouts/AuthLayout.jsx';
 
+function LoginPlaceholder() {
+  return <div>Login content</div>;
+}
+
 describe('AuthLayout', () => {
-  it('keeps the sign-in experience single-column until the extra-large breakpoint', () => {
-    render(
+  test('keeps the sign-in experience single-column until the extra-large breakpoint', () => {
+    const { container } = render(
       <MemoryRouter initialEntries={['/login']}>
         <Routes>
           <Route element={<AuthLayout />}>
-            <Route path="/login" element={<div>Authentication form</div>} />
+            <Route path="/login" element={<LoginPlaceholder />} />
           </Route>
         </Routes>
       </MemoryRouter>,
     );
 
-    const main = screen.getByRole('main');
-    const promotionalPanel = screen.getByText('Modern people operations').closest('section');
+    const main = container.querySelector('main');
+    const promotionalPanel = screen
+      .getByText('Modern people operations')
+      .closest('section');
 
-    expect(main.className).toContain('min-h-dvh');
-    expect(main.className).toContain('xl:grid');
-    expect(main.className).not.toContain('lg:grid');
-    expect(promotionalPanel.className).toContain('xl:flex');
-    expect(promotionalPanel.className).not.toContain('lg:flex');
-    expect(promotionalPanel.className).toContain('overflow-y-auto');
-    expect(screen.getByText('Authentication form')).toBeInTheDocument();
+    expect(main).toHaveClass('xl:grid');
+    expect(main).not.toHaveClass('lg:grid');
+
+    expect(promotionalPanel).toHaveClass('hidden');
+    expect(promotionalPanel).toHaveClass('xl:flex');
+    expect(promotionalPanel).not.toHaveClass('lg:flex');
+  });
+
+  test('renders the connected people operations infographic', () => {
+    render(
+      <MemoryRouter initialEntries={['/login']}>
+        <Routes>
+          <Route element={<AuthLayout />}>
+            <Route path="/login" element={<LoginPlaceholder />} />
+          </Route>
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    expect(
+      screen.getByLabelText('Connected people operations'),
+    ).toBeInTheDocument();
+
+    expect(screen.getByText('People directory')).toBeInTheDocument();
+    expect(screen.getByText('Org structure')).toBeInTheDocument();
+    expect(screen.getByText('Workflows')).toBeInTheDocument();
+    expect(screen.getByText('Secure access')).toBeInTheDocument();
+
+    expect(
+      screen.getByText(
+        'One operational record connects every employee, decision and workflow.',
+      ),
+    ).toBeInTheDocument();
+  });
+
+  test('renders the four existing feature cards', () => {
+    render(
+      <MemoryRouter initialEntries={['/login']}>
+        <Routes>
+          <Route element={<AuthLayout />}>
+            <Route path="/login" element={<LoginPlaceholder />} />
+          </Route>
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByText('Living org structure')).toBeInTheDocument();
+    expect(screen.getByText('People analytics')).toBeInTheDocument();
+    expect(screen.getByText('Guided workflows')).toBeInTheDocument();
+    expect(screen.getByText('Secure by design')).toBeInTheDocument();
+
+    expect(
+      screen.getByText('See teams, reporting lines and roles at a glance.'),
+    ).toBeInTheDocument();
   });
 });
