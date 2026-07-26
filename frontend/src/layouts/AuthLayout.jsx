@@ -112,7 +112,7 @@ export default function AuthLayout() {
               <p className="text-[10px] font-bold uppercase tracking-[0.24em] text-cyan-700">
                 People OS
               </p>
-              <p className="font-bold text-slate-950">HRMIS</p>
+              <p className="font-bold text-slate-950">ACE</p>
             </div>
           </div>
 

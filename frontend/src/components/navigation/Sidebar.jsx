@@ -63,7 +63,7 @@ export default function Sidebar({ open = false, onClose }) {
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           <span className="grid h-11 w-11 place-items-center rounded-2xl bg-gradient-to-br from-cyan-400 to-blue-600 text-white shadow-lg shadow-cyan-950/20"><Sparkles size={20} /></span>
-          <div><p className="text-[10px] font-bold uppercase tracking-[0.24em] text-cyan-300">People OS</p><h1 className="text-lg font-bold text-white">HRMIS</h1></div>
+          <div><p className="text-[10px] font-bold uppercase tracking-[0.24em] text-cyan-300">People OS</p><h1 className="text-lg font-bold text-white">ACE</h1></div>
         </div>
         <Button variant="ghost" size="sm" className="text-slate-300 hover:bg-white/10 hover:text-white lg:hidden" onClick={onClose}><X size={18} /></Button>
       </div>
