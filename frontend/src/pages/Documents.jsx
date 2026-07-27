@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { FileCheck2, FileClock, FileStack, Folder, Plus, Search, ShieldCheck } from 'lucide-react';
 import { documentApi } from '../api/documentApi';
+import { tenantApi } from '../api/tenantApi';
 import DocumentUpload from '../components/documents/DocumentUpload.jsx';
 import Alert from '../components/ui/Alert.jsx';
 import Badge from '../components/ui/Badge.jsx';
@@ -22,15 +23,38 @@ function formatSize(bytes) {
 
 export default function Documents() {
   const [documents, setDocuments] = useState([]);
+  const [tenants, setTenants] = useState([]);
   const [saving, setSaving] = useState(false);
   const [open, setOpen] = useState(false);
   const [error, setError] = useState('');
   const [query, setQuery] = useState('');
   const [folder, setFolder] = useState('all');
-  const { hasPermission } = usePermissions();
+  const { hasPermission, hasRole } = usePermissions();
+  const isSuperAdmin = hasRole('SUPER_ADMIN');
 
-  const load = () => documentApi.list().then((res) => setDocuments(res.data.items || [])).catch((err) => setError(err.error?.message || 'Unable to load document library'));
-  useEffect(() => { load(); }, []);
+  const load = useCallback(async () => {
+    try {
+      const requests = [documentApi.list()];
+
+      if (isSuperAdmin) {
+        requests.push(tenantApi.list());
+      }
+
+      const [documentsResponse, tenantsResponse] = await Promise.all(requests);
+
+      setDocuments(documentsResponse.data.items || []);
+      setTenants(tenantsResponse?.data.items || []);
+    } catch (err) {
+      setError(
+        err.error?.message
+        || 'Unable to load document library',
+      );
+    }
+  }, [isSuperAdmin]);
+
+  useEffect(() => {
+    load();
+  }, [load]);
 
   const folders = useMemo(() => [...new Set(documents.map((document) => document.document_type).filter(Boolean))], [documents]);
   const filtered = useMemo(() => documents.filter((document) => {
@@ -97,7 +121,12 @@ export default function Documents() {
       </div>
 
       <Modal title="Upload document" open={open} onClose={() => setOpen(false)}>
-        <DocumentUpload onSubmit={upload} loading={saving} />
+        <DocumentUpload
+          onSubmit={upload}
+          loading={saving}
+          isSuperAdmin={isSuperAdmin}
+          tenants={tenants}
+        />
       </Modal>
     </div>
   );
