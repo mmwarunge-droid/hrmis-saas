@@ -6,6 +6,7 @@ def register_blueprints(app):
     from app.routes.employee_routes import employee_bp
     from app.routes.leave_routes import leave_bp
     from app.routes.onboarding_routes import onboarding_bp
+    from app.routes.signature_routes import signature_bp
     from app.routes.tenant_routes import tenant_bp
     from app.routes.user_routes import user_bp
 
@@ -18,6 +19,7 @@ def register_blueprints(app):
         leave_bp,
         attendance_bp,
         onboarding_bp,
+        signature_bp,
         dashboard_bp,
     ]
     api_prefix = app.config['API_PREFIX'].rstrip('/')

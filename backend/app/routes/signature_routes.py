@@ -1,0 +1,223 @@
+from flask import Blueprint, request
+from flask_jwt_extended import current_user, jwt_required
+from marshmallow import ValidationError
+
+from app.extensions import db
+from app.models import SignatureRecipient, SignatureRequest
+from app.schemas.signature_schema import (
+    SignatureDeclineSchema,
+    SignatureRequestCreateSchema,
+)
+from app.services.signature_service import (
+    can_access_signature_request,
+    create_signature_request,
+    decline_signature,
+    list_my_signature_tasks,
+    list_signature_requests,
+    mark_recipient_signed,
+    mark_recipient_viewed,
+    serialize_signature_request,
+)
+from app.utils.decorators import permission_required
+from app.utils.response import fail, success
+
+
+signature_bp = Blueprint(
+    'signature_requests',
+    __name__,
+    url_prefix='/signature-requests',
+)
+
+
+@signature_bp.post('')
+@jwt_required()
+@permission_required('document:approve')
+def create_request():
+    try:
+        payload = SignatureRequestCreateSchema().load(
+            request.get_json() or {},
+        )
+
+        tenant_id = (
+            payload.pop('tenant_id', None)
+            if current_user.has_role('SUPER_ADMIN')
+            else current_user.tenant_id
+        )
+
+        if not tenant_id:
+            return fail(
+                'TENANT_REQUIRED',
+                'tenant_id is required for signature requests',
+                422,
+            )
+
+        signature_request = create_signature_request(
+            payload,
+            tenant_id,
+            current_user,
+        )
+    except ValidationError as err:
+        return fail(
+            'VALIDATION_ERROR',
+            err.messages,
+            422,
+        )
+    except ValueError as exc:
+        db.session.rollback()
+        return fail(
+            'SIGNATURE_REQUEST_FAILED',
+            str(exc),
+            400,
+        )
+
+    return success(
+        serialize_signature_request(
+            signature_request,
+            include_events=True,
+        ),
+        'Signature request sent',
+        201,
+    )
+
+
+@signature_bp.get('')
+@jwt_required()
+@permission_required('document:approve')
+def requests():
+    items = list_signature_requests(
+        current_user,
+        tenant_id=request.args.get('tenant_id'),
+        status=request.args.get('status'),
+        document_id=request.args.get('document_id'),
+    )
+
+    return success({
+        'items': [
+            serialize_signature_request(item)
+            for item in items
+        ],
+    })
+
+
+@signature_bp.get('/my-tasks')
+@jwt_required()
+def my_tasks():
+    return success({
+        'items': list_my_signature_tasks(current_user),
+    })
+
+
+@signature_bp.get('/<request_id>')
+@jwt_required()
+def request_details(request_id):
+    signature_request = SignatureRequest.query.filter_by(
+        id=request_id,
+    ).first_or_404()
+
+    if not can_access_signature_request(
+        current_user,
+        signature_request,
+    ):
+        return fail(
+            'FORBIDDEN',
+            'You cannot access this signature request',
+            403,
+        )
+
+    return success(
+        serialize_signature_request(
+            signature_request,
+            include_events=True,
+        ),
+    )
+
+
+@signature_bp.patch('/recipients/<recipient_id>/viewed')
+@jwt_required()
+def recipient_viewed(recipient_id):
+    recipient = SignatureRecipient.query.filter_by(
+        id=recipient_id,
+    ).first_or_404()
+
+    try:
+        recipient = mark_recipient_viewed(
+            recipient,
+            current_user,
+        )
+    except PermissionError as exc:
+        return fail('FORBIDDEN', str(exc), 403)
+    except ValueError as exc:
+        return fail(
+            'SIGNATURE_ACTION_FAILED',
+            str(exc),
+            400,
+        )
+
+    return success(
+        recipient.to_dict(),
+        'Document view recorded',
+    )
+
+
+@signature_bp.patch('/recipients/<recipient_id>/sign')
+@jwt_required()
+def recipient_signed(recipient_id):
+    recipient = SignatureRecipient.query.filter_by(
+        id=recipient_id,
+    ).first_or_404()
+
+    try:
+        recipient = mark_recipient_signed(
+            recipient,
+            current_user,
+        )
+    except PermissionError as exc:
+        return fail('FORBIDDEN', str(exc), 403)
+    except ValueError as exc:
+        return fail(
+            'SIGNATURE_ACTION_FAILED',
+            str(exc),
+            400,
+        )
+
+    return success(
+        recipient.to_dict(),
+        'Signature recorded',
+    )
+
+
+@signature_bp.patch('/recipients/<recipient_id>/decline')
+@jwt_required()
+def recipient_declined(recipient_id):
+    recipient = SignatureRecipient.query.filter_by(
+        id=recipient_id,
+    ).first_or_404()
+
+    try:
+        payload = SignatureDeclineSchema().load(
+            request.get_json() or {},
+        )
+        recipient = decline_signature(
+            recipient,
+            current_user,
+            payload['reason'],
+        )
+    except ValidationError as err:
+        return fail(
+            'VALIDATION_ERROR',
+            err.messages,
+            422,
+        )
+    except PermissionError as exc:
+        return fail('FORBIDDEN', str(exc), 403)
+    except ValueError as exc:
+        return fail(
+            'SIGNATURE_ACTION_FAILED',
+            str(exc),
+            400,
+        )
+
+    return success(
+        recipient.to_dict(),
+        'Signature request declined',
+    )
