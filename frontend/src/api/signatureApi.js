@@ -26,4 +26,18 @@ export const signatureApi = {
     `/signature-requests/recipients/${recipientId}/decline`,
     { reason },
   ),
+
+  remind: (requestId) => apiClient.post(
+    `/signature-requests/${requestId}/remind`,
+  ),
+
+  updateDeadline: (requestId, dueAt) => apiClient.patch(
+    `/signature-requests/${requestId}/deadline`,
+    { due_at: dueAt },
+  ),
+
+  cancel: (requestId, reason) => apiClient.patch(
+    `/signature-requests/${requestId}/cancel`,
+    { reason },
+  ),
 };

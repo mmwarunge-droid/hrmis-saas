@@ -18,6 +18,7 @@ import Organizations from './pages/Organizations.jsx';
 import OrgChart from './pages/OrgChart.jsx';
 import ResetPassword from './pages/ResetPassword.jsx';
 import Settings from './pages/Settings.jsx';
+import SignatureRequests from './pages/SignatureRequests.jsx';
 import Tasks from './pages/Tasks.jsx';
 import Unauthorized from './pages/Unauthorized.jsx';
 import Users from './pages/Users.jsx';
@@ -42,6 +43,10 @@ export default function App() {
           <Route path="/org-chart" element={<OrgChart />} />
           <Route path="/departments" element={<Departments />} />
           <Route path="/documents" element={<Documents />} />
+          <Route
+            path="/signature-requests"
+            element={<SignatureRequests />}
+          />
           <Route path="/leave" element={<LeaveRequests />} />
           <Route path="/attendance" element={<Attendance />} />
           <Route path="/tasks" element={<Tasks />} />
