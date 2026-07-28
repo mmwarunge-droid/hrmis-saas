@@ -156,7 +156,7 @@ def test_dropbox_sign_callback_is_verified_and_idempotent(
             str(request_id)
         )
         assert events[0].signature_valid is True
-        assert events[0].processing_status == 'pending'
+        assert events[0].processing_status == 'processed'
         assert events[0].provider_request_id == (
             provider_request_id
         )

@@ -184,9 +184,17 @@ export default function Documents() {
       setSignatureOpen(false);
       setSelectedDocument(null);
       setSuccess(
-        `${response.data.subject} was sent to `
-        + `${response.data.recipient_count} signatory`
-        + `${response.data.recipient_count === 1 ? '' : 'ies'}.`,
+        response.data.assurance_level === 'qes'
+          ? (
+            `${response.data.subject} was submitted to Dropbox `
+            + 'Sign. The signatory will receive a provider-hosted '
+            + 'eID invitation by email.'
+          )
+          : (
+            `${response.data.subject} was sent to `
+            + `${response.data.recipient_count} signatory`
+            + `${response.data.recipient_count === 1 ? '' : 'ies'}.`
+          ),
       );
 
       await load();

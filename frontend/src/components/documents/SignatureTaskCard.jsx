@@ -3,6 +3,7 @@ import {
   ExternalLink,
   FileSignature,
   Send,
+  ShieldCheck,
   XCircle,
 } from 'lucide-react';
 
@@ -31,6 +32,11 @@ export default function SignatureTaskCard({
 }) {
   const [showDecline, setShowDecline] = useState(false);
   const [reason, setReason] = useState('');
+  const externalQes = (
+    task.external_signing_required
+    && task.provider === 'dropbox_sign'
+    && task.assurance_level === 'qes'
+  );
 
   const submitDecline = () => {
     const normalizedReason = reason.trim();
@@ -55,6 +61,11 @@ export default function SignatureTaskCard({
             <Badge tone="amber">
               {task.status.replaceAll('_', ' ')}
             </Badge>
+            {externalQes && (
+              <Badge tone="violet">
+                QES target
+              </Badge>
+            )}
           </div>
 
           <p className="mt-1 text-sm text-slate-600">
@@ -70,6 +81,32 @@ export default function SignatureTaskCard({
           <p className="mt-2 text-xs font-medium text-slate-500">
             Due {formatDeadline(task.due_at)}
           </p>
+
+          {externalQes && (
+            <div className="mt-3 flex gap-3 rounded-2xl border border-violet-200 bg-violet-50 p-3 text-violet-950">
+              <ShieldCheck
+                className="mt-0.5 shrink-0"
+                size={18}
+              />
+              <div>
+                <p className="text-xs font-semibold">
+                  Complete signing through Dropbox Sign
+                </p>
+                <p className="mt-1 text-xs leading-5 text-violet-800">
+                  Use the provider-hosted invitation sent to your
+                  email. Dropbox Sign controls identity verification,
+                  consent, and signature evidence for this request.
+                  ACE cannot confirm or decline it directly.
+                </p>
+                {task.provider_status && (
+                  <p className="mt-1 text-xs font-medium text-violet-900">
+                    Provider status:{' '}
+                    {task.provider_status.replaceAll('_', ' ')}
+                  </p>
+                )}
+              </div>
+            </div>
+          )}
         </div>
 
         <div className="flex flex-wrap gap-2">
@@ -77,40 +114,48 @@ export default function SignatureTaskCard({
             href={documentApi.downloadUrl(task.document.id)}
             target="_blank"
             rel="noreferrer"
-            onClick={() => onViewed(task.id)}
+            onClick={externalQes
+              ? undefined
+              : () => onViewed(task.id)}
             className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-800 transition hover:bg-slate-50"
           >
             <ExternalLink size={14} />
-            Review document
+            {externalQes
+              ? 'Review source document'
+              : 'Review document'}
           </a>
 
-          <Button
-            type="button"
-            size="sm"
-            variant="accent"
-            disabled={loading}
-            onClick={() => onSign(task.id)}
-          >
-            <Send size={14} />
-            Confirm signature
-          </Button>
+          {!externalQes && (
+            <>
+              <Button
+                type="button"
+                size="sm"
+                variant="accent"
+                disabled={loading}
+                onClick={() => onSign(task.id)}
+              >
+                <Send size={14} />
+                Confirm signature
+              </Button>
 
-          <Button
-            type="button"
-            size="sm"
-            variant="ghost"
-            disabled={loading}
-            onClick={() => setShowDecline(
-              (current) => !current,
-            )}
-          >
-            <XCircle size={14} />
-            Decline
-          </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                disabled={loading}
+                onClick={() => setShowDecline(
+                  (current) => !current,
+                )}
+              >
+                <XCircle size={14} />
+                Decline
+              </Button>
+            </>
+          )}
         </div>
       </div>
 
-      {showDecline && (
+      {showDecline && !externalQes && (
         <div className="mt-4 border-t border-cyan-100 pt-4">
           <label className="block space-y-1">
             <span className="text-sm font-medium text-slate-700">

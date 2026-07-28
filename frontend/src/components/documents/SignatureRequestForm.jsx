@@ -1,8 +1,14 @@
 import { useMemo, useState } from 'react';
-import { Plus, Trash2 } from 'lucide-react';
+import {
+  Plus,
+  ShieldCheck,
+  Trash2,
+} from 'lucide-react';
 
 import Button from '../ui/Button.jsx';
 import Input from '../ui/Input.jsx';
+
+const DAY_MS = 86400000;
 
 function newRecipient() {
   return {
@@ -29,6 +35,7 @@ export default function SignatureRequestForm({
       ? `Please sign: ${document.title}`
       : '',
     message: '',
+    assurance_level: 'qes',
     signing_mode: 'sequential',
     due_at: '',
     first_reminder_after_days: 2,
@@ -39,6 +46,8 @@ export default function SignatureRequestForm({
     newRecipient(),
   ]);
   const [error, setError] = useState('');
+
+  const isQes = form.assurance_level === 'qes';
 
   const eligibleEmployees = useMemo(
     () => employees.filter((employee) => (
@@ -67,6 +76,22 @@ export default function SignatureRequestForm({
           : recipient
       ),
     ));
+  };
+
+  const updateAssurance = (assuranceLevel) => {
+    setForm((current) => ({
+      ...current,
+      assurance_level: assuranceLevel,
+      signing_mode: assuranceLevel === 'qes'
+        ? 'sequential'
+        : current.signing_mode,
+    }));
+
+    if (assuranceLevel === 'qes') {
+      setRecipients((current) => [
+        current[0] || newRecipient(),
+      ]);
+    }
   };
 
   const addRecipient = () => {
@@ -101,6 +126,11 @@ export default function SignatureRequestForm({
       return;
     }
 
+    if (isQes && recipients.length !== 1) {
+      setError('Qualified eID signing requires one signatory.');
+      return;
+    }
+
     const dueAt = new Date(form.due_at);
 
     if (Number.isNaN(dueAt.getTime())) {
@@ -108,11 +138,36 @@ export default function SignatureRequestForm({
       return;
     }
 
+    if (dueAt <= new Date()) {
+      setError('The completion deadline must be in the future.');
+      return;
+    }
+
+    if (isQes) {
+      const minimum = Date.now() + DAY_MS;
+      const maximum = Date.now() + (90 * DAY_MS);
+
+      if (
+        dueAt.getTime() < minimum
+        || dueAt.getTime() > maximum
+      ) {
+        setError(
+          'Qualified eID signing requires a deadline '
+          + 'between 1 and 90 days from now.',
+        );
+        return;
+      }
+    }
+
+    const signingMode = isQes
+      ? 'sequential'
+      : form.signing_mode;
     const payload = {
       document_id: document.id,
       subject: form.subject.trim(),
       message: form.message.trim() || null,
-      signing_mode: form.signing_mode,
+      assurance_level: form.assurance_level,
+      signing_mode: signingMode,
       due_at: dueAt.toISOString(),
       recipients: recipients.map((recipient, index) => ({
         employee_id: recipient.employee_id,
@@ -120,7 +175,7 @@ export default function SignatureRequestForm({
           recipient.role_label.trim()
           || 'Signatory'
         ),
-        sequence: form.signing_mode === 'parallel'
+        sequence: signingMode === 'parallel'
           ? 1
           : toInteger(recipient.sequence, index + 1),
       })),
@@ -177,6 +232,51 @@ export default function SignatureRequestForm({
         </div>
       )}
 
+      <label className="block space-y-1">
+        <span className="text-sm font-medium text-slate-700">
+          Signature assurance
+        </span>
+        <select
+          aria-label="Signature assurance"
+          value={form.assurance_level}
+          onChange={(event) => updateAssurance(
+            event.target.value,
+          )}
+          className="w-full rounded-2xl border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none transition focus:border-cyan-400 focus:ring-4 focus:ring-cyan-100"
+        >
+          <option value="qes">
+            Qualified electronic signature target — eID
+          </option>
+          <option value="standard">
+            Standard ACE electronic signature
+          </option>
+        </select>
+      </label>
+
+      {isQes && (
+        <div className="rounded-2xl border border-violet-200 bg-violet-50 p-4 text-violet-950">
+          <div className="flex items-start gap-3">
+            <ShieldCheck className="mt-0.5 shrink-0" size={19} />
+            <div>
+              <p className="text-sm font-semibold">
+                Identity-verified provider signing
+              </p>
+              <p className="mt-1 text-xs leading-5 text-violet-800">
+                Dropbox Sign will email one signatory and require
+                an eID signing ceremony. ACE will treat QES as a
+                target until the signed PDF and provider evidence
+                are captured and verified.
+              </p>
+              <p className="mt-2 text-xs font-medium text-violet-900">
+                The deadline must be 1–90 days ahead and is
+                rounded down to the nearest UTC hour by the
+                provider.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="grid gap-4 md:grid-cols-2">
         <Input
           label="Email subject"
@@ -223,12 +323,13 @@ export default function SignatureRequestForm({
         </span>
         <select
           aria-label="Signing order"
-          value={form.signing_mode}
+          value={isQes ? 'sequential' : form.signing_mode}
+          disabled={isQes}
           onChange={(event) => setForm({
             ...form,
             signing_mode: event.target.value,
           })}
-          className="w-full rounded-2xl border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none transition focus:border-cyan-400 focus:ring-4 focus:ring-cyan-100"
+          className="w-full rounded-2xl border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none transition disabled:bg-slate-100 disabled:text-slate-500 focus:border-cyan-400 focus:ring-4 focus:ring-cyan-100"
         >
           <option value="sequential">
             Sequential — notify one stage at a time
@@ -246,20 +347,23 @@ export default function SignatureRequestForm({
               Signatories
             </p>
             <p className="text-xs text-slate-500">
-              Employees must have ACE platform access before
-              they can receive a signing task.
+              {isQes
+                ? 'Qualified eID signing supports exactly one employee.'
+                : 'Employees must have ACE platform access before they can receive a signing task.'}
             </p>
           </div>
 
-          <Button
-            type="button"
-            variant="secondary"
-            size="sm"
-            onClick={addRecipient}
-          >
-            <Plus size={15} />
-            Add signatory
-          </Button>
+          {!isQes && (
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              onClick={addRecipient}
+            >
+              <Plus size={15} />
+              Add signatory
+            </Button>
+          )}
         </div>
 
         {recipients.map((recipient, index) => (
@@ -319,11 +423,13 @@ export default function SignatureRequestForm({
               type="number"
               min="1"
               value={
-                form.signing_mode === 'parallel'
+                isQes || form.signing_mode === 'parallel'
                   ? 1
                   : recipient.sequence
               }
-              disabled={form.signing_mode === 'parallel'}
+              disabled={
+                isQes || form.signing_mode === 'parallel'
+              }
               onChange={(event) => updateRecipient(
                 index,
                 { sequence: event.target.value },
@@ -337,7 +443,7 @@ export default function SignatureRequestForm({
                 variant="ghost"
                 size="sm"
                 aria-label={`Remove signatory ${index + 1}`}
-                disabled={recipients.length === 1}
+                disabled={isQes || recipients.length === 1}
                 onClick={() => removeRecipient(index)}
               >
                 <Trash2 size={16} />
@@ -404,7 +510,9 @@ export default function SignatureRequestForm({
         >
           {loading
             ? 'Sending request...'
-            : 'Send for signature'}
+            : isQes
+              ? 'Send qualified-signature request'
+              : 'Send for signature'}
         </Button>
       </div>
     </form>

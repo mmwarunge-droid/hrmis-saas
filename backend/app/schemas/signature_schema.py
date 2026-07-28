@@ -1,4 +1,18 @@
-from marshmallow import Schema, fields, validate, validates_schema, ValidationError
+from datetime import datetime, timedelta, timezone
+
+from marshmallow import (
+    Schema,
+    ValidationError,
+    fields,
+    validate,
+    validates_schema,
+)
+
+
+def _utc_naive(value):
+    if value.tzinfo is None:
+        return value
+    return value.astimezone(timezone.utc).replace(tzinfo=None)
 
 
 class SignatureRecipientCreateSchema(Schema):
@@ -59,6 +73,14 @@ class SignatureRequestCreateSchema(Schema):
             'parallel',
         ]),
     )
+    assurance_level = fields.Str(
+        required=False,
+        load_default='standard',
+        validate=validate.OneOf([
+            'standard',
+            'qes',
+        ]),
+    )
     due_at = fields.DateTime(required=True)
 
     recipients = fields.List(
@@ -74,16 +96,33 @@ class SignatureRequestCreateSchema(Schema):
     )
 
     @validates_schema
-    def validate_recipient_deadlines(self, data, **kwargs):
+    def validate_workflow(self, data, **kwargs):
         request_due_at = data.get('due_at')
 
-        for recipient in data.get('recipients', []):
+        normalized_due_at = (
+            _utc_naive(request_due_at)
+            if request_due_at
+            else None
+        )
+        now = datetime.utcnow()
+
+        if normalized_due_at and normalized_due_at <= now:
+            raise ValidationError({
+                'due_at': [
+                    'The signature deadline must be in the future.',
+                ],
+            })
+
+        recipients = data.get('recipients', [])
+
+        for recipient in recipients:
             recipient_due_at = recipient.get('due_at')
 
             if (
                 recipient_due_at
-                and request_due_at
-                and recipient_due_at > request_due_at
+                and normalized_due_at
+                and _utc_naive(recipient_due_at)
+                > normalized_due_at
             ):
                 raise ValidationError({
                     'recipients': [
@@ -91,6 +130,38 @@ class SignatureRequestCreateSchema(Schema):
                         'the request deadline.',
                     ],
                 })
+
+        if data.get('assurance_level') == 'qes':
+            errors = {}
+
+            if len(recipients) != 1:
+                errors['recipients'] = [
+                    'QES through eID requires exactly one signer.',
+                ]
+
+            if data.get('signing_mode') != 'sequential':
+                errors['signing_mode'] = [
+                    'QES through eID requires sequential signing.',
+                ]
+
+            if normalized_due_at:
+                provider_due_at = normalized_due_at.replace(
+                    minute=0,
+                    second=0,
+                    microsecond=0,
+                )
+                if not (
+                    now + timedelta(days=1)
+                    <= provider_due_at
+                    <= now + timedelta(days=90)
+                ):
+                    errors['due_at'] = [
+                        'Dropbox Sign QES deadlines must be between '
+                        '1 and 90 days in the future.',
+                    ]
+
+            if errors:
+                raise ValidationError(errors)
 
 
 class SignatureDeclineSchema(Schema):
@@ -102,6 +173,17 @@ class SignatureDeclineSchema(Schema):
 
 class SignatureDeadlineUpdateSchema(Schema):
     due_at = fields.DateTime(required=True)
+
+    @validates_schema
+    def validate_due_at(self, data, **kwargs):
+        due_at = data.get('due_at')
+
+        if due_at and _utc_naive(due_at) <= datetime.utcnow():
+            raise ValidationError({
+                'due_at': [
+                    'The signature deadline must be in the future.',
+                ],
+            })
 
 
 class SignatureCancelSchema(Schema):

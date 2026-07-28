@@ -208,6 +208,11 @@ class ProductionConfig(BaseConfig):
                     'Missing Dropbox Sign production variables: '
                     + ', '.join(provider_missing)
                 )
+            if cls.DROPBOX_SIGN_TEST_MODE:
+                raise RuntimeError(
+                    'DROPBOX_SIGN_TEST_MODE must be false when '
+                    'Dropbox Sign is enabled in production'
+                )
         if cls.MAIL_TRANSPORT.lower() != 'smtp':
             raise RuntimeError('MAIL_TRANSPORT must be smtp in production')
         if not cls.MAIL_SMTP_USE_TLS:

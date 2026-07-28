@@ -10,6 +10,10 @@ from app.schemas.signature_schema import (
     SignatureDeclineSchema,
     SignatureRequestCreateSchema,
 )
+from app.services.signature_providers.base import (
+    SignatureProviderError,
+    SignatureProviderNotConfigured,
+)
 from app.services.signature_service import (
     can_access_signature_request,
     cancel_signature_request,
@@ -32,6 +36,11 @@ signature_bp = Blueprint(
     __name__,
     url_prefix='/signature-requests',
 )
+
+
+def _provider_error(code, exc, status):
+    db.session.rollback()
+    return fail(code, str(exc), status)
 
 
 @signature_bp.post('')
@@ -67,6 +76,18 @@ def create_request():
             err.messages,
             422,
         )
+    except SignatureProviderNotConfigured as exc:
+        return _provider_error(
+            'SIGNATURE_PROVIDER_NOT_CONFIGURED',
+            exc,
+            503,
+        )
+    except SignatureProviderError as exc:
+        return _provider_error(
+            'SIGNATURE_PROVIDER_FAILED',
+            exc,
+            502,
+        )
     except ValueError as exc:
         db.session.rollback()
         return fail(
@@ -75,12 +96,18 @@ def create_request():
             400,
         )
 
+    message = (
+        'Qualified-signature request sent through Dropbox Sign'
+        if signature_request.assurance_level == 'qes'
+        else 'Signature request sent'
+    )
+
     return success(
         serialize_signature_request(
             signature_request,
             include_events=True,
         ),
-        'Signature request sent',
+        message,
         201,
     )
 
@@ -227,6 +254,7 @@ def recipient_declined(recipient_id):
         'Signature request declined',
     )
 
+
 def _manageable_request(request_id):
     signature_request = SignatureRequest.query.filter_by(
         id=request_id,
@@ -242,6 +270,7 @@ def _manageable_request(request_id):
 
     return signature_request
 
+
 @signature_bp.post('/<request_id>/remind')
 @jwt_required()
 @permission_required('document:approve')
@@ -254,6 +283,18 @@ def remind_request(request_id):
         )
     except PermissionError as exc:
         return fail('FORBIDDEN', str(exc), 403)
+    except SignatureProviderNotConfigured as exc:
+        return _provider_error(
+            'SIGNATURE_PROVIDER_NOT_CONFIGURED',
+            exc,
+            503,
+        )
+    except SignatureProviderError as exc:
+        return _provider_error(
+            'SIGNATURE_PROVIDER_FAILED',
+            exc,
+            502,
+        )
     except ValueError as exc:
         db.session.rollback()
         return fail(
@@ -272,6 +313,7 @@ def remind_request(request_id):
         },
         'Signing reminder sent',
     )
+
 
 @signature_bp.patch('/<request_id>/deadline')
 @jwt_required()
@@ -295,6 +337,18 @@ def update_deadline(request_id):
         )
     except PermissionError as exc:
         return fail('FORBIDDEN', str(exc), 403)
+    except SignatureProviderNotConfigured as exc:
+        return _provider_error(
+            'SIGNATURE_PROVIDER_NOT_CONFIGURED',
+            exc,
+            503,
+        )
+    except SignatureProviderError as exc:
+        return _provider_error(
+            'SIGNATURE_PROVIDER_FAILED',
+            exc,
+            502,
+        )
     except ValueError as exc:
         db.session.rollback()
         return fail(
@@ -310,6 +364,7 @@ def update_deadline(request_id):
         ),
         'Signature deadline updated',
     )
+
 
 @signature_bp.patch('/<request_id>/cancel')
 @jwt_required()
@@ -333,6 +388,18 @@ def cancel_request(request_id):
         )
     except PermissionError as exc:
         return fail('FORBIDDEN', str(exc), 403)
+    except SignatureProviderNotConfigured as exc:
+        return _provider_error(
+            'SIGNATURE_PROVIDER_NOT_CONFIGURED',
+            exc,
+            503,
+        )
+    except SignatureProviderError as exc:
+        return _provider_error(
+            'SIGNATURE_PROVIDER_FAILED',
+            exc,
+            502,
+        )
     except ValueError as exc:
         db.session.rollback()
         return fail(
@@ -341,10 +408,19 @@ def cancel_request(request_id):
             400,
         )
 
+    cancellation_pending = (
+        signature_request.provider_status
+        == 'cancellation_pending'
+    )
+
     return success(
         serialize_signature_request(
             signature_request,
             include_events=True,
         ),
-        'Signature request cancelled',
+        (
+            'Dropbox Sign cancellation requested'
+            if cancellation_pending
+            else 'Signature request cancelled'
+        ),
     )

@@ -136,13 +136,29 @@ class SignatureRequest(
         db.CheckConstraint(
             "status IN ("
             "'draft','sent','in_progress','completed',"
-            "'declined','expired','cancelled'"
+            "'declined','expired','cancelled','failed'"
             ")",
             name='ck_signature_requests_status',
         ),
         db.CheckConstraint(
             'current_sequence >= 1',
             name='ck_signature_requests_current_sequence',
+        ),
+        db.CheckConstraint(
+            "assurance_level IS NULL OR "
+            "assurance_level IN ('standard','aes','qes')",
+            name='ck_signature_requests_assurance_level',
+        ),
+        db.Index(
+            'uq_signature_requests_active_document',
+            'document_id',
+            unique=True,
+            postgresql_where=db.text(
+                "status IN ('draft','sent','in_progress')",
+            ),
+            sqlite_where=db.text(
+                "status IN ('draft','sent','in_progress')",
+            ),
         ),
     )
 

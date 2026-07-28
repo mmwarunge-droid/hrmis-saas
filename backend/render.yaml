@@ -67,7 +67,7 @@ services:
       - key: DROPBOX_SIGN_CLIENT_ID
         sync: false
       - key: DROPBOX_SIGN_TEST_MODE
-        value: "true"
+        value: "false"
 
       - key: AUTH_MAX_FAILED_ATTEMPTS
         value: "5"
