@@ -814,3 +814,285 @@ def decline_signature(
 
     db.session.commit()
     return recipient
+
+
+ACTIVE_SIGNATURE_REQUEST_STATUSES = {
+    'sent',
+    'in_progress',
+}
+
+
+def _require_active_signature_request(signature_request):
+    if signature_request.status not in ACTIVE_SIGNATURE_REQUEST_STATUSES:
+        raise ValueError(
+            'Only active signature requests can be modified.',
+        )
+
+
+def send_signature_reminder(
+    signature_request,
+    actor,
+):
+    _require_active_signature_request(signature_request)
+
+    recipients = [
+        recipient
+        for recipient in _active_recipients(signature_request)
+        if recipient.status in {'notified', 'viewed'}
+    ]
+
+    if not recipients:
+        raise ValueError(
+            'No active signatories are currently available '
+            'for a reminder.',
+        )
+
+    now = utcnow()
+
+    for recipient in recipients:
+        title = f'Reminder: {signature_request.subject}'
+        body = (
+            f'{recipient.name}, this is a reminder that '
+            f'{signature_request.document.title} is waiting '
+            f'for your signature.\n\n'
+            f'Due: {_due_text(recipient.due_at)}\n\n'
+            f'Open ACE to complete the task:\n{_task_url()}'
+        )
+
+        _create_notification(
+            signature_request.tenant_id,
+            recipient.user_id,
+            title,
+            body,
+        )
+
+        delivered = _deliver_email(
+            signature_request,
+            recipient.email,
+            title,
+            body,
+            recipient=recipient,
+        )
+
+        recipient.last_reminder_at = now
+
+        _record_event(
+            signature_request,
+            'signature.reminder_sent',
+            actor=actor,
+            recipient=recipient,
+            description=(
+                f'A signing reminder was sent to '
+                f'{recipient.name}'
+            ),
+            metadata={
+                'email': recipient.email,
+                'sequence': recipient.sequence,
+                'email_delivered': delivered,
+                'sent_at': now.isoformat(),
+            },
+        )
+
+    if (
+        signature_request.reminder_rule
+        and signature_request.reminder_rule.is_active
+    ):
+        signature_request.reminder_rule.next_run_at = (
+            now
+            + timedelta(
+                days=signature_request.reminder_rule
+                .reminder_interval_days,
+            )
+        )
+
+    log_event(
+        'signature.reminder_send',
+        'SignatureRequest',
+        signature_request.id,
+        tenant_id=signature_request.tenant_id,
+        metadata={
+            'recipient_count': len(recipients),
+        },
+        actor=actor,
+    )
+
+    db.session.commit()
+    return len(recipients)
+
+
+def update_signature_deadline(
+    signature_request,
+    due_at,
+    actor,
+):
+    _require_active_signature_request(signature_request)
+
+    old_due_at = signature_request.due_at
+    signature_request.due_at = due_at
+
+    affected_recipients = [
+        recipient
+        for recipient in signature_request.recipients
+        if recipient.status not in FINAL_RECIPIENT_STATUSES
+    ]
+
+    for recipient in affected_recipients:
+        recipient.due_at = due_at
+
+    active_recipients = [
+        recipient
+        for recipient in affected_recipients
+        if recipient.status in {'notified', 'viewed'}
+    ]
+
+    for recipient in active_recipients:
+        title = f'Deadline updated: {signature_request.subject}'
+        body = (
+            f'{recipient.name}, the deadline for signing '
+            f'{signature_request.document.title} has changed.\n\n'
+            f'New due date: {_due_text(due_at)}\n\n'
+            f'Open ACE to review the task:\n{_task_url()}'
+        )
+
+        _create_notification(
+            signature_request.tenant_id,
+            recipient.user_id,
+            title,
+            body,
+        )
+
+        _deliver_email(
+            signature_request,
+            recipient.email,
+            title,
+            body,
+            recipient=recipient,
+        )
+
+    _record_event(
+        signature_request,
+        'signature.deadline_updated',
+        actor=actor,
+        description='The signature deadline was changed',
+        metadata={
+            'previous_due_at': (
+                old_due_at.isoformat()
+                if old_due_at
+                else None
+            ),
+            'new_due_at': due_at.isoformat(),
+            'affected_recipient_count': len(
+                affected_recipients,
+            ),
+        },
+    )
+
+    log_event(
+        'signature.deadline_update',
+        'SignatureRequest',
+        signature_request.id,
+        tenant_id=signature_request.tenant_id,
+        metadata={
+            'previous_due_at': (
+                old_due_at.isoformat()
+                if old_due_at
+                else None
+            ),
+            'new_due_at': due_at.isoformat(),
+        },
+        actor=actor,
+    )
+
+    db.session.commit()
+    return signature_request
+
+
+def cancel_signature_request(
+    signature_request,
+    actor,
+    reason,
+):
+    _require_active_signature_request(signature_request)
+
+    notified_recipients = [
+        recipient
+        for recipient in signature_request.recipients
+        if recipient.status in {'notified', 'viewed'}
+    ]
+
+    now = utcnow()
+
+    signature_request.status = 'cancelled'
+    signature_request.cancelled_at = now
+
+    for recipient in signature_request.recipients:
+        if recipient.status not in FINAL_RECIPIENT_STATUSES:
+            recipient.status = 'skipped'
+
+    if signature_request.reminder_rule:
+        signature_request.reminder_rule.is_active = False
+        signature_request.reminder_rule.next_run_at = None
+
+    other_active_request = SignatureRequest.query.filter(
+        SignatureRequest.id != signature_request.id,
+        SignatureRequest.document_id
+        == signature_request.document_id,
+        SignatureRequest.status.in_(
+            ACTIVE_SIGNATURE_REQUEST_STATUSES,
+        ),
+    ).first()
+
+    signature_request.document.signature_status = (
+        'pending'
+        if other_active_request
+        else 'not_required'
+    )
+
+    for recipient in notified_recipients:
+        title = f'Signature request cancelled: {signature_request.subject}'
+        body = (
+            f'{recipient.name}, the request to sign '
+            f'{signature_request.document.title} has been '
+            f'cancelled.\n\n'
+            f'Reason: {reason}'
+        )
+
+        _create_notification(
+            signature_request.tenant_id,
+            recipient.user_id,
+            title,
+            body,
+        )
+
+        _deliver_email(
+            signature_request,
+            recipient.email,
+            title,
+            body,
+            recipient=recipient,
+        )
+
+    _record_event(
+        signature_request,
+        'signature.request_cancelled',
+        actor=actor,
+        description='The signature request was cancelled',
+        metadata={
+            'reason': reason,
+            'cancelled_at': now.isoformat(),
+        },
+    )
+
+    log_event(
+        'signature.request_cancel',
+        'SignatureRequest',
+        signature_request.id,
+        tenant_id=signature_request.tenant_id,
+        metadata={
+            'reason': reason,
+        },
+        actor=actor,
+    )
+
+    db.session.commit()
+    return signature_request

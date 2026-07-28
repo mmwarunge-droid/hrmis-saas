@@ -358,3 +358,137 @@ def test_sequential_request_notifies_next_signer_after_first_signature(
     ]
 
     assert len(second_recipient_mail) == 1
+
+
+def test_client_admin_reminds_reschedules_and_cancels_request(
+    client,
+    app,
+    tenant,
+    admin_user,
+    auth_headers,
+):
+    signer = _create_employee_signer(
+        app,
+        tenant.id,
+        number='SIGN-301',
+        email='managed.signer@acme.test',
+        password='StrongManagedPass123!',
+        first_name='Managed',
+    )
+    document_id = _create_document(
+        app,
+        tenant.id,
+        admin_user,
+    )
+
+    initial_due_at = (
+        datetime.utcnow()
+        + timedelta(days=7)
+    ).replace(microsecond=0)
+
+    create_response = client.post(
+        '/api/signature-requests',
+        headers=auth_headers,
+        json={
+            'document_id': str(document_id),
+            'subject': 'Managed signature workflow',
+            'signing_mode': 'sequential',
+            'due_at': initial_due_at.isoformat(),
+            'recipients': [{
+                'employee_id': str(signer['employee_id']),
+                'role_label': 'Employee',
+                'sequence': 1,
+            }],
+        },
+    )
+
+    assert create_response.status_code == 201
+
+    request_data = create_response.get_json()['data']
+    request_id = request_data['id']
+    recipient_id = request_data['recipients'][0]['id']
+
+    initial_outbox_size = len(
+        app.extensions['mail_outbox'],
+    )
+
+    reminder_response = client.post(
+        f'/api/signature-requests/{request_id}/remind',
+        headers=auth_headers,
+    )
+
+    assert reminder_response.status_code == 200
+    assert (
+        reminder_response.get_json()['data']
+        ['recipient_count']
+        == 1
+    )
+    assert len(app.extensions['mail_outbox']) == (
+        initial_outbox_size + 1
+    )
+
+    updated_due_at = (
+        datetime.utcnow()
+        + timedelta(days=14)
+    ).replace(microsecond=0)
+
+    deadline_response = client.patch(
+        f'/api/signature-requests/{request_id}/deadline',
+        headers=auth_headers,
+        json={
+            'due_at': updated_due_at.isoformat(),
+        },
+    )
+
+    assert deadline_response.status_code == 200
+    assert (
+        deadline_response.get_json()['data']['due_at']
+        == updated_due_at.isoformat()
+    )
+
+    cancel_response = client.patch(
+        f'/api/signature-requests/{request_id}/cancel',
+        headers=auth_headers,
+        json={
+            'reason': 'The contract requires revision.',
+        },
+    )
+
+    assert cancel_response.status_code == 200
+    assert (
+        cancel_response.get_json()['data']['status']
+        == 'cancelled'
+    )
+
+    with app.app_context():
+        signature_request = db.session.get(
+            SignatureRequest,
+            request_id,
+        )
+        recipient = db.session.get(
+            SignatureRecipient,
+            recipient_id,
+        )
+        document = db.session.get(
+            Document,
+            document_id,
+        )
+
+        assert signature_request.status == 'cancelled'
+        assert signature_request.cancelled_at is not None
+        assert signature_request.due_at == updated_due_at
+        assert recipient.status == 'skipped'
+        assert recipient.due_at == updated_due_at
+        assert recipient.last_reminder_at is not None
+        assert document.signature_status == 'not_required'
+
+        event_types = {
+            event.event_type
+            for event in SignatureEvent.query.filter_by(
+                signature_request_id=request_id,
+            ).all()
+        }
+
+        assert 'signature.reminder_sent' in event_types
+        assert 'signature.deadline_updated' in event_types
+        assert 'signature.request_cancelled' in event_types

@@ -98,3 +98,15 @@ class SignatureDeclineSchema(Schema):
         required=True,
         validate=validate.Length(min=2, max=2000),
     )
+
+
+class SignatureDeadlineUpdateSchema(Schema):
+    due_at = fields.DateTime(required=True)
+
+
+class SignatureCancelSchema(Schema):
+    reason = fields.Str(
+        required=False,
+        load_default='Cancelled by an administrator',
+        validate=validate.Length(min=2, max=2000),
+    )

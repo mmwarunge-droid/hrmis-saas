@@ -5,11 +5,14 @@ from marshmallow import ValidationError
 from app.extensions import db
 from app.models import SignatureRecipient, SignatureRequest
 from app.schemas.signature_schema import (
+    SignatureCancelSchema,
+    SignatureDeadlineUpdateSchema,
     SignatureDeclineSchema,
     SignatureRequestCreateSchema,
 )
 from app.services.signature_service import (
     can_access_signature_request,
+    cancel_signature_request,
     create_signature_request,
     decline_signature,
     list_my_signature_tasks,
@@ -17,6 +20,8 @@ from app.services.signature_service import (
     mark_recipient_signed,
     mark_recipient_viewed,
     serialize_signature_request,
+    send_signature_reminder,
+    update_signature_deadline,
 )
 from app.utils.decorators import permission_required
 from app.utils.response import fail, success
@@ -220,4 +225,126 @@ def recipient_declined(recipient_id):
     return success(
         recipient.to_dict(),
         'Signature request declined',
+    )
+
+def _manageable_request(request_id):
+    signature_request = SignatureRequest.query.filter_by(
+        id=request_id,
+    ).first_or_404()
+
+    if not can_access_signature_request(
+        current_user,
+        signature_request,
+    ):
+        raise PermissionError(
+            'You cannot manage this signature request.',
+        )
+
+    return signature_request
+
+@signature_bp.post('/<request_id>/remind')
+@jwt_required()
+@permission_required('document:approve')
+def remind_request(request_id):
+    try:
+        signature_request = _manageable_request(request_id)
+        recipient_count = send_signature_reminder(
+            signature_request,
+            current_user,
+        )
+    except PermissionError as exc:
+        return fail('FORBIDDEN', str(exc), 403)
+    except ValueError as exc:
+        db.session.rollback()
+        return fail(
+            'SIGNATURE_REMINDER_FAILED',
+            str(exc),
+            400,
+        )
+
+    return success(
+        {
+            'request': serialize_signature_request(
+                signature_request,
+                include_events=True,
+            ),
+            'recipient_count': recipient_count,
+        },
+        'Signing reminder sent',
+    )
+
+@signature_bp.patch('/<request_id>/deadline')
+@jwt_required()
+@permission_required('document:approve')
+def update_deadline(request_id):
+    try:
+        payload = SignatureDeadlineUpdateSchema().load(
+            request.get_json() or {},
+        )
+        signature_request = _manageable_request(request_id)
+        signature_request = update_signature_deadline(
+            signature_request,
+            payload['due_at'],
+            current_user,
+        )
+    except ValidationError as err:
+        return fail(
+            'VALIDATION_ERROR',
+            err.messages,
+            422,
+        )
+    except PermissionError as exc:
+        return fail('FORBIDDEN', str(exc), 403)
+    except ValueError as exc:
+        db.session.rollback()
+        return fail(
+            'SIGNATURE_DEADLINE_UPDATE_FAILED',
+            str(exc),
+            400,
+        )
+
+    return success(
+        serialize_signature_request(
+            signature_request,
+            include_events=True,
+        ),
+        'Signature deadline updated',
+    )
+
+@signature_bp.patch('/<request_id>/cancel')
+@jwt_required()
+@permission_required('document:approve')
+def cancel_request(request_id):
+    try:
+        payload = SignatureCancelSchema().load(
+            request.get_json() or {},
+        )
+        signature_request = _manageable_request(request_id)
+        signature_request = cancel_signature_request(
+            signature_request,
+            current_user,
+            payload['reason'],
+        )
+    except ValidationError as err:
+        return fail(
+            'VALIDATION_ERROR',
+            err.messages,
+            422,
+        )
+    except PermissionError as exc:
+        return fail('FORBIDDEN', str(exc), 403)
+    except ValueError as exc:
+        db.session.rollback()
+        return fail(
+            'SIGNATURE_CANCEL_FAILED',
+            str(exc),
+            400,
+        )
+
+    return success(
+        serialize_signature_request(
+            signature_request,
+            include_events=True,
+        ),
+        'Signature request cancelled',
     )
