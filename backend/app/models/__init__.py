@@ -14,6 +14,10 @@ from app.models.signature import (
     SignatureReminderRule,
     SignatureRequest,
 )
+from app.models.signature_provider import (
+    SignatureArtifact,
+    SignatureProviderEvent,
+)
 from app.models.leave import LeaveBalance, LeaveRequest, LeaveType
 from app.models.attendance import AttendanceRecord
 from app.models.onboarding import EmployeeOnboardingTask, OnboardingTask, OnboardingTemplate
@@ -24,6 +28,7 @@ __all__ = [
     'EmergencyContact', 'JobHistory', 'Document',
     'SignatureRequest', 'SignatureRecipient',
     'SignatureReminderRule', 'SignatureEvent',
+    'SignatureArtifact', 'SignatureProviderEvent',
     'LeaveType', 'LeaveBalance', 'LeaveRequest',
     'AttendanceRecord', 'OnboardingTemplate', 'OnboardingTask', 'EmployeeOnboardingTask', 'AuditLog', 'Notification',
 ]

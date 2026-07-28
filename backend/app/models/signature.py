@@ -61,6 +61,36 @@ class SignatureRequest(
         nullable=True,
         index=True,
     )
+    provider_status = db.Column(
+        db.String(80),
+        nullable=True,
+        index=True,
+    )
+    provider_test_mode = db.Column(
+        db.Boolean,
+        nullable=True,
+    )
+    assurance_level = db.Column(
+        db.String(30),
+        nullable=True,
+    )
+    provider_metadata_json = db.Column(
+        db.JSON,
+        nullable=False,
+        default=dict,
+    )
+    provider_created_at = db.Column(
+        db.DateTime,
+        nullable=True,
+    )
+    provider_downloadable_at = db.Column(
+        db.DateTime,
+        nullable=True,
+    )
+    evidence_completed_at = db.Column(
+        db.DateTime,
+        nullable=True,
+    )
 
     document = db.relationship('Document')
     created_by = db.relationship(
@@ -84,6 +114,18 @@ class SignatureRequest(
         back_populates='signature_request',
         cascade='all, delete-orphan',
         uselist=False,
+    )
+    artifacts = db.relationship(
+        'SignatureArtifact',
+        back_populates='signature_request',
+        passive_deletes=True,
+        order_by='SignatureArtifact.captured_at',
+    )
+    provider_events = db.relationship(
+        'SignatureProviderEvent',
+        back_populates='signature_request',
+        passive_deletes=True,
+        order_by='SignatureProviderEvent.received_at',
     )
 
     __table_args__ = (
@@ -154,6 +196,28 @@ class SignatureRequest(
             ),
             'provider': self.provider,
             'provider_request_id': self.provider_request_id,
+            'provider_status': self.provider_status,
+            'provider_test_mode': self.provider_test_mode,
+            'assurance_level': self.assurance_level,
+            'provider_metadata_json': (
+                self.provider_metadata_json
+            ),
+            'provider_created_at': (
+                self.provider_created_at.isoformat()
+                if self.provider_created_at
+                else None
+            ),
+            'provider_downloadable_at': (
+                self.provider_downloadable_at.isoformat()
+                if self.provider_downloadable_at
+                else None
+            ),
+            'evidence_completed_at': (
+                self.evidence_completed_at.isoformat()
+                if self.evidence_completed_at
+                else None
+            ),
+            'artifact_count': len(self.artifacts),
             'created_at': (
                 self.created_at.isoformat()
                 if self.created_at
@@ -237,6 +301,16 @@ class SignatureRecipient(
         db.String(255),
         nullable=True,
         index=True,
+    )
+    provider_status = db.Column(
+        db.String(80),
+        nullable=True,
+        index=True,
+    )
+    provider_metadata_json = db.Column(
+        db.JSON,
+        nullable=False,
+        default=dict,
     )
 
     signature_request = db.relationship(
@@ -327,6 +401,13 @@ class SignatureRecipient(
                 else None
             ),
             'decline_reason': self.decline_reason,
+            'provider_recipient_id': (
+                self.provider_recipient_id
+            ),
+            'provider_status': self.provider_status,
+            'provider_metadata_json': (
+                self.provider_metadata_json
+            ),
         }
 
 
