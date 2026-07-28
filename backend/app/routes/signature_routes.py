@@ -1,0 +1,426 @@
+from flask import Blueprint, request
+from flask_jwt_extended import current_user, jwt_required
+from marshmallow import ValidationError
+
+from app.extensions import db
+from app.models import SignatureRecipient, SignatureRequest
+from app.schemas.signature_schema import (
+    SignatureCancelSchema,
+    SignatureDeadlineUpdateSchema,
+    SignatureDeclineSchema,
+    SignatureRequestCreateSchema,
+)
+from app.services.signature_providers.base import (
+    SignatureProviderError,
+    SignatureProviderNotConfigured,
+)
+from app.services.signature_service import (
+    can_access_signature_request,
+    cancel_signature_request,
+    create_signature_request,
+    decline_signature,
+    list_my_signature_tasks,
+    list_signature_requests,
+    mark_recipient_signed,
+    mark_recipient_viewed,
+    serialize_signature_request,
+    send_signature_reminder,
+    update_signature_deadline,
+)
+from app.utils.decorators import permission_required
+from app.utils.response import fail, success
+
+
+signature_bp = Blueprint(
+    'signature_requests',
+    __name__,
+    url_prefix='/signature-requests',
+)
+
+
+def _provider_error(code, exc, status):
+    db.session.rollback()
+    return fail(code, str(exc), status)
+
+
+@signature_bp.post('')
+@jwt_required()
+@permission_required('document:approve')
+def create_request():
+    try:
+        payload = SignatureRequestCreateSchema().load(
+            request.get_json() or {},
+        )
+
+        tenant_id = (
+            payload.pop('tenant_id', None)
+            if current_user.has_role('SUPER_ADMIN')
+            else current_user.tenant_id
+        )
+
+        if not tenant_id:
+            return fail(
+                'TENANT_REQUIRED',
+                'tenant_id is required for signature requests',
+                422,
+            )
+
+        signature_request = create_signature_request(
+            payload,
+            tenant_id,
+            current_user,
+        )
+    except ValidationError as err:
+        return fail(
+            'VALIDATION_ERROR',
+            err.messages,
+            422,
+        )
+    except SignatureProviderNotConfigured as exc:
+        return _provider_error(
+            'SIGNATURE_PROVIDER_NOT_CONFIGURED',
+            exc,
+            503,
+        )
+    except SignatureProviderError as exc:
+        return _provider_error(
+            'SIGNATURE_PROVIDER_FAILED',
+            exc,
+            502,
+        )
+    except ValueError as exc:
+        db.session.rollback()
+        return fail(
+            'SIGNATURE_REQUEST_FAILED',
+            str(exc),
+            400,
+        )
+
+    message = (
+        'Qualified-signature request sent through Dropbox Sign'
+        if signature_request.assurance_level == 'qes'
+        else 'Signature request sent'
+    )
+
+    return success(
+        serialize_signature_request(
+            signature_request,
+            include_events=True,
+        ),
+        message,
+        201,
+    )
+
+
+@signature_bp.get('')
+@jwt_required()
+@permission_required('document:approve')
+def requests():
+    items = list_signature_requests(
+        current_user,
+        tenant_id=request.args.get('tenant_id'),
+        status=request.args.get('status'),
+        document_id=request.args.get('document_id'),
+    )
+
+    return success({
+        'items': [
+            serialize_signature_request(item)
+            for item in items
+        ],
+    })
+
+
+@signature_bp.get('/my-tasks')
+@jwt_required()
+def my_tasks():
+    return success({
+        'items': list_my_signature_tasks(current_user),
+    })
+
+
+@signature_bp.get('/<request_id>')
+@jwt_required()
+def request_details(request_id):
+    signature_request = SignatureRequest.query.filter_by(
+        id=request_id,
+    ).first_or_404()
+
+    if not can_access_signature_request(
+        current_user,
+        signature_request,
+    ):
+        return fail(
+            'FORBIDDEN',
+            'You cannot access this signature request',
+            403,
+        )
+
+    return success(
+        serialize_signature_request(
+            signature_request,
+            include_events=True,
+        ),
+    )
+
+
+@signature_bp.patch('/recipients/<recipient_id>/viewed')
+@jwt_required()
+def recipient_viewed(recipient_id):
+    recipient = SignatureRecipient.query.filter_by(
+        id=recipient_id,
+    ).first_or_404()
+
+    try:
+        recipient = mark_recipient_viewed(
+            recipient,
+            current_user,
+        )
+    except PermissionError as exc:
+        return fail('FORBIDDEN', str(exc), 403)
+    except ValueError as exc:
+        return fail(
+            'SIGNATURE_ACTION_FAILED',
+            str(exc),
+            400,
+        )
+
+    return success(
+        recipient.to_dict(),
+        'Document view recorded',
+    )
+
+
+@signature_bp.patch('/recipients/<recipient_id>/sign')
+@jwt_required()
+def recipient_signed(recipient_id):
+    recipient = SignatureRecipient.query.filter_by(
+        id=recipient_id,
+    ).first_or_404()
+
+    try:
+        recipient = mark_recipient_signed(
+            recipient,
+            current_user,
+        )
+    except PermissionError as exc:
+        return fail('FORBIDDEN', str(exc), 403)
+    except ValueError as exc:
+        return fail(
+            'SIGNATURE_ACTION_FAILED',
+            str(exc),
+            400,
+        )
+
+    return success(
+        recipient.to_dict(),
+        'Signature recorded',
+    )
+
+
+@signature_bp.patch('/recipients/<recipient_id>/decline')
+@jwt_required()
+def recipient_declined(recipient_id):
+    recipient = SignatureRecipient.query.filter_by(
+        id=recipient_id,
+    ).first_or_404()
+
+    try:
+        payload = SignatureDeclineSchema().load(
+            request.get_json() or {},
+        )
+        recipient = decline_signature(
+            recipient,
+            current_user,
+            payload['reason'],
+        )
+    except ValidationError as err:
+        return fail(
+            'VALIDATION_ERROR',
+            err.messages,
+            422,
+        )
+    except PermissionError as exc:
+        return fail('FORBIDDEN', str(exc), 403)
+    except ValueError as exc:
+        return fail(
+            'SIGNATURE_ACTION_FAILED',
+            str(exc),
+            400,
+        )
+
+    return success(
+        recipient.to_dict(),
+        'Signature request declined',
+    )
+
+
+def _manageable_request(request_id):
+    signature_request = SignatureRequest.query.filter_by(
+        id=request_id,
+    ).first_or_404()
+
+    if not can_access_signature_request(
+        current_user,
+        signature_request,
+    ):
+        raise PermissionError(
+            'You cannot manage this signature request.',
+        )
+
+    return signature_request
+
+
+@signature_bp.post('/<request_id>/remind')
+@jwt_required()
+@permission_required('document:approve')
+def remind_request(request_id):
+    try:
+        signature_request = _manageable_request(request_id)
+        recipient_count = send_signature_reminder(
+            signature_request,
+            current_user,
+        )
+    except PermissionError as exc:
+        return fail('FORBIDDEN', str(exc), 403)
+    except SignatureProviderNotConfigured as exc:
+        return _provider_error(
+            'SIGNATURE_PROVIDER_NOT_CONFIGURED',
+            exc,
+            503,
+        )
+    except SignatureProviderError as exc:
+        return _provider_error(
+            'SIGNATURE_PROVIDER_FAILED',
+            exc,
+            502,
+        )
+    except ValueError as exc:
+        db.session.rollback()
+        return fail(
+            'SIGNATURE_REMINDER_FAILED',
+            str(exc),
+            400,
+        )
+
+    return success(
+        {
+            'request': serialize_signature_request(
+                signature_request,
+                include_events=True,
+            ),
+            'recipient_count': recipient_count,
+        },
+        'Signing reminder sent',
+    )
+
+
+@signature_bp.patch('/<request_id>/deadline')
+@jwt_required()
+@permission_required('document:approve')
+def update_deadline(request_id):
+    try:
+        payload = SignatureDeadlineUpdateSchema().load(
+            request.get_json() or {},
+        )
+        signature_request = _manageable_request(request_id)
+        signature_request = update_signature_deadline(
+            signature_request,
+            payload['due_at'],
+            current_user,
+        )
+    except ValidationError as err:
+        return fail(
+            'VALIDATION_ERROR',
+            err.messages,
+            422,
+        )
+    except PermissionError as exc:
+        return fail('FORBIDDEN', str(exc), 403)
+    except SignatureProviderNotConfigured as exc:
+        return _provider_error(
+            'SIGNATURE_PROVIDER_NOT_CONFIGURED',
+            exc,
+            503,
+        )
+    except SignatureProviderError as exc:
+        return _provider_error(
+            'SIGNATURE_PROVIDER_FAILED',
+            exc,
+            502,
+        )
+    except ValueError as exc:
+        db.session.rollback()
+        return fail(
+            'SIGNATURE_DEADLINE_UPDATE_FAILED',
+            str(exc),
+            400,
+        )
+
+    return success(
+        serialize_signature_request(
+            signature_request,
+            include_events=True,
+        ),
+        'Signature deadline updated',
+    )
+
+
+@signature_bp.patch('/<request_id>/cancel')
+@jwt_required()
+@permission_required('document:approve')
+def cancel_request(request_id):
+    try:
+        payload = SignatureCancelSchema().load(
+            request.get_json() or {},
+        )
+        signature_request = _manageable_request(request_id)
+        signature_request = cancel_signature_request(
+            signature_request,
+            current_user,
+            payload['reason'],
+        )
+    except ValidationError as err:
+        return fail(
+            'VALIDATION_ERROR',
+            err.messages,
+            422,
+        )
+    except PermissionError as exc:
+        return fail('FORBIDDEN', str(exc), 403)
+    except SignatureProviderNotConfigured as exc:
+        return _provider_error(
+            'SIGNATURE_PROVIDER_NOT_CONFIGURED',
+            exc,
+            503,
+        )
+    except SignatureProviderError as exc:
+        return _provider_error(
+            'SIGNATURE_PROVIDER_FAILED',
+            exc,
+            502,
+        )
+    except ValueError as exc:
+        db.session.rollback()
+        return fail(
+            'SIGNATURE_CANCEL_FAILED',
+            str(exc),
+            400,
+        )
+
+    cancellation_pending = (
+        signature_request.provider_status
+        == 'cancellation_pending'
+    )
+
+    return success(
+        serialize_signature_request(
+            signature_request,
+            include_events=True,
+        ),
+        (
+            'Dropbox Sign cancellation requested'
+            if cancellation_pending
+            else 'Signature request cancelled'
+        ),
+    )

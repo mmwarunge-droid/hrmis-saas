@@ -3,7 +3,12 @@ import hashlib
 from flask_jwt_extended import current_user
 
 from app.extensions import db
-from app.models import Document, Employee
+from app.models import (
+    Document,
+    Employee,
+    SignatureRecipient,
+    SignatureRequest,
+)
 from app.services.audit_service import log_event
 from app.utils.file_storage import save_document_file
 
@@ -19,14 +24,50 @@ def _checksum(path: str) -> str:
 def can_access_document(user, document: Document) -> bool:
     if user.has_role('SUPER_ADMIN'):
         return True
+
     if str(user.tenant_id) != str(document.tenant_id):
         return False
+
     if user.has_any_role({'HR_CONSULTANT', 'CLIENT_ADMIN'}):
         return True
+
     if user.has_role('MANAGER'):
         return document.access_level in {'manager', 'employee'}
+
     if user.has_role('EMPLOYEE'):
-        return user.employee_profile and str(user.employee_profile.id) == str(document.employee_id) and document.access_level == 'employee'
+        assigned_signature = (
+            db.session.query(SignatureRecipient.id)
+            .join(
+                SignatureRequest,
+                SignatureRecipient.signature_request_id
+                == SignatureRequest.id,
+            )
+            .filter(
+                SignatureRecipient.user_id == user.id,
+                SignatureRequest.document_id == document.id,
+                SignatureRequest.tenant_id == document.tenant_id,
+                SignatureRequest.status.in_([
+                    'sent',
+                    'in_progress',
+                    'completed',
+                    'declined',
+                    'expired',
+                    'cancelled',
+                ]),
+            )
+            .first()
+        )
+
+        if assigned_signature:
+            return True
+
+        return bool(
+            user.employee_profile
+            and str(user.employee_profile.id)
+            == str(document.employee_id)
+            and document.access_level == 'employee'
+        )
+
     return False
 
 

@@ -8,6 +8,16 @@ from app.models.employee import Employee
 from app.models.emergency_contact import EmergencyContact
 from app.models.job_history import JobHistory
 from app.models.document import Document
+from app.models.signature import (
+    SignatureEvent,
+    SignatureRecipient,
+    SignatureReminderRule,
+    SignatureRequest,
+)
+from app.models.signature_provider import (
+    SignatureArtifact,
+    SignatureProviderEvent,
+)
 from app.models.leave import LeaveBalance, LeaveRequest, LeaveType
 from app.models.attendance import AttendanceRecord
 from app.models.onboarding import EmployeeOnboardingTask, OnboardingTask, OnboardingTemplate
@@ -15,6 +25,10 @@ from app.models.audit_log import AuditLog, Notification
 
 __all__ = [
     'Tenant', 'AuthSession', 'AccountToken', 'MfaRecoveryCode', 'Permission', 'Role', 'RolePermission', 'User', 'UserRole', 'Department', 'Employee',
-    'EmergencyContact', 'JobHistory', 'Document', 'LeaveType', 'LeaveBalance', 'LeaveRequest',
+    'EmergencyContact', 'JobHistory', 'Document',
+    'SignatureRequest', 'SignatureRecipient',
+    'SignatureReminderRule', 'SignatureEvent',
+    'SignatureArtifact', 'SignatureProviderEvent',
+    'LeaveType', 'LeaveBalance', 'LeaveRequest',
     'AttendanceRecord', 'OnboardingTemplate', 'OnboardingTask', 'EmployeeOnboardingTask', 'AuditLog', 'Notification',
 ]

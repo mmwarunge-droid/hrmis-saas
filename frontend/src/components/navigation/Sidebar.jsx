@@ -4,6 +4,7 @@ import {
   Building2,
   CalendarDays,
   CheckSquare2,
+  FileSignature,
   FileText,
   Home,
   Network,
@@ -40,6 +41,12 @@ const groups = [
     label: 'Operations',
     links: [
       { to: '/documents', label: 'Docs', icon: FileText, permission: 'document:read' },
+      {
+        to: '/signature-requests',
+        label: 'Signature requests',
+        icon: FileSignature,
+        permission: 'document:approve',
+      },
       { to: '/onboarding', label: 'Onboarding', icon: UserPlus, permission: 'onboarding:create' },
     ],
   },

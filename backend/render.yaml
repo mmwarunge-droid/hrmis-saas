@@ -58,6 +58,16 @@ services:
         value: /var/data/uploads
       - key: MAX_CONTENT_LENGTH
         value: "10485760"
+      - key: SIGNATURE_PROVIDER
+        value: internal
+      - key: SIGNATURE_EVIDENCE_FOLDER
+        value: /var/data/signature-evidence
+      - key: DROPBOX_SIGN_API_KEY
+        sync: false
+      - key: DROPBOX_SIGN_CLIENT_ID
+        sync: false
+      - key: DROPBOX_SIGN_TEST_MODE
+        value: "false"
 
       - key: AUTH_MAX_FAILED_ATTEMPTS
         value: "5"

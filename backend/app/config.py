@@ -67,6 +67,24 @@ class BaseConfig:
     CORS_ORIGINS = _csv(os.getenv('CORS_ORIGINS') or FRONTEND_URL)
     UPLOAD_FOLDER = os.getenv('UPLOAD_FOLDER', str(BASE_DIR / 'uploads'))
     MAX_CONTENT_LENGTH = int(os.getenv('MAX_CONTENT_LENGTH', str(10 * 1024 * 1024)))
+    SIGNATURE_PROVIDER = os.getenv(
+        'SIGNATURE_PROVIDER',
+        'internal',
+    ).strip().lower()
+    SIGNATURE_EVIDENCE_FOLDER = os.getenv(
+        'SIGNATURE_EVIDENCE_FOLDER',
+        str(Path(UPLOAD_FOLDER) / 'signature-evidence'),
+    )
+    DROPBOX_SIGN_API_KEY = os.getenv(
+        'DROPBOX_SIGN_API_KEY',
+    ) or None
+    DROPBOX_SIGN_CLIENT_ID = os.getenv(
+        'DROPBOX_SIGN_CLIENT_ID',
+    ) or None
+    DROPBOX_SIGN_TEST_MODE = _bool_env(
+        'DROPBOX_SIGN_TEST_MODE',
+        True,
+    )
     JSON_SORT_KEYS = False
     ERROR_INCLUDE_MESSAGE = False
     REDIS_URL = os.getenv('REDIS_URL', 'redis://127.0.0.1:6379/0')
@@ -168,6 +186,33 @@ class ProductionConfig(BaseConfig):
             raise RuntimeError('MFA_RECOVERY_CODE_PEPPER must differ from SECRET_KEY and JWT_SECRET_KEY')
         if cls.JWT_COOKIE_SAMESITE.lower() == 'none' and not cls.JWT_COOKIE_SECURE:
             raise RuntimeError('JWT_COOKIE_SECURE must be enabled when JWT_COOKIE_SAMESITE=None')
+        if cls.SIGNATURE_PROVIDER not in {
+            'internal',
+            'dropbox_sign',
+        }:
+            raise RuntimeError(
+                'SIGNATURE_PROVIDER must be internal '
+                'or dropbox_sign'
+            )
+        if cls.SIGNATURE_PROVIDER == 'dropbox_sign':
+            provider_missing = [
+                key
+                for key in (
+                    'DROPBOX_SIGN_API_KEY',
+                    'DROPBOX_SIGN_CLIENT_ID',
+                )
+                if not os.getenv(key)
+            ]
+            if provider_missing:
+                raise RuntimeError(
+                    'Missing Dropbox Sign production variables: '
+                    + ', '.join(provider_missing)
+                )
+            if cls.DROPBOX_SIGN_TEST_MODE:
+                raise RuntimeError(
+                    'DROPBOX_SIGN_TEST_MODE must be false when '
+                    'Dropbox Sign is enabled in production'
+                )
         if cls.MAIL_TRANSPORT.lower() != 'smtp':
             raise RuntimeError('MAIL_TRANSPORT must be smtp in production')
         if not cls.MAIL_SMTP_USE_TLS:
