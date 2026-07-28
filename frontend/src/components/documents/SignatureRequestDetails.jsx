@@ -11,6 +11,7 @@ import {
   XCircle,
 } from 'lucide-react';
 
+import SignatureEvidencePanel from './SignatureEvidencePanel.jsx';
 import Badge from '../ui/Badge.jsx';
 import Button from '../ui/Button.jsx';
 import Card from '../ui/Card.jsx';
@@ -83,6 +84,8 @@ export default function SignatureRequestDetails({
   onRemind,
   onUpdateDeadline,
   onCancel,
+  evidence = null,
+  onRetryEvidence,
 }) {
   const [deadline, setDeadline] = useState(
     () => toDateTimeLocal(request?.due_at),
@@ -267,6 +270,15 @@ export default function SignatureRequestDetails({
           </p>
         </Card>
       </div>
+
+      {request.assurance_level === 'qes' && (
+        <SignatureEvidencePanel
+          requestId={request.id}
+          evidence={evidence}
+          loading={loading}
+          onRetry={onRetryEvidence}
+        />
+      )}
 
       {isActive && (
         <Card>

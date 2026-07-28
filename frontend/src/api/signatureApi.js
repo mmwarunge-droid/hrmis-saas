@@ -40,4 +40,19 @@ export const signatureApi = {
     `/signature-requests/${requestId}/cancel`,
     { reason },
   ),
+
+  evidence: (requestId) => apiClient.get(
+    `/signature-requests/${requestId}/evidence`,
+  ),
+
+  retryEvidence: (requestId) => apiClient.post(
+    `/signature-requests/${requestId}/evidence/retry`,
+  ),
+
+  artifactDownloadUrl: (requestId, artifactId) => {
+    const base = apiClient.defaults.baseURL || '/api';
+
+    return `${base}/signature-requests/${requestId}`
+      + `/artifacts/${artifactId}/download`;
+  },
 };

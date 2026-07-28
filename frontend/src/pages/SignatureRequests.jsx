@@ -88,6 +88,7 @@ function currentSignatories(request) {
 export default function SignatureRequests() {
   const [requests, setRequests] = useState([]);
   const [details, setDetails] = useState(null);
+  const [evidence, setEvidence] = useState(null);
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
@@ -156,8 +157,18 @@ export default function SignatureRequests() {
     setError('');
 
     try {
-      const response = await signatureApi.get(request.id);
-      setDetails(response.data);
+      const [
+        requestResponse,
+        evidenceResponse,
+      ] = await Promise.all([
+        signatureApi.get(request.id),
+        request.assurance_level === 'qes'
+          ? signatureApi.evidence(request.id)
+          : Promise.resolve({ data: null }),
+      ]);
+
+      setDetails(requestResponse.data);
+      setEvidence(evidenceResponse.data);
     } catch (err) {
       setDetailsOpen(false);
       setError(
@@ -170,6 +181,14 @@ export default function SignatureRequests() {
   const refreshDetails = async (requestId) => {
     const response = await signatureApi.get(requestId);
     setDetails(response.data);
+
+    if (response.data.assurance_level === 'qes') {
+      const evidenceResponse = await signatureApi.evidence(
+        requestId,
+      );
+      setEvidence(evidenceResponse.data);
+    }
+
     await load();
   };
 
@@ -235,6 +254,25 @@ export default function SignatureRequests() {
       setError(
         err.error?.message
         || 'Unable to cancel signature request',
+      );
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const retryEvidence = async (requestId) => {
+    setActionLoading(true);
+    setError('');
+    setSuccess('');
+
+    try {
+      await signatureApi.retryEvidence(requestId);
+      setSuccess('Signature evidence retry queued.');
+      await refreshDetails(requestId);
+    } catch (err) {
+      setError(
+        err.error?.message
+        || 'Unable to retry signature evidence',
       );
     } finally {
       setActionLoading(false);
@@ -442,6 +480,7 @@ export default function SignatureRequests() {
           if (actionLoading) return;
           setDetailsOpen(false);
           setDetails(null);
+          setEvidence(null);
         }}
         size="xl"
       >
@@ -453,6 +492,8 @@ export default function SignatureRequests() {
             onRemind={remind}
             onUpdateDeadline={updateDeadline}
             onCancel={cancel}
+            evidence={evidence}
+            onRetryEvidence={retryEvidence}
           />
         ) : (
           <p className="py-12 text-center text-sm text-slate-500">

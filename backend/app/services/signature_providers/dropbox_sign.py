@@ -1,16 +1,21 @@
 import hashlib
 import hmac
+import io
 import json
+import zipfile
 from datetime import datetime, timedelta, timezone
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 from app.services.signature_providers.base import (
     InvalidProviderCallback,
+    ProviderArtifactPayload,
     ProviderCallback,
     ProviderRequestResult,
+    SignatureArtifactsNotReady,
     SignatureProvider,
     SignatureProviderError,
     SignatureProviderNotConfigured,
+    SignatureProviderRetryableError,
 )
 
 
@@ -340,10 +345,157 @@ class DropboxSignProvider(SignatureProvider):
 
     def download_artifacts(self, signature_request):
         self._require_qes(signature_request)
-        raise SignatureProviderError(
-            'Dropbox Sign evidence download is activated in '
-            'Phase 2C after the downloadable callback.',
-        )
+
+        if not signature_request.provider_request_id:
+            raise SignatureProviderError(
+                'The Dropbox Sign request ID is missing.',
+            )
+
+        (
+            ApiClient,
+            ApiException,
+            configuration,
+            api,
+            _models,
+        ) = self._api_context()
+
+        try:
+            with ApiClient(configuration) as api_client:
+                response = api.SignatureRequestApi(
+                    api_client,
+                ).signature_request_files(
+                    signature_request_id=(
+                        signature_request.provider_request_id
+                    ),
+                    file_type='zip',
+                )
+                archive_bytes = response.read()
+        except ApiException as exc:
+            status = getattr(exc, 'status', None)
+
+            if status in {409, 422}:
+                raise SignatureArtifactsNotReady(
+                    'Dropbox Sign is still preparing the final '
+                    'evidence package.',
+                ) from exc
+
+            if status in {408, 425, 429} or (
+                isinstance(status, int) and status >= 500
+            ):
+                raise SignatureProviderRetryableError(
+                    'Dropbox Sign evidence download is temporarily '
+                    'unavailable.',
+                ) from exc
+
+            raise SignatureProviderError(
+                'Dropbox Sign rejected the evidence download.',
+            ) from exc
+        except OSError as exc:
+            raise SignatureProviderRetryableError(
+                'Dropbox Sign evidence could not be read.',
+            ) from exc
+
+        if not isinstance(archive_bytes, bytes):
+            archive_bytes = bytes(archive_bytes)
+
+        if not archive_bytes:
+            raise SignatureProviderRetryableError(
+                'Dropbox Sign returned an empty evidence package.',
+            )
+
+        if len(archive_bytes) > 50 * 1024 * 1024:
+            raise SignatureProviderError(
+                'Dropbox Sign evidence package exceeds 50 MB.',
+            )
+
+        try:
+            with zipfile.ZipFile(
+                io.BytesIO(archive_bytes),
+            ) as archive:
+                pdf_members = []
+
+                for info in archive.infolist():
+                    if info.is_dir():
+                        continue
+
+                    path = PurePosixPath(info.filename)
+
+                    if (
+                        path.is_absolute()
+                        or '..' in path.parts
+                        or info.flag_bits & 0x1
+                    ):
+                        raise SignatureProviderError(
+                            'Dropbox Sign returned an unsafe '
+                            'evidence archive.',
+                        )
+
+                    if info.file_size > 25 * 1024 * 1024:
+                        raise SignatureProviderError(
+                            'A Dropbox Sign evidence artifact '
+                            'exceeds 25 MB.',
+                        )
+
+                    if path.suffix.lower() == '.pdf':
+                        pdf_members.append((info, path))
+
+                audit_members = [
+                    item
+                    for item in pdf_members
+                    if 'audit trail' in item[1].name.lower()
+                ]
+                signed_members = [
+                    item
+                    for item in pdf_members
+                    if item not in audit_members
+                ]
+
+                if (
+                    len(audit_members) != 1
+                    or len(signed_members) != 1
+                ):
+                    raise SignatureProviderError(
+                        'Dropbox Sign did not return exactly one '
+                        'signed PDF and one audit trail.',
+                    )
+
+                artifacts = []
+
+                for artifact_type, item in (
+                    ('signed_document', signed_members[0]),
+                    ('audit_trail', audit_members[0]),
+                ):
+                    info, path = item
+                    content = archive.read(info)
+
+                    if not content.startswith(b'%PDF-'):
+                        raise SignatureProviderError(
+                            'Dropbox Sign returned an invalid PDF '
+                            'artifact.',
+                        )
+
+                    artifacts.append(ProviderArtifactPayload(
+                        artifact_type=artifact_type,
+                        filename=path.name,
+                        content=content,
+                        mime_type='application/pdf',
+                        provider_artifact_id=(
+                            f'{signature_request.provider_request_id}:'
+                            f'{artifact_type}'
+                        ),
+                        metadata={
+                            'archive_member': info.filename,
+                            'archive_sha256': hashlib.sha256(
+                                archive_bytes,
+                            ).hexdigest(),
+                        },
+                    ))
+
+                return artifacts
+        except zipfile.BadZipFile as exc:
+            raise SignatureProviderError(
+                'Dropbox Sign returned an invalid evidence archive.',
+            ) from exc
 
     def parse_callback(self, raw_payload):
         if not self.api_key:

@@ -1,14 +1,26 @@
-from flask import Blueprint, request
+from io import BytesIO
+
+from flask import Blueprint, request, send_file
 from flask_jwt_extended import current_user, jwt_required
 from marshmallow import ValidationError
 
 from app.extensions import db
-from app.models import SignatureRecipient, SignatureRequest
+from app.models import (
+    SignatureArtifact,
+    SignatureRecipient,
+    SignatureRequest,
+)
 from app.schemas.signature_schema import (
     SignatureCancelSchema,
     SignatureDeadlineUpdateSchema,
     SignatureDeclineSchema,
     SignatureRequestCreateSchema,
+)
+from app.services.signature_evidence_service import (
+    SignatureEvidenceValidationError,
+    artifact_content,
+    retry_signature_evidence,
+    serialize_signature_evidence,
 )
 from app.services.signature_providers.base import (
     SignatureProviderError,
@@ -269,6 +281,89 @@ def _manageable_request(request_id):
         )
 
     return signature_request
+
+
+@signature_bp.get('/<request_id>/evidence')
+@jwt_required()
+@permission_required('document:approve')
+def request_evidence(request_id):
+    try:
+        signature_request = _manageable_request(request_id)
+    except PermissionError as exc:
+        return fail('FORBIDDEN', str(exc), 403)
+
+    return success(
+        serialize_signature_evidence(signature_request),
+    )
+
+
+@signature_bp.post('/<request_id>/evidence/retry')
+@jwt_required()
+@permission_required('document:approve')
+def retry_evidence(request_id):
+    try:
+        signature_request = _manageable_request(request_id)
+        signature_request = retry_signature_evidence(
+            signature_request,
+            current_user,
+        )
+    except PermissionError as exc:
+        return fail('FORBIDDEN', str(exc), 403)
+    except ValueError as exc:
+        db.session.rollback()
+        return fail(
+            'SIGNATURE_EVIDENCE_RETRY_FAILED',
+            str(exc),
+            400,
+        )
+
+    return success(
+        serialize_signature_evidence(signature_request),
+        'Signature evidence retry queued',
+    )
+
+
+@signature_bp.get(
+    '/<request_id>/artifacts/<artifact_id>/download',
+)
+@jwt_required()
+@permission_required('document:approve')
+def download_evidence_artifact(
+    request_id,
+    artifact_id,
+):
+    try:
+        signature_request = _manageable_request(request_id)
+    except PermissionError as exc:
+        return fail('FORBIDDEN', str(exc), 403)
+
+    artifact = SignatureArtifact.query.filter_by(
+        id=artifact_id,
+        signature_request_id=signature_request.id,
+        tenant_id=signature_request.tenant_id,
+    ).first_or_404()
+
+    try:
+        content = artifact_content(artifact)
+    except (
+        FileNotFoundError,
+        SignatureEvidenceValidationError,
+    ) as exc:
+        return fail(
+            'SIGNATURE_EVIDENCE_UNAVAILABLE',
+            str(exc),
+            409,
+        )
+
+    return send_file(
+        BytesIO(content),
+        mimetype=artifact.mime_type or (
+            'application/octet-stream'
+        ),
+        as_attachment=True,
+        download_name=artifact.original_filename,
+        max_age=0,
+    )
 
 
 @signature_bp.post('/<request_id>/remind')
