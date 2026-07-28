@@ -29,15 +29,35 @@ def run(*, once=False):
         ))
 
         while not stopping:
-            request_ids = claim_signature_evidence_jobs()
+            try:
+                request_ids = claim_signature_evidence_jobs()
 
-            for request_id in request_ids:
-                result = process_signature_evidence(request_id)
-                logger.info(
-                    'Evidence job %s finished with status %s',
-                    request_id,
-                    result.evidence_status,
+                for request_id in request_ids:
+                    try:
+                        result = process_signature_evidence(
+                            request_id,
+                        )
+                        logger.info(
+                            'Evidence job %s finished with status %s',
+                            request_id,
+                            result.evidence_status,
+                        )
+                    except Exception:
+                        logger.exception(
+                            'Evidence job %s crashed outside the '
+                            'service retry boundary',
+                            request_id,
+                        )
+            except Exception:
+                logger.exception(
+                    'Evidence worker iteration failed; retrying',
                 )
+
+                if once:
+                    raise
+
+                time.sleep(poll_seconds)
+                continue
 
             if once:
                 return

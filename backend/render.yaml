@@ -63,7 +63,7 @@ services:
       - key: SIGNATURE_EVIDENCE_FOLDER
         value: /var/data/signature-evidence
       - key: SIGNATURE_EVIDENCE_STORAGE
-        value: local
+        value: s3
       - key: SIGNATURE_EVIDENCE_S3_BUCKET
         sync: false
       - key: SIGNATURE_EVIDENCE_S3_PREFIX
@@ -157,6 +157,178 @@ services:
       name: hrmis-saas-uploads
       mountPath: /var/data
       sizeGB: 1
+
+  - type: worker
+    name: hrmis-saas-evidence-worker
+    runtime: python
+    plan: starter
+    region: frankfurt
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: python signature_evidence_worker.py
+    maxShutdownDelaySeconds: 300
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.3
+      - key: APP_ENV
+        value: production
+      - key: FLASK_ENV
+        value: production
+      - key: API_PREFIX
+        value: /api
+
+      - key: DATABASE_URL
+        fromDatabase:
+          name: hrmis-saas-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          type: keyvalue
+          name: hrmis-saas-kv
+          property: connectionString
+      - key: RATELIMIT_STORAGE_URI
+        fromService:
+          type: keyvalue
+          name: hrmis-saas-kv
+          property: connectionString
+
+      - key: SECRET_KEY
+        fromService:
+          type: web
+          name: hrmis-saas-api
+          envVarKey: SECRET_KEY
+      - key: JWT_SECRET_KEY
+        fromService:
+          type: web
+          name: hrmis-saas-api
+          envVarKey: JWT_SECRET_KEY
+      - key: MFA_ENCRYPTION_KEYS
+        fromService:
+          type: web
+          name: hrmis-saas-api
+          envVarKey: MFA_ENCRYPTION_KEYS
+      - key: MFA_RECOVERY_CODE_PEPPER
+        fromService:
+          type: web
+          name: hrmis-saas-api
+          envVarKey: MFA_RECOVERY_CODE_PEPPER
+
+      - key: PASSWORD_RESET_URL
+        fromService:
+          type: web
+          name: hrmis-saas-api
+          envVarKey: PASSWORD_RESET_URL
+      - key: EMAIL_VERIFICATION_URL
+        fromService:
+          type: web
+          name: hrmis-saas-api
+          envVarKey: EMAIL_VERIFICATION_URL
+
+      - key: MAIL_TRANSPORT
+        value: smtp
+      - key: MAIL_FROM
+        fromService:
+          type: web
+          name: hrmis-saas-api
+          envVarKey: MAIL_FROM
+      - key: MAIL_SMTP_HOST
+        fromService:
+          type: web
+          name: hrmis-saas-api
+          envVarKey: MAIL_SMTP_HOST
+      - key: MAIL_SMTP_PORT
+        fromService:
+          type: web
+          name: hrmis-saas-api
+          envVarKey: MAIL_SMTP_PORT
+      - key: MAIL_SMTP_USERNAME
+        fromService:
+          type: web
+          name: hrmis-saas-api
+          envVarKey: MAIL_SMTP_USERNAME
+      - key: MAIL_SMTP_PASSWORD
+        fromService:
+          type: web
+          name: hrmis-saas-api
+          envVarKey: MAIL_SMTP_PASSWORD
+      - key: MAIL_SMTP_USE_TLS
+        value: "true"
+
+      - key: SIGNATURE_PROVIDER
+        fromService:
+          type: web
+          name: hrmis-saas-api
+          envVarKey: SIGNATURE_PROVIDER
+      - key: DROPBOX_SIGN_API_KEY
+        fromService:
+          type: web
+          name: hrmis-saas-api
+          envVarKey: DROPBOX_SIGN_API_KEY
+      - key: DROPBOX_SIGN_CLIENT_ID
+        fromService:
+          type: web
+          name: hrmis-saas-api
+          envVarKey: DROPBOX_SIGN_CLIENT_ID
+      - key: DROPBOX_SIGN_TEST_MODE
+        fromService:
+          type: web
+          name: hrmis-saas-api
+          envVarKey: DROPBOX_SIGN_TEST_MODE
+
+      - key: UPLOAD_FOLDER
+        value: /tmp/uploads
+      - key: SIGNATURE_EVIDENCE_FOLDER
+        value: /tmp/signature-evidence
+      - key: SIGNATURE_EVIDENCE_STORAGE
+        value: s3
+      - key: SIGNATURE_EVIDENCE_S3_BUCKET
+        fromService:
+          type: web
+          name: hrmis-saas-api
+          envVarKey: SIGNATURE_EVIDENCE_S3_BUCKET
+      - key: SIGNATURE_EVIDENCE_S3_PREFIX
+        fromService:
+          type: web
+          name: hrmis-saas-api
+          envVarKey: SIGNATURE_EVIDENCE_S3_PREFIX
+      - key: SIGNATURE_EVIDENCE_S3_REGION
+        fromService:
+          type: web
+          name: hrmis-saas-api
+          envVarKey: SIGNATURE_EVIDENCE_S3_REGION
+      - key: SIGNATURE_EVIDENCE_S3_ENDPOINT_URL
+        fromService:
+          type: web
+          name: hrmis-saas-api
+          envVarKey: SIGNATURE_EVIDENCE_S3_ENDPOINT_URL
+      - key: SIGNATURE_EVIDENCE_S3_ACCESS_KEY_ID
+        fromService:
+          type: web
+          name: hrmis-saas-api
+          envVarKey: SIGNATURE_EVIDENCE_S3_ACCESS_KEY_ID
+      - key: SIGNATURE_EVIDENCE_S3_SECRET_ACCESS_KEY
+        fromService:
+          type: web
+          name: hrmis-saas-api
+          envVarKey: SIGNATURE_EVIDENCE_S3_SECRET_ACCESS_KEY
+      - key: SIGNATURE_EVIDENCE_S3_SSE
+        fromService:
+          type: web
+          name: hrmis-saas-api
+          envVarKey: SIGNATURE_EVIDENCE_S3_SSE
+
+      - key: SIGNATURE_EVIDENCE_MAX_ATTEMPTS
+        value: "8"
+      - key: SIGNATURE_EVIDENCE_RETRY_BASE_SECONDS
+        value: "30"
+      - key: SIGNATURE_EVIDENCE_RETRY_MAX_SECONDS
+        value: "1800"
+      - key: SIGNATURE_EVIDENCE_LOCK_TIMEOUT_SECONDS
+        value: "900"
+      - key: SIGNATURE_EVIDENCE_WORKER_POLL_SECONDS
+        value: "5"
+      - key: SIGNATURE_EVIDENCE_WORKER_BATCH_SIZE
+        value: "10"
 
   - type: keyvalue
     name: hrmis-saas-kv

@@ -82,18 +82,49 @@ credentials to the evidence prefix.
 
 ## Render deployment
 
-Do not activate Dropbox Sign yet. After validation:
+The Blueprint defines `hrmis-saas-evidence-worker` as a dedicated
+background worker. It uses the same Postgres and Key Value services as the
+API and reads shared security, mail, Dropbox Sign, and object-storage
+settings from `hrmis-saas-api`.
 
-1. configure the S3 variables on the web service;
-2. create a Render background worker using the same repository and
-   production environment variables;
-3. use `python signature_evidence_worker.py` as its start command;
-4. set the same database, Redis, Dropbox Sign, mail, MFA, and evidence
-   storage variables on both services;
-5. run migration `013_qes_evidence_ingestion`;
-6. execute a provider sandbox/UAT evidence cycle;
-7. only then change `SIGNATURE_PROVIDER` from `internal` to
-   `dropbox_sign`.
+The worker start command is:
+
+```bash
+python signature_evidence_worker.py
+```
+
+The worker has a 300-second shutdown allowance so an in-flight provider
+download and object-storage write can finish after `SIGTERM`. The worker
+loop logs and retries database/schema availability failures instead of
+terminating permanently during a coordinated deploy.
+
+Before syncing the updated Blueprint, manually configure these new
+`sync: false` values on the existing `hrmis-saas-api` service:
+
+```text
+SIGNATURE_EVIDENCE_S3_BUCKET
+SIGNATURE_EVIDENCE_S3_REGION
+SIGNATURE_EVIDENCE_S3_ENDPOINT_URL   # optional for AWS S3
+SIGNATURE_EVIDENCE_S3_ACCESS_KEY_ID
+SIGNATURE_EVIDENCE_S3_SECRET_ACCESS_KEY
+```
+
+Render does not prompt for newly added `sync: false` variables when an
+existing Blueprint is updated. After setting them on the API service, sync
+the Blueprint so the worker's `fromService` references are refreshed.
+
+Deployment order:
+
+1. keep `SIGNATURE_PROVIDER=internal`;
+2. configure and test the private S3-compatible bucket;
+3. deploy the API and confirm migration `013_qes_evidence_ingestion`;
+4. sync/create the evidence worker and confirm it remains running;
+5. run `python signature_evidence_worker.py --once` against the production
+   configuration and confirm it exits successfully with no queued work;
+6. execute a controlled Dropbox Sign UAT evidence cycle;
+7. verify the signed PDF and audit-trail downloads in the admin panel; and
+8. only then change `SIGNATURE_PROVIDER` to `dropbox_sign` and sync the
+   Blueprint again so the worker receives the updated provider setting.
 
 ## Administrative endpoints
 
