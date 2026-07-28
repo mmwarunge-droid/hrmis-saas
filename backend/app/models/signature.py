@@ -91,6 +91,40 @@ class SignatureRequest(
         db.DateTime,
         nullable=True,
     )
+    evidence_status = db.Column(
+        db.String(30),
+        nullable=False,
+        default='not_required',
+        index=True,
+    )
+    evidence_attempts = db.Column(
+        db.Integer,
+        nullable=False,
+        default=0,
+    )
+    evidence_next_attempt_at = db.Column(
+        db.DateTime,
+        nullable=True,
+        index=True,
+    )
+    evidence_last_attempt_at = db.Column(
+        db.DateTime,
+        nullable=True,
+    )
+    evidence_locked_at = db.Column(
+        db.DateTime,
+        nullable=True,
+        index=True,
+    )
+    evidence_last_error = db.Column(
+        db.Text,
+        nullable=True,
+    )
+    evidence_verification_json = db.Column(
+        db.JSON,
+        nullable=False,
+        default=dict,
+    )
 
     document = db.relationship('Document')
     created_by = db.relationship(
@@ -148,6 +182,22 @@ class SignatureRequest(
             "assurance_level IS NULL OR "
             "assurance_level IN ('standard','aes','qes')",
             name='ck_signature_requests_assurance_level',
+        ),
+        db.CheckConstraint(
+            "evidence_status IN ("
+            "'not_required','awaiting_provider','pending',"
+            "'processing','retry_scheduled','verified','failed'"
+            ")",
+            name='ck_signature_requests_evidence_status',
+        ),
+        db.CheckConstraint(
+            'evidence_attempts >= 0',
+            name='ck_signature_requests_evidence_attempts',
+        ),
+        db.Index(
+            'ix_signature_requests_evidence_queue',
+            'evidence_status',
+            'evidence_next_attempt_at',
         ),
         db.Index(
             'uq_signature_requests_active_document',
@@ -232,6 +282,22 @@ class SignatureRequest(
                 self.evidence_completed_at.isoformat()
                 if self.evidence_completed_at
                 else None
+            ),
+            'evidence_status': self.evidence_status,
+            'evidence_attempts': self.evidence_attempts,
+            'evidence_next_attempt_at': (
+                self.evidence_next_attempt_at.isoformat()
+                if self.evidence_next_attempt_at
+                else None
+            ),
+            'evidence_last_attempt_at': (
+                self.evidence_last_attempt_at.isoformat()
+                if self.evidence_last_attempt_at
+                else None
+            ),
+            'evidence_last_error': self.evidence_last_error,
+            'evidence_verification_json': (
+                self.evidence_verification_json
             ),
             'artifact_count': len(self.artifacts),
             'created_at': (

@@ -75,6 +75,57 @@ class BaseConfig:
         'SIGNATURE_EVIDENCE_FOLDER',
         str(Path(UPLOAD_FOLDER) / 'signature-evidence'),
     )
+    SIGNATURE_EVIDENCE_STORAGE = os.getenv(
+        'SIGNATURE_EVIDENCE_STORAGE',
+        'local',
+    ).strip().lower()
+    SIGNATURE_EVIDENCE_S3_BUCKET = os.getenv(
+        'SIGNATURE_EVIDENCE_S3_BUCKET',
+    ) or None
+    SIGNATURE_EVIDENCE_S3_PREFIX = os.getenv(
+        'SIGNATURE_EVIDENCE_S3_PREFIX',
+        'signature-evidence',
+    ).strip('/')
+    SIGNATURE_EVIDENCE_S3_REGION = os.getenv(
+        'SIGNATURE_EVIDENCE_S3_REGION',
+    ) or None
+    SIGNATURE_EVIDENCE_S3_ENDPOINT_URL = os.getenv(
+        'SIGNATURE_EVIDENCE_S3_ENDPOINT_URL',
+    ) or None
+    SIGNATURE_EVIDENCE_S3_ACCESS_KEY_ID = os.getenv(
+        'SIGNATURE_EVIDENCE_S3_ACCESS_KEY_ID',
+    ) or None
+    SIGNATURE_EVIDENCE_S3_SECRET_ACCESS_KEY = os.getenv(
+        'SIGNATURE_EVIDENCE_S3_SECRET_ACCESS_KEY',
+    ) or None
+    SIGNATURE_EVIDENCE_S3_SSE = os.getenv(
+        'SIGNATURE_EVIDENCE_S3_SSE',
+        'AES256',
+    ) or None
+    SIGNATURE_EVIDENCE_MAX_ATTEMPTS = int(os.getenv(
+        'SIGNATURE_EVIDENCE_MAX_ATTEMPTS',
+        '8',
+    ))
+    SIGNATURE_EVIDENCE_RETRY_BASE_SECONDS = int(os.getenv(
+        'SIGNATURE_EVIDENCE_RETRY_BASE_SECONDS',
+        '30',
+    ))
+    SIGNATURE_EVIDENCE_RETRY_MAX_SECONDS = int(os.getenv(
+        'SIGNATURE_EVIDENCE_RETRY_MAX_SECONDS',
+        '1800',
+    ))
+    SIGNATURE_EVIDENCE_LOCK_TIMEOUT_SECONDS = int(os.getenv(
+        'SIGNATURE_EVIDENCE_LOCK_TIMEOUT_SECONDS',
+        '900',
+    ))
+    SIGNATURE_EVIDENCE_WORKER_POLL_SECONDS = int(os.getenv(
+        'SIGNATURE_EVIDENCE_WORKER_POLL_SECONDS',
+        '5',
+    ))
+    SIGNATURE_EVIDENCE_WORKER_BATCH_SIZE = int(os.getenv(
+        'SIGNATURE_EVIDENCE_WORKER_BATCH_SIZE',
+        '10',
+    ))
     DROPBOX_SIGN_API_KEY = os.getenv(
         'DROPBOX_SIGN_API_KEY',
     ) or None
@@ -194,6 +245,13 @@ class ProductionConfig(BaseConfig):
                 'SIGNATURE_PROVIDER must be internal '
                 'or dropbox_sign'
             )
+        if cls.SIGNATURE_EVIDENCE_STORAGE not in {
+            'local',
+            's3',
+        }:
+            raise RuntimeError(
+                'SIGNATURE_EVIDENCE_STORAGE must be local or s3'
+            )
         if cls.SIGNATURE_PROVIDER == 'dropbox_sign':
             provider_missing = [
                 key
@@ -212,6 +270,26 @@ class ProductionConfig(BaseConfig):
                 raise RuntimeError(
                     'DROPBOX_SIGN_TEST_MODE must be false when '
                     'Dropbox Sign is enabled in production'
+                )
+            if cls.SIGNATURE_EVIDENCE_STORAGE != 's3':
+                raise RuntimeError(
+                    'SIGNATURE_EVIDENCE_STORAGE must be s3 when '
+                    'Dropbox Sign is enabled in production'
+                )
+            evidence_missing = [
+                key
+                for key in (
+                    'SIGNATURE_EVIDENCE_S3_BUCKET',
+                    'SIGNATURE_EVIDENCE_S3_REGION',
+                    'SIGNATURE_EVIDENCE_S3_ACCESS_KEY_ID',
+                    'SIGNATURE_EVIDENCE_S3_SECRET_ACCESS_KEY',
+                )
+                if not os.getenv(key)
+            ]
+            if evidence_missing:
+                raise RuntimeError(
+                    'Missing signature evidence storage variables: '
+                    + ', '.join(evidence_missing)
                 )
         if cls.MAIL_TRANSPORT.lower() != 'smtp':
             raise RuntimeError('MAIL_TRANSPORT must be smtp in production')

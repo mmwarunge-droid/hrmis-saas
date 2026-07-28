@@ -11,6 +11,9 @@ from app.models import (
     SignatureRequest,
 )
 from app.models.base import utcnow
+from app.services.signature_evidence_service import (
+    queue_signature_evidence,
+)
 from app.services.signature_providers.registry import (
     get_signature_provider,
 )
@@ -227,6 +230,13 @@ def _disable_reminders(signature_request):
         signature_request.reminder_rule.next_run_at = None
 
 
+def _close_evidence_queue(signature_request):
+    if signature_request.evidence_status != 'verified':
+        signature_request.evidence_status = 'not_required'
+        signature_request.evidence_next_attempt_at = None
+        signature_request.evidence_locked_at = None
+
+
 def _mark_recipients_signed(signature_request, occurred_at):
     for recipient in signature_request.recipients:
         if recipient.status not in {
@@ -336,11 +346,10 @@ def _apply_callback(signature_request, callback):
             signature_request.provider_downloadable_at
             or occurred_at
         )
-        signature_request.provider_metadata_json = {
-            **signature_request.provider_metadata_json,
-            'evidence_pending': True,
-            'assurance_confirmed': False,
-        }
+        queue_signature_evidence(
+            signature_request,
+            available_at=occurred_at,
+        )
 
         if signature_request.status in {'sent', 'in_progress'}:
             signature_request.status = 'in_progress'
@@ -371,6 +380,7 @@ def _apply_callback(signature_request, callback):
             signature_request.status = 'declined'
 
         _disable_reminders(signature_request)
+        _close_evidence_queue(signature_request)
         refresh_document_signature_status(
             signature_request.document,
         )
@@ -400,6 +410,7 @@ def _apply_callback(signature_request, callback):
                 item.status = 'skipped'
 
         _disable_reminders(signature_request)
+        _close_evidence_queue(signature_request)
         refresh_document_signature_status(
             signature_request.document,
         )
@@ -423,6 +434,7 @@ def _apply_callback(signature_request, callback):
                 item.status = 'expired'
 
         _disable_reminders(signature_request)
+        _close_evidence_queue(signature_request)
         refresh_document_signature_status(
             signature_request.document,
         )
@@ -465,6 +477,7 @@ def _apply_callback(signature_request, callback):
             'provider_error': message,
         }
         _disable_reminders(signature_request)
+        _close_evidence_queue(signature_request)
         refresh_document_signature_status(
             signature_request.document,
         )

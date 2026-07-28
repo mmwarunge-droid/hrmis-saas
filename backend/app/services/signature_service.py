@@ -21,6 +21,9 @@ from app.services.signature_providers.base import (
     SignatureProviderError,
     SignatureProviderNotConfigured,
 )
+from app.services.signature_evidence_service import (
+    capture_source_artifact,
+)
 from app.services.signature_providers.registry import (
     get_signature_provider,
 )
@@ -455,6 +458,11 @@ def create_signature_request(
         provider_status='preparing' if is_qes else None,
         provider_test_mode=False if is_qes else None,
         assurance_level=assurance_level,
+        evidence_status=(
+            'awaiting_provider'
+            if is_qes
+            else 'not_required'
+        ),
         provider_metadata_json=(
             {
                 'eid_required': True,
@@ -539,6 +547,9 @@ def create_signature_request(
         },
     )
 
+    if is_qes:
+        capture_source_artifact(signature_request)
+
     document.signature_status = 'pending'
 
     log_event(
@@ -586,6 +597,8 @@ def create_signature_request(
         ) as exc:
             signature_request.status = 'failed'
             signature_request.provider_status = 'submission_failed'
+            signature_request.evidence_status = 'not_required'
+            signature_request.evidence_next_attempt_at = None
             signature_request.provider_metadata_json = {
                 **(signature_request.provider_metadata_json or {}),
                 'provider_error': str(exc),

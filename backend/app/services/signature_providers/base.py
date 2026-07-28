@@ -16,6 +16,14 @@ class InvalidProviderCallback(SignatureProviderError):
     pass
 
 
+class SignatureProviderRetryableError(SignatureProviderError):
+    pass
+
+
+class SignatureArtifactsNotReady(SignatureProviderRetryableError):
+    pass
+
+
 @dataclass(frozen=True)
 class ProviderRequestResult:
     provider_request_id: str
