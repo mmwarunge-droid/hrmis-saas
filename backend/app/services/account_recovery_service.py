@@ -73,10 +73,10 @@ def send_password_reset_email(user: User, raw_token: str) -> None:
     reset_url = _account_url('PASSWORD_RESET_URL', raw_token)
     send_email(
         to_address=user.email,
-        subject='Reset your HRMIS password',
+        subject='Reset your ACE password',
         text_body=(
             f'Hello {user.first_name},\n\n'
-            'A password reset was requested for your HRMIS account. '
+            'A password reset was requested for your ACE account. '
             f'Use this single-use link before it expires:\n\n{reset_url}\n\n'
             'If you did not request this change, you can ignore this email.'
         ),
@@ -87,12 +87,12 @@ def send_email_verification_email(user: User, raw_token: str) -> None:
     verification_url = _account_url('EMAIL_VERIFICATION_URL', raw_token)
     send_email(
         to_address=user.email,
-        subject='Verify your HRMIS email address',
+        subject='Verify your ACE email address',
         text_body=(
             f'Hello {user.first_name},\n\n'
-            'Verify your HRMIS email address using this single-use link:\n\n'
+            'Verify your ACE email address using this single-use link:\n\n'
             f'{verification_url}\n\n'
-            'If you did not expect this email, contact your HRMIS administrator.'
+            'If you did not expect this email, contact your ACE administrator.'
         ),
     )
 
