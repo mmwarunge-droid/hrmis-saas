@@ -5,7 +5,11 @@ from marshmallow import ValidationError
 from app.models import EmployeeOnboardingTask, OnboardingTemplate
 from app.schemas.onboarding_schema import OnboardingAssignSchema, OnboardingTaskCompleteSchema, OnboardingTemplateCreateSchema
 from app.services.onboarding_service import assign_template, complete_assignment, create_template
-from app.utils.decorators import permission_required, tenant_query
+from app.utils.decorators import (
+    permission_required,
+    request_tenant_id,
+    tenant_query,
+)
 from app.utils.response import fail, success
 
 onboarding_bp = Blueprint('onboarding', __name__, url_prefix='/onboarding')
@@ -24,8 +28,17 @@ def list_templates():
 @permission_required('onboarding:create')
 def create_onboarding_template():
     try:
-        payload = OnboardingTemplateCreateSchema().load(request.get_json() or {})
-        template = create_template(payload, current_user.tenant_id)
+        payload = OnboardingTemplateCreateSchema().load(
+            request.get_json() or {},
+        )
+        tenant_id = request_tenant_id(payload)
+        if not tenant_id:
+            return fail(
+                'TENANT_REQUIRED',
+                'tenant_id is required for onboarding templates',
+                422,
+            )
+        template = create_template(payload, tenant_id)
     except ValidationError as err:
         return fail('VALIDATION_ERROR', err.messages, 422)
     return success(template.to_dict(), 'Onboarding template created', 201)
@@ -36,8 +49,21 @@ def create_onboarding_template():
 @permission_required('onboarding:assign')
 def assign_onboarding():
     try:
-        payload = OnboardingAssignSchema().load(request.get_json() or {})
-        assignments = assign_template(payload['employee_id'], payload['template_id'], current_user.tenant_id)
+        payload = OnboardingAssignSchema().load(
+            request.get_json() or {},
+        )
+        tenant_id = request_tenant_id(payload)
+        if not tenant_id:
+            return fail(
+                'TENANT_REQUIRED',
+                'tenant_id is required for onboarding assignments',
+                422,
+            )
+        assignments = assign_template(
+            payload['employee_id'],
+            payload['template_id'],
+            tenant_id,
+        )
     except (ValidationError, ValueError) as err:
         return fail('ONBOARDING_ASSIGN_FAILED', getattr(err, 'messages', str(err)), 400)
     return success({'items': [assignment.to_dict() for assignment in assignments]}, 'Onboarding assigned', 201)
