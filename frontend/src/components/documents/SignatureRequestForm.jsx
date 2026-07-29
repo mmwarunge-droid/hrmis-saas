@@ -35,7 +35,7 @@ export default function SignatureRequestForm({
       ? `Please sign: ${document.title}`
       : '',
     message: '',
-    assurance_level: 'qes',
+    assurance_level: 'standard',
     signing_mode: 'sequential',
     due_at: '',
     first_reminder_after_days: 2,
