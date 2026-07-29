@@ -6,7 +6,11 @@ from app.extensions import db
 from app.models import LeaveBalance, LeaveRequest, LeaveType
 from app.schemas.leave_schema import LeaveDecisionSchema, LeaveRequestCreateSchema, LeaveTypeCreateSchema
 from app.services.leave_service import create_leave_request, decide_leave_request
-from app.utils.decorators import permission_required, tenant_query
+from app.utils.decorators import (
+    permission_required,
+    request_tenant_id,
+    tenant_query,
+)
 from app.utils.pagination import get_pagination, paginated_response
 from app.utils.response import fail, success
 
@@ -29,7 +33,14 @@ def create_leave_type():
         payload = LeaveTypeCreateSchema().load(request.get_json() or {})
     except ValidationError as err:
         return fail('VALIDATION_ERROR', err.messages, 422)
-    leave_type = LeaveType(tenant_id=current_user.tenant_id, **payload)
+    tenant_id = request_tenant_id(payload)
+    if not tenant_id:
+        return fail(
+            'TENANT_REQUIRED',
+            'tenant_id is required for leave types',
+            422,
+        )
+    leave_type = LeaveType(tenant_id=tenant_id, **payload)
     db.session.add(leave_type)
     db.session.commit()
     return success(leave_type.to_dict(), 'Leave type created', 201)
@@ -40,8 +51,17 @@ def create_leave_type():
 @permission_required('leave:create')
 def submit_leave_request():
     try:
-        payload = LeaveRequestCreateSchema().load(request.get_json() or {})
-        request_obj = create_leave_request(payload, current_user.tenant_id)
+        payload = LeaveRequestCreateSchema().load(
+            request.get_json() or {},
+        )
+        tenant_id = request_tenant_id(payload)
+        if not tenant_id:
+            return fail(
+                'TENANT_REQUIRED',
+                'tenant_id is required for leave requests',
+                422,
+            )
+        request_obj = create_leave_request(payload, tenant_id)
     except ValidationError as err:
         return fail('VALIDATION_ERROR', err.messages, 422)
     except ValueError as exc:

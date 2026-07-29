@@ -1,5 +1,7 @@
 import axios from 'axios';
 
+import { withActiveTenantParams } from '../utils/tenantScope.js';
+
 const configuredBaseUrl = import.meta.env.VITE_API_BASE_URL?.trim();
 
 if (import.meta.env.PROD && !configuredBaseUrl) {
@@ -26,11 +28,18 @@ const apiClient = axios.create({
 });
 
 apiClient.interceptors.request.use((config) => {
+  config.params = withActiveTenantParams(
+    config.url,
+    config.params,
+  );
+
   const method = config.method?.toLowerCase();
   if (!MUTATING_METHODS.has(method)) return config;
 
   const isRefreshRequest = config.url?.includes('/auth/refresh');
-  const csrfCookieName = isRefreshRequest ? 'csrf_refresh_token' : 'csrf_access_token';
+  const csrfCookieName = isRefreshRequest
+    ? 'csrf_refresh_token'
+    : 'csrf_access_token';
   const csrfToken = readCookie(csrfCookieName);
 
   if (csrfToken) {

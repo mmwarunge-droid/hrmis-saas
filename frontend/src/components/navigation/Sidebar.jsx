@@ -17,6 +17,7 @@ import {
 import { NavLink } from 'react-router-dom';
 import useAuth from '../../hooks/useAuth.js';
 import usePermissions from '../../hooks/usePermissions.js';
+import useTenant from '../../hooks/useTenant.js';
 import Avatar from '../ui/Avatar.jsx';
 import Button from '../ui/Button.jsx';
 
@@ -64,6 +65,14 @@ const groups = [
 export default function Sidebar({ open = false, onClose }) {
   const { user } = useAuth();
   const { hasPermission, hasRole } = usePermissions();
+  const {
+    tenantId,
+    tenants,
+    loading: tenantLoading,
+    error: tenantError,
+    isSuperAdmin,
+    setTenantId,
+  } = useTenant();
 
   const content = (
     <div className="flex h-full flex-col">
@@ -74,6 +83,40 @@ export default function Sidebar({ open = false, onClose }) {
         </div>
         <Button variant="ghost" size="sm" className="text-slate-300 hover:bg-white/10 hover:text-white lg:hidden" onClick={onClose}><X size={18} /></Button>
       </div>
+
+      {isSuperAdmin && (
+        <div className="mt-6 rounded-3xl border border-white/10 bg-white/5 p-3">
+          <label
+            htmlFor="active-organization"
+            className="text-[10px] font-bold uppercase tracking-[0.2em] text-cyan-300"
+          >
+            Active organization
+          </label>
+          <select
+            id="active-organization"
+            value={tenantId || ''}
+            disabled={tenantLoading}
+            onChange={(event) => setTenantId(event.target.value)}
+            className="mt-2 w-full rounded-2xl border border-white/10 bg-slate-900 px-3 py-2.5 text-sm text-white outline-none transition focus:border-cyan-400 focus:ring-2 focus:ring-cyan-400/20"
+          >
+            <option value="">
+              {tenantLoading
+                ? 'Loading organizations...'
+                : 'Select organization'}
+            </option>
+            {tenants.map((tenant) => (
+              <option key={tenant.id} value={tenant.id}>
+                {tenant.name}
+              </option>
+            ))}
+          </select>
+          {tenantError && (
+            <p className="mt-2 text-xs leading-5 text-rose-300">
+              {tenantError}
+            </p>
+          )}
+        </div>
+      )}
 
       <nav className="mt-8 flex-1 space-y-6 overflow-y-auto pr-1">
         {groups.map((group) => {

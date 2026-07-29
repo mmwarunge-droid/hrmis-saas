@@ -39,7 +39,10 @@ from app.services.signature_service import (
     send_signature_reminder,
     update_signature_deadline,
 )
-from app.utils.decorators import permission_required
+from app.utils.decorators import (
+    permission_required,
+    request_tenant_id,
+)
 from app.utils.response import fail, success
 
 
@@ -64,11 +67,7 @@ def create_request():
             request.get_json() or {},
         )
 
-        tenant_id = (
-            payload.pop('tenant_id', None)
-            if current_user.has_role('SUPER_ADMIN')
-            else current_user.tenant_id
-        )
+        tenant_id = request_tenant_id(payload)
 
         if not tenant_id:
             return fail(

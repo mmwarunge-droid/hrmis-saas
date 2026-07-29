@@ -6,7 +6,11 @@ from app.extensions import db
 from app.models import Document
 from app.schemas.document_schema import DocumentUpdateSchema, DocumentUploadSchema
 from app.services.document_service import can_access_document, create_document, update_document
-from app.utils.decorators import permission_required, tenant_query
+from app.utils.decorators import (
+    permission_required,
+    request_tenant_id,
+    tenant_query,
+)
 from app.utils.file_storage import send_stored_file
 from app.utils.pagination import get_pagination
 from app.utils.response import fail, success
@@ -38,7 +42,7 @@ def list_documents():
 def upload_document():
     try:
         payload = DocumentUploadSchema().load(request.form.to_dict())
-        tenant_id = payload.pop('tenant_id', None) if current_user.has_role('SUPER_ADMIN') else current_user.tenant_id
+        tenant_id = request_tenant_id(payload)
         if not tenant_id:
             return fail('TENANT_REQUIRED', 'tenant_id is required for document upload', 422)
         document = create_document(payload, request.files.get('file'), tenant_id)

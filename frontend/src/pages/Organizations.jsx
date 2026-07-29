@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Building2, Globe2, Plus, ShieldCheck } from 'lucide-react';
+import { ArrowRight, Building2, Globe2, Plus, ShieldCheck } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { tenantApi } from '../api/tenantApi';
 import { userApi } from '../api/userApi';
 import OrganizationProvisionForm from '../components/organizations/OrganizationProvisionForm.jsx';
@@ -12,8 +13,15 @@ import EmptyState from '../components/ui/EmptyState.jsx';
 import Modal from '../components/ui/Modal.jsx';
 import PageHeader from '../components/ui/PageHeader.jsx';
 import StatCard from '../components/ui/StatCard.jsx';
+import useTenant from '../hooks/useTenant.js';
 
 export default function Organizations() {
+  const navigate = useNavigate();
+  const {
+    tenantId,
+    setTenantId,
+    reloadTenants,
+  } = useTenant();
   const [tenants, setTenants] = useState([]);
   const [users, setUsers] = useState([]);
   const [open, setOpen] = useState(false);
@@ -47,7 +55,7 @@ export default function Organizations() {
       const response = await tenantApi.provision(payload);
       setOpen(false);
       setSuccess(`${response.data.organization.name} is ready. ${response.data.admin.full_name} is the organization administrator.`);
-      await load();
+      await Promise.all([load(), reloadTenants()]);
     } catch (err) {
       setError(err.error?.message || 'Organization provisioning failed');
     } finally {
@@ -114,6 +122,24 @@ export default function Organizations() {
                   ) : (
                     <p className="mt-2 text-sm text-amber-700">No CLIENT_ADMIN assigned.</p>
                   )}
+                </div>
+                <div className="mt-5 flex justify-end border-t border-slate-100 pt-4">
+                  <Button
+                    variant={
+                      String(tenantId) === String(tenant.id)
+                        ? 'primary'
+                        : 'secondary'
+                    }
+                    onClick={() => {
+                      setTenantId(tenant.id);
+                      navigate('/dashboard');
+                    }}
+                  >
+                    {String(tenantId) === String(tenant.id)
+                      ? 'Current workspace'
+                      : 'Open workspace'}
+                    <ArrowRight size={16} />
+                  </Button>
                 </div>
               </Card>
             );
