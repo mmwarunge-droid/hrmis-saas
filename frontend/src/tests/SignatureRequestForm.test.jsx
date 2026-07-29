@@ -43,7 +43,7 @@ const employees = [
 ];
 
 describe('SignatureRequestForm', () => {
-  it('creates a one-signer QES target request by default', () => {
+  it('creates a standard ACE signature request by default', () => {
     const onSubmit = vi.fn();
     const deadline = futureLocalDate();
 
@@ -57,12 +57,16 @@ describe('SignatureRequestForm', () => {
     );
 
     expect(
-      screen.getByText('Identity-verified provider signing'),
-    ).toBeInTheDocument();
+      screen.getByLabelText('Signature assurance'),
+    ).toHaveValue('standard');
+
     expect(
-      screen.queryByRole('button', { name: 'Add signatory' }),
+      screen.queryByText('Identity-verified provider signing'),
     ).not.toBeInTheDocument();
-    expect(screen.getByLabelText('Sequence')).toBeDisabled();
+    expect(
+      screen.getByRole('button', { name: 'Add signatory' }),
+    ).toBeInTheDocument();
+    expect(screen.getByLabelText('Sequence')).toBeEnabled();
 
     fireEvent.change(
       screen.getByLabelText('Completion deadline'),
@@ -79,7 +83,7 @@ describe('SignatureRequestForm', () => {
 
     const submitButton = screen.getByRole(
       'button',
-      { name: 'Send qualified-signature request' },
+      { name: 'Send for signature' },
     );
     fireEvent.submit(submitButton.closest('form'));
 
@@ -89,7 +93,7 @@ describe('SignatureRequestForm', () => {
       document_id: 'document-1',
       subject: 'Please sign: Employment contract',
       message: null,
-      assurance_level: 'qes',
+      assurance_level: 'standard',
       signing_mode: 'sequential',
       due_at: new Date(deadline).toISOString(),
       recipients: [{
