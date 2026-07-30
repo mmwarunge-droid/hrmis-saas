@@ -1,89 +1,205 @@
 from app.extensions import db
 from app.models import Permission, Role, RolePermission, UserRole
 
+
 PERMISSIONS = {
-    'tenant:create': 'Create client tenants',
-    'tenant:read': 'Read client tenants',
-    'tenant:update': 'Update client tenants',
-    'user:create': 'Create users',
-    'user:read': 'Read users',
-    'user:update': 'Update users',
-    'employee:create': 'Create employees',
-    'employee:read': 'Read employees',
-    'employee:update': 'Update employees',
-    'employee:delete': 'Soft-delete employees',
+    'tenant:create': 'Create organizations',
+    'tenant:read': 'Read organization records',
+    'tenant:update': 'Update organization records',
+    'user:create': 'Create user accounts',
+    'user:read': 'Read user accounts',
+    'user:update': 'Update user accounts and roles',
+    'employee:create': 'Create employee records',
+    'employee:read': 'Read employee records',
+    'employee:update': 'Update employee records',
+    'employee:delete': 'Archive employee records',
     'document:upload': 'Upload documents',
-    'document:read': 'Read document metadata and download permitted documents',
-    'document:approve': 'Approve or classify documents',
+    'document:read': 'Read documents',
+    'document:approve': 'Approve documents and manage signatures',
     'leave:create': 'Create leave requests',
     'leave:approve': 'Approve/reject leave requests',
     'attendance:read': 'Read attendance records',
-    'attendance:write': 'Create attendance records',
+    'attendance:write': 'Record attendance',
     'onboarding:create': 'Create onboarding templates',
-    'onboarding:assign': 'Assign onboarding templates',
-    'dashboard:read': 'Read dashboard analytics',
+    'onboarding:assign': 'Assign and complete onboarding work',
+    'dashboard:read': 'Read dashboard information',
 }
-
-
 
 TENANT_ASSIGNABLE_ROLES = {'MANAGER', 'EMPLOYEE'}
 
-
-def validate_role_assignment(actor, role_names, tenant_id=None):
-    """Prevent tenant-scoped administrators from granting platform-wide roles."""
-    requested = set(role_names)
-    if actor is None or actor.has_role('SUPER_ADMIN'):
-        return
-
-    forbidden = requested - TENANT_ASSIGNABLE_ROLES
-    if forbidden:
-        raise ValueError(f'Not authorized to assign role(s): {", ".join(sorted(forbidden))}')
-    if str(actor.tenant_id) != str(tenant_id):
-        raise ValueError('Users can only be managed within your tenant')
-
-
 ROLE_PERMISSIONS = {
     'SUPER_ADMIN': list(PERMISSIONS.keys()),
-    'HR_CONSULTANT': ['tenant:read','user:create','user:read','user:update','employee:create','employee:read','employee:update','employee:delete','document:upload','document:read','document:approve','leave:create','leave:approve','attendance:read','onboarding:create','onboarding:assign','dashboard:read'],
-    'CLIENT_ADMIN': ['user:create','user:read','user:update','employee:create','employee:read','employee:update','employee:delete','document:upload','document:read','document:approve','leave:create','leave:approve','attendance:read','onboarding:create','onboarding:assign','dashboard:read'],
-    'MANAGER': ['employee:read','document:read','leave:create','leave:approve','attendance:read','onboarding:assign','dashboard:read'],
-    'EMPLOYEE': ['employee:read','document:read','leave:create','attendance:write','onboarding:assign'],
+    'ORGANIZATION_OWNER': [
+        'tenant:read',
+        'user:read',
+        'employee:read',
+        'document:read',
+        'document:approve',
+        'leave:create',
+        'leave:approve',
+        'attendance:read',
+        'dashboard:read',
+    ],
+    'HR_CONSULTANT': [
+        'tenant:read',
+        'user:create',
+        'user:read',
+        'user:update',
+        'employee:create',
+        'employee:read',
+        'employee:update',
+        'employee:delete',
+        'document:upload',
+        'document:read',
+        'document:approve',
+        'leave:create',
+        'leave:approve',
+        'attendance:read',
+        'onboarding:create',
+        'onboarding:assign',
+        'dashboard:read',
+    ],
+    'CLIENT_ADMIN': [
+        'user:create',
+        'user:read',
+        'user:update',
+        'employee:create',
+        'employee:read',
+        'employee:update',
+        'employee:delete',
+        'document:upload',
+        'document:read',
+        'document:approve',
+        'leave:create',
+        'leave:approve',
+        'attendance:read',
+        'onboarding:create',
+        'onboarding:assign',
+        'dashboard:read',
+    ],
+    'MANAGER': [
+        'employee:read',
+        'document:read',
+        'leave:create',
+        'leave:approve',
+        'attendance:read',
+        'onboarding:assign',
+        'dashboard:read',
+    ],
+    'EMPLOYEE': [
+        'employee:read',
+        'document:read',
+        'leave:create',
+        'attendance:write',
+        'onboarding:assign',
+    ],
 }
 
 
-def seed_roles_permissions(commit=True):
+def validate_role_assignment(actor, roles, tenant_id):
+    requested = set(roles or [])
+    unknown = requested - set(ROLE_PERMISSIONS)
+    if unknown:
+        raise ValueError(
+            'Unknown role assignment: '
+            + ', '.join(sorted(unknown))
+        )
+
+    if actor is None or actor.has_role('SUPER_ADMIN'):
+        return
+
+    if not tenant_id or str(actor.tenant_id) != str(tenant_id):
+        raise ValueError(
+            'Roles can only be assigned within your organization'
+        )
+
+    forbidden = requested - TENANT_ASSIGNABLE_ROLES
+    if forbidden:
+        raise ValueError(
+            'Organization administrators cannot assign privileged roles: '
+            + ', '.join(sorted(forbidden))
+        )
+
+
+def seed_roles_permissions(commit: bool = True):
     permissions = {}
     for code, description in PERMISSIONS.items():
         permission = Permission.query.filter_by(code=code).first()
-        if not permission:
-            permission = Permission(code=code, description=description)
+        if permission is None:
+            permission = Permission(
+                code=code,
+                description=description,
+            )
             db.session.add(permission)
+            db.session.flush()
+        elif permission.description != description:
+            permission.description = description
         permissions[code] = permission
-    db.session.flush()
 
-    for role_name, codes in ROLE_PERMISSIONS.items():
+    for role_name, permission_codes in ROLE_PERMISSIONS.items():
         role = Role.query.filter_by(name=role_name).first()
-        if not role:
-            role = Role(name=role_name, description=f'{role_name} system role')
+        if role is None:
+            role = Role(
+                name=role_name,
+                description=role_name.replace('_', ' ').title(),
+                is_system=True,
+            )
             db.session.add(role)
             db.session.flush()
-        existing = {link.permission.code for link in role.permission_links}
-        for code in codes:
-            if code not in existing:
-                db.session.add(RolePermission(role_id=role.id, permission_id=permissions[code].id))
+
+        existing = {
+            link.permission.code: link
+            for link in role.permission_links
+        }
+        expected = set(permission_codes)
+
+        for code in expected - set(existing):
+            db.session.add(
+                RolePermission(
+                    role_id=role.id,
+                    permission_id=permissions[code].id,
+                )
+            )
+
+        for code in set(existing) - expected:
+            db.session.delete(existing[code])
+
     if commit:
         db.session.commit()
 
 
-def set_user_roles(user, role_names, assigned_by_id=None, commit=False):
-    roles = Role.query.filter(Role.name.in_(role_names)).all()
+def set_user_roles(
+    user,
+    role_names,
+    assigned_by_id=None,
+    commit: bool = True,
+):
+    requested = list(dict.fromkeys(role_names or []))
+    if not requested:
+        raise ValueError('At least one role is required')
+
+    seed_roles_permissions(commit=False)
+    roles = Role.query.filter(Role.name.in_(requested)).all()
     found = {role.name for role in roles}
-    missing = set(role_names) - found
+    missing = set(requested) - found
     if missing:
-        raise ValueError(f'Unknown role(s): {", ".join(sorted(missing))}')
-    user.role_links.clear()
-    db.session.flush()
+        raise ValueError(
+            'Unknown role assignment: '
+            + ', '.join(sorted(missing))
+        )
+
+    UserRole.query.filter_by(user_id=user.id).delete(
+        synchronize_session=False,
+    )
     for role in roles:
-        db.session.add(UserRole(user_id=user.id, role_id=role.id, tenant_id=user.tenant_id, assigned_by_id=assigned_by_id))
+        db.session.add(
+            UserRole(
+                tenant_id=user.tenant_id,
+                user_id=user.id,
+                role_id=role.id,
+                assigned_by_id=assigned_by_id,
+            )
+        )
+
     if commit:
         db.session.commit()
