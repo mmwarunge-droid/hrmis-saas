@@ -15,8 +15,10 @@ from app.schemas.auth_schema import (
     ForgotPasswordSchema,
     LoginSchema,
     MfaChallengeSchema,
+    MfaDisableSchema,
     MfaEnrollmentStartSchema,
     MfaRecoveryCodesSchema,
+    MfaSelfEnrollmentStartSchema,
     RegisterSchema,
     ResetPasswordSchema,
     VerifyEmailSchema,
@@ -41,11 +43,14 @@ from app.services.auth_service import (
 from app.services.mfa_service import (
     MfaError,
     confirm_mfa_enrollment,
+    confirm_self_mfa_enrollment,
+    disable_mfa,
     generate_recovery_codes,
     is_mfa_required,
     issue_mfa_challenge,
     mfa_status,
     start_mfa_enrollment,
+    start_self_mfa_enrollment,
     verify_current_totp,
     verify_mfa_challenge,
 )
@@ -60,6 +65,7 @@ from app.services.session_service import (
     revoke_session,
     revoke_session_from_token,
     rotate_auth_session,
+    upgrade_auth_session_mfa,
 )
 from app.utils.email import EmailDeliveryError
 from app.utils.request_security import request_ip_address
@@ -498,6 +504,137 @@ def mfa_challenge_verify():
 @jwt_required()
 def get_mfa_status():
     return success(mfa_status(current_user))
+
+
+@auth_bp.post('/mfa/enrollment/self/start')
+@jwt_required()
+@limiter.limit('5 per hour')
+def self_mfa_enrollment_start():
+    try:
+        payload = MfaSelfEnrollmentStartSchema().load(
+            request.get_json(silent=True) or {}
+        )
+        enrollment = start_self_mfa_enrollment(
+            current_user,
+            payload['password'],
+            ip_address=request_ip_address(),
+            user_agent=request.headers.get('User-Agent'),
+        )
+    except ValidationError as err:
+        return fail('VALIDATION_ERROR', err.messages, 422)
+    except MfaError as exc:
+        return _mfa_error_response(exc)
+
+    log_event(
+        'auth.mfa_self_enrollment_started',
+        'User',
+        entity_id=current_user.id,
+        actor=current_user,
+    )
+    db.session.commit()
+    return success(
+        enrollment,
+        'Authenticator enrollment started',
+    )
+
+
+@auth_bp.post('/mfa/enrollment/self/confirm')
+@jwt_required()
+@limiter.limit('10 per hour')
+def self_mfa_enrollment_confirm():
+    try:
+        payload = MfaChallengeSchema().load(
+            request.get_json(silent=True) or {}
+        )
+        recovery_codes, _ = confirm_self_mfa_enrollment(
+            current_user,
+            payload['challenge_token'],
+            payload['code'],
+        )
+        _, access_token, refresh_token = (
+            upgrade_auth_session_mfa(
+                current_user,
+                get_jwt(),
+            )
+        )
+    except ValidationError as err:
+        return fail('VALIDATION_ERROR', err.messages, 422)
+    except MfaError as exc:
+        log_event(
+            'auth.mfa_self_enrollment_failed',
+            'Authentication',
+            actor=current_user,
+            metadata={'reason': exc.reason},
+        )
+        db.session.commit()
+        return _mfa_error_response(exc)
+    except SessionRevokedError as exc:
+        db.session.rollback()
+        return fail('SESSION_REVOKED', str(exc), 401)
+
+    log_event(
+        'auth.mfa_enabled',
+        'User',
+        entity_id=current_user.id,
+        actor=current_user,
+        metadata={
+            'recovery_codes_issued': len(recovery_codes),
+            'enrollment_source': 'settings',
+        },
+    )
+    db.session.commit()
+    response, status = success(
+        {
+            'mfa': mfa_status(current_user),
+            'recovery_codes': recovery_codes,
+        },
+        'Multi-factor authentication enabled',
+    )
+    set_access_cookies(response, access_token)
+    set_refresh_cookies(response, refresh_token)
+    return response, status
+
+
+@auth_bp.post('/mfa/disable')
+@jwt_required()
+@limiter.limit('5 per hour')
+def disable_current_user_mfa():
+    try:
+        payload = MfaDisableSchema().load(
+            request.get_json(silent=True) or {}
+        )
+        disable_mfa(
+            current_user,
+            payload['password'],
+            payload['code'],
+        )
+    except ValidationError as err:
+        return fail('VALIDATION_ERROR', err.messages, 422)
+    except PermissionError as exc:
+        return fail('MFA_POLICY_REQUIRED', str(exc), 409)
+    except MfaError as exc:
+        return _mfa_error_response(exc)
+
+    revoked_count = revoke_all_user_sessions(
+        current_user,
+        'mfa_disabled',
+        jwt_data=get_jwt(),
+        commit=False,
+    )
+    log_event(
+        'auth.mfa_disabled',
+        'User',
+        entity_id=current_user.id,
+        actor=current_user,
+        metadata={'revoked_sessions': revoked_count},
+    )
+    db.session.commit()
+    response, status = success(
+        {'revoked_sessions': revoked_count},
+        'Multi-factor authentication disabled',
+    )
+    unset_jwt_cookies(response)
+    return response, status
 
 
 @auth_bp.post('/mfa/recovery-codes/regenerate')

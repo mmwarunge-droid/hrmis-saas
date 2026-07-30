@@ -27,6 +27,24 @@ class Tenant(db.Model, TimestampMixin, SoftDeleteMixin, ReprMixin):
         index=True,
     )
     leave_setup_completed_at = db.Column(db.DateTime, nullable=True)
+    mfa_policy_mode = db.Column(
+        db.String(40),
+        nullable=False,
+        default='optional',
+    )
+    mfa_enrollment_grace_days = db.Column(
+        db.Integer,
+        nullable=False,
+        default=14,
+    )
+    mfa_enforcement_date = db.Column(db.Date, nullable=True)
+    mfa_policy_updated_at = db.Column(db.DateTime, nullable=True)
+    mfa_policy_updated_by_id = db.Column(
+        GUID(),
+        db.ForeignKey('users.id', ondelete='SET NULL'),
+        nullable=True,
+        index=True,
+    )
 
     users = db.relationship(
         'User',
@@ -49,11 +67,28 @@ class Tenant(db.Model, TimestampMixin, SoftDeleteMixin, ReprMixin):
         foreign_keys=[leave_alternate_approver_user_id],
         post_update=True,
     )
+    mfa_policy_updated_by = db.relationship(
+        'User',
+        foreign_keys=[mfa_policy_updated_by_id],
+        post_update=True,
+    )
 
     __table_args__ = (
         db.CheckConstraint(
             "status IN ('active','suspended','archived')",
             name='ck_tenants_status',
+        ),
+        db.CheckConstraint(
+            "mfa_policy_mode IN ("
+            "'optional','privileged',"
+            "'managers_and_privileged','all_users'"
+            ")",
+            name='ck_tenants_mfa_policy_mode',
+        ),
+        db.CheckConstraint(
+            'mfa_enrollment_grace_days >= 0 '
+            'AND mfa_enrollment_grace_days <= 365',
+            name='ck_tenants_mfa_grace_days',
         ),
     )
 
@@ -81,6 +116,25 @@ class Tenant(db.Model, TimestampMixin, SoftDeleteMixin, ReprMixin):
             'leave_setup_completed_at': (
                 self.leave_setup_completed_at.isoformat()
                 if self.leave_setup_completed_at
+                else None
+            ),
+            'mfa_policy_mode': self.mfa_policy_mode,
+            'mfa_enrollment_grace_days': (
+                self.mfa_enrollment_grace_days
+            ),
+            'mfa_enforcement_date': (
+                self.mfa_enforcement_date.isoformat()
+                if self.mfa_enforcement_date
+                else None
+            ),
+            'mfa_policy_updated_at': (
+                self.mfa_policy_updated_at.isoformat()
+                if self.mfa_policy_updated_at
+                else None
+            ),
+            'mfa_policy_updated_by_id': (
+                str(self.mfa_policy_updated_by_id)
+                if self.mfa_policy_updated_by_id
                 else None
             ),
         }

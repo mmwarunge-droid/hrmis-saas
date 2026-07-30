@@ -6,14 +6,37 @@ from sqlalchemy.exc import IntegrityError
 from app.extensions import db
 from app.models import Tenant
 from app.models.base import utcnow
-from app.schemas.user_schema import OrganizationProvisionSchema, TenantCreateSchema, TenantUpdateSchema
+from app.schemas.user_schema import (
+    OrganizationProvisionSchema,
+    TenantCreateSchema,
+    TenantMfaPolicySchema,
+    TenantUpdateSchema,
+)
 from app.services.auth_service import register_user
 from app.services.audit_service import log_event
+from app.services.mfa_policy_service import (
+    configure_tenant_mfa_policy,
+    tenant_mfa_compliance,
+    tenant_mfa_policy,
+)
 from app.utils.decorators import permission_required
 from app.utils.pagination import get_pagination, paginated_response
 from app.utils.response import fail, success
 
 tenant_bp = Blueprint('tenants', __name__, url_prefix='/tenants')
+
+
+def _security_tenant(tenant_id):
+    tenant = Tenant.query.filter_by(
+        id=tenant_id,
+        deleted_at=None,
+    ).first_or_404()
+    if (
+        not current_user.has_role('SUPER_ADMIN')
+        and str(current_user.tenant_id) != str(tenant.id)
+    ):
+        return None
+    return tenant
 
 
 @tenant_bp.get('')
@@ -113,3 +136,74 @@ def update_tenant(tenant_id):
     log_event('tenant.update', 'Tenant', tenant.id, tenant_id=tenant.id)
     db.session.commit()
     return success(tenant.to_dict(), 'Tenant updated')
+
+@tenant_bp.get('/<tenant_id>/mfa-policy')
+@jwt_required()
+@permission_required('security:mfa_policy')
+def get_tenant_mfa_policy(tenant_id):
+    tenant = _security_tenant(tenant_id)
+    if tenant is None:
+        return fail(
+            'FORBIDDEN',
+            'MFA policy can only be viewed within your organization',
+            403,
+        )
+    return success(tenant_mfa_policy(tenant))
+
+
+@tenant_bp.patch('/<tenant_id>/mfa-policy')
+@jwt_required()
+@permission_required('security:mfa_policy')
+def update_tenant_mfa_policy(tenant_id):
+    tenant = _security_tenant(tenant_id)
+    if tenant is None:
+        return fail(
+            'FORBIDDEN',
+            'MFA policy can only be configured within your organization',
+            403,
+        )
+
+    try:
+        payload = TenantMfaPolicySchema().load(
+            request.get_json(silent=True) or {}
+        )
+        policy = configure_tenant_mfa_policy(
+            tenant,
+            current_user,
+            payload,
+        )
+    except ValidationError as err:
+        return fail('VALIDATION_ERROR', err.messages, 422)
+    except PermissionError as exc:
+        return fail('FORBIDDEN', str(exc), 403)
+    except ValueError as exc:
+        return fail('MFA_POLICY_INVALID', str(exc), 422)
+
+    log_event(
+        'security.mfa_policy_updated',
+        'Tenant',
+        tenant.id,
+        tenant_id=tenant.id,
+        actor=current_user,
+        metadata={
+            'mode': policy['mode'],
+            'grace_days': policy['grace_days'],
+            'enforcement_date': policy['enforcement_date'],
+        },
+    )
+    db.session.commit()
+    return success(policy, 'MFA policy updated')
+
+
+@tenant_bp.get('/<tenant_id>/mfa-compliance')
+@jwt_required()
+@permission_required('security:mfa_policy')
+def get_tenant_mfa_compliance(tenant_id):
+    tenant = _security_tenant(tenant_id)
+    if tenant is None:
+        return fail(
+            'FORBIDDEN',
+            'MFA compliance can only be viewed within your organization',
+            403,
+        )
+    return success(tenant_mfa_compliance(tenant))

@@ -25,6 +25,10 @@ PERMISSIONS = {
     'onboarding:create': 'Create onboarding templates',
     'onboarding:assign': 'Assign and complete onboarding work',
     'dashboard:read': 'Read dashboard information',
+    'security:mfa_policy': (
+        'Configure organization MFA policy and review compliance'
+    ),
+    'security:mfa_reset': 'Reset another user MFA enrollment',
 }
 
 TENANT_ASSIGNABLE_ROLES = {'MANAGER', 'EMPLOYEE'}
@@ -43,6 +47,8 @@ ROLE_PERMISSIONS = {
         'leave:adjust',
         'attendance:read',
         'dashboard:read',
+        'security:mfa_policy',
+        'security:mfa_reset',
     ],
     'HR_CONSULTANT': [
         'tenant:read',
@@ -84,6 +90,8 @@ ROLE_PERMISSIONS = {
         'onboarding:create',
         'onboarding:assign',
         'dashboard:read',
+        'security:mfa_policy',
+        'security:mfa_reset',
     ],
     'MANAGER': [
         'employee:read',
