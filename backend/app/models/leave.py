@@ -282,6 +282,28 @@ class LeaveBalance(db.Model, TenantMixin, TimestampMixin, ReprMixin):
             - Decimal(self.expired_days or 0)
         )
 
+    @property
+    def earned_days(self):
+        return self.allocated_days
+
+    @property
+    def posted_days(self):
+        return (
+            self.earned_days
+            - Decimal(self.used_days or 0)
+        )
+
+    @property
+    def available_days(self):
+        return (
+            self.posted_days
+            - Decimal(self.reserved_days or 0)
+        )
+
+    @property
+    def balance_reconciled(self):
+        return Decimal(self.balance_days or 0) == self.available_days
+
     def to_dict(self):
         return {
             'id': str(self.id),
@@ -290,8 +312,11 @@ class LeaveBalance(db.Model, TenantMixin, TimestampMixin, ReprMixin):
             'leave_type_id': str(self.leave_type_id),
             'opening_days': float(self.opening_days or 0),
             'balance_days': float(self.balance_days or 0),
-            'available_days': float(self.balance_days or 0),
+            'earned_days': float(self.earned_days),
+            'posted_days': float(self.posted_days),
+            'available_days': float(self.available_days),
             'allocated_days': float(self.allocated_days),
+            'balance_reconciled': self.balance_reconciled,
             'accrued_days': float(self.accrued_days or 0),
             'carried_over_days': float(self.carried_over_days or 0),
             'adjusted_days': float(self.adjusted_days or 0),

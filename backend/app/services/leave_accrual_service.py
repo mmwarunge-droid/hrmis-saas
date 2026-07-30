@@ -9,6 +9,7 @@ from app.models import (
     Employee,
     LeaveBalance,
     LeaveLedgerEntry,
+    LeaveRequest,
     LeaveType,
     Tenant,
 )
@@ -18,6 +19,7 @@ from app.services.audit_service import log_event
 
 DAY = Decimal('0.01')
 ACTIVE_EMPLOYMENT_STATUSES = {'active', 'probation'}
+NON_BALANCE_ENTITLEMENT_MODES = {'unlimited', 'event_based'}
 
 
 def quantize_days(value):
@@ -93,6 +95,26 @@ def eligibility_date(policy, employee):
         employee.hire_date,
         int(policy.eligibility_after_months or 0),
     )
+
+
+def uses_balance(leave_type):
+    return (
+        leave_type.entitlement_mode
+        not in NON_BALANCE_ENTITLEMENT_MODES
+    )
+
+
+def validate_event_entitlement(leave_type, total_days):
+    if leave_type.entitlement_mode != 'event_based':
+        return
+
+    requested = quantize_days(total_days)
+    maximum = quantize_days(leave_type.annual_entitlement_days)
+    if maximum > 0 and requested > maximum:
+        raise ValueError(
+            f'{leave_type.name} permits up to {maximum} days '
+            'per qualifying event'
+        )
 
 
 def get_or_create_balance(
@@ -189,7 +211,8 @@ def _restore_carryover(balance, amount):
 
 
 def assert_balance_available(employee, leave_type, start_date, total_days):
-    if leave_type.entitlement_mode == 'unlimited':
+    validate_event_entitlement(leave_type, total_days)
+    if not uses_balance(leave_type):
         return None
 
     balance = LeaveBalance.query.filter_by(
@@ -204,7 +227,7 @@ def assert_balance_available(employee, leave_type, start_date, total_days):
             'this leave policy'
         )
 
-    available = quantize_days(balance.balance_days)
+    available = quantize_days(balance.available_days)
     requested = quantize_days(total_days)
     if (
         not leave_type.allow_negative_balance
@@ -218,7 +241,7 @@ def assert_balance_available(employee, leave_type, start_date, total_days):
 
 def reserve_request_balance(leave_request, actor_user_id=None):
     leave_type = leave_request.leave_type
-    if leave_type.entitlement_mode == 'unlimited':
+    if not uses_balance(leave_type):
         return None
     if leave_request.balance_reserved_at is not None:
         return None
@@ -231,7 +254,7 @@ def reserve_request_balance(leave_request, actor_user_id=None):
         lock=True,
     )
     requested = quantize_days(leave_request.total_days)
-    available = quantize_days(balance.balance_days)
+    available = quantize_days(balance.available_days)
     if (
         not leave_type.allow_negative_balance
         and available < requested
@@ -264,7 +287,7 @@ def reserve_request_balance(leave_request, actor_user_id=None):
 
 def approve_request_balance(leave_request, actor_user_id=None):
     leave_type = leave_request.leave_type
-    if leave_type.entitlement_mode == 'unlimited':
+    if not uses_balance(leave_type):
         return None
 
     balance, _ = get_or_create_balance(
@@ -286,7 +309,7 @@ def approve_request_balance(leave_request, actor_user_id=None):
         )
         amount = Decimal('0')
     else:
-        available = quantize_days(balance.balance_days)
+        available = quantize_days(balance.available_days)
         if (
             not leave_type.allow_negative_balance
             and available < requested
@@ -328,7 +351,7 @@ def restore_request_balance(
     reason,
 ):
     leave_type = leave_request.leave_type
-    if leave_type.entitlement_mode == 'unlimited':
+    if not uses_balance(leave_type):
         return None
 
     balance, _ = get_or_create_balance(
@@ -389,7 +412,7 @@ def restore_request_balance(
 
 
 def record_request_cancelled(leave_request, actor_user_id=None, notes=None):
-    if leave_request.leave_type.entitlement_mode == 'unlimited':
+    if not uses_balance(leave_request.leave_type):
         return None
 
     balance = LeaveBalance.query.filter_by(
@@ -432,7 +455,7 @@ def adjust_leave_balance(
         tenant_id=balance.tenant_id,
     ).with_for_update().one()
     policy = locked.leave_type
-    available = quantize_days(locked.balance_days)
+    available = quantize_days(locked.available_days)
     if (
         amount < 0
         and not policy.allow_negative_balance
@@ -598,7 +621,11 @@ def initialize_balance_for_policy(
         return 'updated'
 
     entitlement = quantize_days(policy.annual_entitlement_days)
-    if policy.entitlement_mode in {'unlimited', 'manual'}:
+    if policy.entitlement_mode in {
+        'unlimited',
+        'manual',
+        'event_based',
+    }:
         balance.accrual_through_date = as_of_date
         return 'updated'
 
@@ -766,7 +793,7 @@ def _accrue_policy_through(
 
     entitlement = quantize_days(policy.annual_entitlement_days)
     mode = policy.entitlement_mode
-    if mode in {'unlimited', 'manual'}:
+    if mode in {'unlimited', 'manual', 'event_based'}:
         return 0
 
     created = 0
@@ -887,7 +914,11 @@ def run_scheduled_accruals(
 
         for employee in employees:
             for policy in policies:
-                if policy.entitlement_mode in {'unlimited', 'manual'}:
+                if policy.entitlement_mode in {
+                    'unlimited',
+                    'manual',
+                    'event_based',
+                }:
                     continue
                 balance, created = get_or_create_balance(
                     tenant.id,
@@ -941,6 +972,111 @@ def run_scheduled_accruals(
 
     if commit:
         db.session.commit()
+    return result
+
+
+def repair_event_based_balances(
+    *,
+    tenant_id=None,
+    as_of_date=None,
+    actor=None,
+    dry_run=True,
+    commit=True,
+):
+    effective = as_of_date or date.today()
+    query = LeaveBalance.query.join(LeaveType).filter(
+        LeaveType.entitlement_mode == 'event_based',
+    )
+    if tenant_id:
+        query = query.filter(LeaveBalance.tenant_id == tenant_id)
+
+    balances = query.all()
+    result = {
+        'dry_run': dry_run,
+        'balances_scanned': len(balances),
+        'balances_corrected': 0,
+        'request_reservations_cleared': 0,
+    }
+    actor_user_id = getattr(actor, 'id', None)
+
+    for balance in balances:
+        before = {
+            name: float(getattr(balance, name) or 0)
+            for name in (
+                'opening_days',
+                'accrued_days',
+                'carried_over_days',
+                'adjusted_days',
+                'used_days',
+                'reserved_days',
+                'expired_days',
+                'carryover_remaining_days',
+                'balance_days',
+            )
+        }
+        if not any(before.values()):
+            continue
+
+        result['balances_corrected'] += 1
+        if dry_run:
+            continue
+
+        delta = -quantize_days(balance.balance_days)
+        for name in before:
+            setattr(balance, name, Decimal('0'))
+        balance.carryover_expires_at = None
+        balance.accrual_through_date = effective
+        record_ledger_entry(
+            balance,
+            'MANUAL_ADJUSTMENT',
+            delta,
+            effective,
+            f'event-balance-repair:v1:{balance.id}',
+            actor_user_id=actor_user_id,
+            reason=(
+                'Converted event-based entitlement from a banked '
+                'balance to a per-event allowance'
+            ),
+            metadata={
+                'repair_version': 1,
+                'before': before,
+            },
+        )
+
+    request_query = LeaveRequest.query.join(LeaveType).filter(
+        LeaveType.entitlement_mode == 'event_based',
+        LeaveRequest.balance_reserved_at.is_not(None),
+    )
+    if tenant_id:
+        request_query = request_query.filter(
+            LeaveRequest.tenant_id == tenant_id,
+        )
+    requests = request_query.all()
+    result['request_reservations_cleared'] = len(requests)
+    if not dry_run:
+        for request_obj in requests:
+            request_obj.balance_reserved_at = None
+            request_obj.reserved_carryover_days = Decimal('0')
+
+        affected_tenants = {
+            balance.tenant_id for balance in balances
+        } | {request_obj.tenant_id for request_obj in requests}
+        for affected_tenant_id in affected_tenants:
+            log_event(
+                'leave.event_balances_repaired',
+                'Tenant',
+                affected_tenant_id,
+                tenant_id=affected_tenant_id,
+                metadata={
+                    **result,
+                    'effective_date': effective.isoformat(),
+                },
+                actor=actor,
+            )
+
+        if commit:
+            db.session.commit()
+
     return result
 
 
