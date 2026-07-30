@@ -1,14 +1,22 @@
-from datetime import timedelta
+from datetime import date, timedelta
 from decimal import Decimal
 
 from sqlalchemy import false, or_
 
 from app.extensions import db
-from app.models import Employee, LeaveBalance, LeaveRequest, LeaveType, Tenant, User
+from app.models import Employee, LeaveRequest, LeaveType, Tenant, User
 from app.models.base import utcnow
 from app.services.audit_service import log_event
+from app.services.leave_accrual_service import (
+    approve_request_balance,
+    assert_balance_available,
+    record_request_cancelled,
+    reserve_request_balance,
+    restore_request_balance,
+)
 from app.services.leave_policy_service import (
     SUBMIT_FOR_OTHERS_ROLES,
+    can_configure_leave,
     find_fallback_owner,
 )
 
@@ -109,75 +117,6 @@ def resolve_required_approver(employee, tenant, requester_user):
     return approver, route
 
 
-def _get_balance(leave_request, *, lock=False):
-    query = LeaveBalance.query.filter_by(
-        tenant_id=leave_request.tenant_id,
-        employee_id=leave_request.employee_id,
-        leave_type_id=leave_request.leave_type_id,
-        year=leave_request.start_date.year,
-    )
-    if lock:
-        query = query.with_for_update()
-    return query.first()
-
-
-def _apply_balance(leave_request):
-    leave_type = leave_request.leave_type
-    if leave_type.entitlement_mode == 'unlimited':
-        return
-
-    balance = _get_balance(leave_request, lock=True)
-    if balance is None:
-        raise ValueError(
-            'The employee has no initialized balance for this '
-            'leave policy and year'
-        )
-
-    available = Decimal(balance.balance_days or 0)
-    requested = Decimal(leave_request.total_days or 0)
-    if (
-        not leave_type.allow_negative_balance
-        and available < requested
-    ):
-        raise ValueError(
-            f'Insufficient leave balance: {available} days available'
-        )
-
-    balance.used_days = Decimal(balance.used_days or 0) + requested
-    balance.balance_days = available - requested
-
-
-def _assert_balance_available(
-    employee,
-    leave_type,
-    start_date,
-    total_days,
-):
-    if leave_type.entitlement_mode == 'unlimited':
-        return
-
-    balance = LeaveBalance.query.filter_by(
-        tenant_id=employee.tenant_id,
-        employee_id=employee.id,
-        leave_type_id=leave_type.id,
-        year=start_date.year,
-    ).first()
-    if balance is None:
-        raise ValueError(
-            'Opening balances have not been initialized for '
-            'this leave policy'
-        )
-
-    available = Decimal(balance.balance_days or 0)
-    if (
-        not leave_type.allow_negative_balance
-        and available < total_days
-    ):
-        raise ValueError(
-            f'Insufficient leave balance: {available} days available'
-        )
-
-
 def create_leave_request(payload, tenant_id, actor):
     employee_id = payload.pop('employee_id', None)
     if employee_id is None and actor.employee_profile:
@@ -240,7 +179,7 @@ def create_leave_request(payload, tenant_id, actor):
             'The employee already has an overlapping leave request'
         )
 
-    _assert_balance_available(
+    assert_balance_available(
         employee,
         leave_type,
         start_date,
@@ -278,9 +217,17 @@ def create_leave_request(payload, tenant_id, actor):
     db.session.add(request_obj)
     db.session.flush()
 
-    if status == 'approved':
+    if status == 'pending':
+        reserve_request_balance(
+            request_obj,
+            actor_user_id=actor.id,
+        )
+    else:
         request_obj.decided_at = utcnow()
-        _apply_balance(request_obj)
+        approve_request_balance(
+            request_obj,
+            actor_user_id=actor.id,
+        )
 
     log_event(
         'leave.request',
@@ -296,6 +243,7 @@ def create_leave_request(payload, tenant_id, actor):
             ),
             'approval_route': approval_route,
             'total_days': float(total_days),
+            'balance_reserved': status == 'pending',
         },
     )
     db.session.commit()
@@ -336,7 +284,16 @@ def decide_leave_request(
         )
 
     if status == 'approved':
-        _apply_balance(leave_request)
+        approve_request_balance(
+            leave_request,
+            actor_user_id=actor.id,
+        )
+    else:
+        restore_request_balance(
+            leave_request,
+            actor_user_id=actor.id,
+            reason='rejected',
+        )
 
     leave_request.status = status
     leave_request.approver_id = actor.id
@@ -353,6 +310,54 @@ def decide_leave_request(
                 leave_request.required_approver_id
             ),
         },
+    )
+    db.session.commit()
+    return leave_request
+
+
+def cancel_leave_request(leave_request, actor, notes=None):
+    if leave_request.status not in {'pending', 'approved'}:
+        raise ValueError(
+            'Only pending or future approved requests can be cancelled'
+        )
+
+    owns_request = bool(
+        actor.employee_profile
+        and str(actor.employee_profile.id)
+        == str(leave_request.employee_id)
+    )
+    if not owns_request and not can_configure_leave(actor):
+        raise ValueError(
+            'Users may only cancel their own leave requests'
+        )
+    if (
+        leave_request.status == 'approved'
+        and leave_request.start_date <= date.today()
+    ):
+        raise ValueError(
+            'Approved leave can only be cancelled before its start date'
+        )
+
+    restore_request_balance(
+        leave_request,
+        actor_user_id=actor.id,
+        reason='cancelled',
+    )
+    record_request_cancelled(
+        leave_request,
+        actor_user_id=actor.id,
+        notes=notes,
+    )
+    leave_request.status = 'cancelled'
+    leave_request.approver_id = actor.id
+    leave_request.decision_notes = notes
+    leave_request.decided_at = utcnow()
+
+    log_event(
+        'leave.cancelled',
+        'LeaveRequest',
+        leave_request.id,
+        tenant_id=leave_request.tenant_id,
     )
     db.session.commit()
     return leave_request

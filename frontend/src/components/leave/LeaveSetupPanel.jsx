@@ -18,6 +18,11 @@ function policyState(pack) {
       item.annual_entitlement_days ?? 0,
     ),
     pay_percentage: String(item.pay_percentage ?? 100),
+    carryover_expiry_months: (
+      item.carryover_expiry_months == null
+        ? ''
+        : String(item.carryover_expiry_months)
+    ),
   }));
 }
 
@@ -26,6 +31,7 @@ export default function LeaveSetupPanel({
   onSaveGovernance,
   onApplyPack,
   onInitializeBalances,
+  onRunAccruals,
   loading,
 }) {
   const [ownerId, setOwnerId] = useState(
@@ -75,6 +81,11 @@ export default function LeaveSetupPanel({
         ),
         pay_percentage: Number(
           policy.pay_percentage || 0,
+        ),
+        carryover_expiry_months: (
+          policy.carryover_expiry_months === ''
+            ? null
+            : Number(policy.carryover_expiry_months)
         ),
       })),
     });
@@ -231,6 +242,7 @@ export default function LeaveSetupPanel({
                 <th className="px-3 py-2">Days</th>
                 <th className="px-3 py-2">Allocation</th>
                 <th className="px-3 py-2">Pay %</th>
+                <th className="px-3 py-2">Carryover expiry</th>
               </tr>
             </thead>
             <tbody>
@@ -296,6 +308,22 @@ export default function LeaveSetupPanel({
                       className="w-20 rounded-lg border border-slate-200 px-2 py-1.5"
                     />
                   </td>
+                  <td className="px-3 py-3">
+                    <input
+                      aria-label={`${policy.code} carryover expiry months`}
+                      type="number"
+                      min="0"
+                      max="24"
+                      value={policy.carryover_expiry_months}
+                      onChange={(event) => updatePolicy(
+                        index,
+                        'carryover_expiry_months',
+                        event.target.value,
+                      )}
+                      className="w-24 rounded-lg border border-slate-200 px-2 py-1.5"
+                      placeholder="None"
+                    />
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -313,6 +341,13 @@ export default function LeaveSetupPanel({
           >
             <RefreshCcw size={16} />
             Re-run opening balances
+          </Button>
+          <Button
+            variant="secondary"
+            onClick={() => onRunAccruals({})}
+            disabled={loading}
+          >
+            Run scheduled allocations
           </Button>
         </div>
       </Card>
