@@ -17,6 +17,10 @@ from sqlalchemy import delete, select
 from app.extensions import db, redis_store
 from app.models import MfaRecoveryCode, User
 from app.models.base import utcnow
+from app.services.mfa_policy_service import (
+    clear_user_mfa,
+    mfa_requirement_status,
+)
 from app.utils.security import verify_password
 
 
@@ -33,12 +37,8 @@ class MfaConfigurationError(RuntimeError):
     pass
 
 
-def _required_roles() -> set[str]:
-    return set(current_app.config.get('MFA_REQUIRED_ROLES') or [])
-
-
 def is_mfa_required(user: User) -> bool:
-    return bool(_required_roles().intersection(user.role_names))
+    return mfa_requirement_status(user)['required']
 
 
 def _fernet() -> MultiFernet:
@@ -75,7 +75,7 @@ def _challenge_seconds() -> int:
 
 
 def issue_mfa_challenge(user: User, purpose: str, ip_address=None, user_agent=None) -> str:
-    if purpose not in {'verify', 'enroll'}:
+    if purpose not in {'verify', 'enroll', 'self_enroll'}:
         raise ValueError('Unsupported MFA challenge purpose')
 
     raw_token = secrets.token_urlsafe(32)
@@ -195,37 +195,126 @@ def _provisioning_payload(user: User, secret: str) -> dict:
     }
 
 
-def start_mfa_enrollment(challenge_token: str) -> tuple[User, dict]:
-    _, user = _load_challenge(challenge_token, 'enroll')
+def _stage_enrollment_secret(user: User) -> dict:
+    secret = pyotp.random_base32()
+    user.mfa_pending_secret_encrypted = _encrypt_secret(secret)
+    return _provisioning_payload(user, secret)
+
+
+def _complete_enrollment(
+    challenge_token: str,
+    code: str,
+    expected_purpose: str,
+    expected_user: User | None = None,
+) -> tuple[User, list[str], dict]:
+    payload, user = _load_challenge(
+        challenge_token,
+        expected_purpose,
+    )
+    if (
+        expected_user
+        and str(user.id) != str(expected_user.id)
+    ):
+        raise MfaError('invalid_challenge_user')
+    if user.email_verified_at is None:
+        raise MfaError('email_verification_required')
+
+    secret = _decrypt_secret(
+        user.mfa_pending_secret_encrypted
+    )
+    matched_timecode = _totp_match(secret, code)
+    if matched_timecode is None:
+        remaining = _record_challenge_failure(
+            challenge_token,
+            payload,
+        )
+        raise MfaError(
+            'invalid_totp',
+            attempts_remaining=remaining,
+        )
+
+    _consume_challenge(challenge_token)
+    user.mfa_secret_encrypted = (
+        user.mfa_pending_secret_encrypted
+    )
+    user.mfa_pending_secret_encrypted = None
+    user.mfa_enabled_at = utcnow()
+    user.mfa_last_used_timecode = matched_timecode
+    user.mfa_reset_at = None
+    user.mfa_reset_by_user_id = None
+    recovery_codes = generate_recovery_codes(user)
+    return user, recovery_codes, payload
+
+
+def start_mfa_enrollment(
+    challenge_token: str,
+) -> tuple[User, dict]:
+    _, user = _load_challenge(
+        challenge_token,
+        'enroll',
+    )
     if user.email_verified_at is None:
         raise MfaError('email_verification_required')
     if user.mfa_enabled_at is not None:
         raise MfaError('mfa_already_enabled')
 
-    secret = pyotp.random_base32()
-    user.mfa_pending_secret_encrypted = _encrypt_secret(secret)
+    enrollment = _stage_enrollment_secret(user)
     db.session.commit()
-    return user, _provisioning_payload(user, secret)
+    return user, enrollment
 
 
-def confirm_mfa_enrollment(challenge_token: str, code: str) -> tuple[User, list[str], dict]:
-    payload, user = _load_challenge(challenge_token, 'enroll')
+def confirm_mfa_enrollment(
+    challenge_token: str,
+    code: str,
+) -> tuple[User, list[str], dict]:
+    return _complete_enrollment(
+        challenge_token,
+        code,
+        'enroll',
+    )
+
+
+def start_self_mfa_enrollment(
+    user: User,
+    password: str,
+    *,
+    ip_address=None,
+    user_agent=None,
+) -> dict:
+    if not password_is_valid(user, password):
+        raise MfaError('invalid_password')
     if user.email_verified_at is None:
         raise MfaError('email_verification_required')
+    if user.mfa_enabled_at is not None:
+        raise MfaError('mfa_already_enabled')
 
-    secret = _decrypt_secret(user.mfa_pending_secret_encrypted)
-    matched_timecode = _totp_match(secret, code)
-    if matched_timecode is None:
-        remaining = _record_challenge_failure(challenge_token, payload)
-        raise MfaError('invalid_totp', attempts_remaining=remaining)
+    challenge_token = issue_mfa_challenge(
+        user,
+        'self_enroll',
+        ip_address=ip_address,
+        user_agent=user_agent,
+    )
+    enrollment = _stage_enrollment_secret(user)
+    db.session.commit()
+    return {
+        **enrollment,
+        'challenge_token': challenge_token,
+        'challenge_expires_seconds': _challenge_seconds(),
+    }
 
-    _consume_challenge(challenge_token)
-    user.mfa_secret_encrypted = user.mfa_pending_secret_encrypted
-    user.mfa_pending_secret_encrypted = None
-    user.mfa_enabled_at = utcnow()
-    user.mfa_last_used_timecode = matched_timecode
-    recovery_codes = generate_recovery_codes(user)
-    return user, recovery_codes, payload
+
+def confirm_self_mfa_enrollment(
+    user: User,
+    challenge_token: str,
+    code: str,
+) -> tuple[list[str], dict]:
+    _, recovery_codes, challenge = _complete_enrollment(
+        challenge_token,
+        code,
+        'self_enroll',
+        expected_user=user,
+    )
+    return recovery_codes, challenge
 
 
 def _use_recovery_code(user: User, code: str) -> bool:
@@ -275,17 +364,55 @@ def verify_current_totp(user: User, code: str) -> None:
     user.mfa_last_used_timecode = matched_timecode
 
 
+def disable_mfa(
+    user: User,
+    password: str,
+    code: str,
+) -> dict:
+    policy = mfa_requirement_status(user)
+    if not policy['can_disable']:
+        raise PermissionError(
+            'MFA cannot be disabled while an applicable '
+            'organization or platform policy is assigned'
+        )
+    if not password_is_valid(user, password):
+        raise MfaError('invalid_password')
+    verify_current_totp(user, code)
+    clear_user_mfa(user)
+    return policy
+
+
 def recovery_codes_remaining(user: User) -> int:
     return MfaRecoveryCode.query.filter_by(user_id=user.id, used_at=None).count()
 
 
 def mfa_status(user: User) -> dict:
+    remaining = (
+        recovery_codes_remaining(user)
+        if user.mfa_enabled_at
+        else 0
+    )
+    policy = mfa_requirement_status(user)
     return {
         'enabled': user.mfa_enabled_at is not None,
-        'enabled_at': user.mfa_enabled_at.isoformat() if user.mfa_enabled_at else None,
-        'required': is_mfa_required(user),
+        'enabled_at': (
+            user.mfa_enabled_at.isoformat()
+            if user.mfa_enabled_at
+            else None
+        ),
+        'required': policy['required'],
         'email_verified': user.email_verified_at is not None,
-        'recovery_codes_remaining': recovery_codes_remaining(user) if user.mfa_enabled_at else 0,
+        'recovery_codes_remaining': remaining,
+        'recovery_codes_low': bool(
+            user.mfa_enabled_at
+            and remaining <= 2
+        ),
+        'policy': policy,
+        'reset_at': (
+            user.mfa_reset_at.isoformat()
+            if user.mfa_reset_at
+            else None
+        ),
     }
 
 

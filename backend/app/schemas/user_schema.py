@@ -64,3 +64,38 @@ class UserUpdateSchema(Schema):
 
 class UserRoleUpdateSchema(Schema):
     roles = fields.List(fields.Str(), required=True, validate=validate.Length(min=1))
+
+class TenantMfaPolicySchema(Schema):
+    mode = fields.Str(
+        required=False,
+        validate=validate.OneOf([
+            'optional',
+            'privileged',
+            'managers_and_privileged',
+            'all_users',
+        ]),
+    )
+    grace_days = fields.Int(
+        required=False,
+        validate=validate.Range(min=0, max=365),
+    )
+    enforcement_date = fields.Date(
+        required=False,
+        allow_none=True,
+    )
+
+
+class MfaAdminResetSchema(Schema):
+    reason = fields.Str(
+        required=True,
+        validate=validate.Length(min=5, max=500),
+    )
+    password = fields.Str(
+        required=True,
+        load_only=True,
+        validate=validate.Length(min=1, max=128),
+    )
+    code = fields.Str(
+        required=True,
+        validate=validate.Length(min=6, max=32),
+    )

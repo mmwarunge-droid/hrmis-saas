@@ -119,6 +119,35 @@ def rotate_auth_session(user: User, jwt_data: dict):
     return auth_session, access_token, refresh_token
 
 
+def upgrade_auth_session_mfa(
+    user: User,
+    jwt_data: dict,
+) -> tuple[AuthSession, str, str]:
+    auth_session = get_session_for_token(
+        jwt_data,
+        lock=True,
+    )
+    if (
+        not auth_session
+        or str(auth_session.user_id) != str(user.id)
+        or auth_session.revoked_at is not None
+        or to_utc_naive(auth_session.expires_at) <= utcnow()
+    ):
+        raise SessionRevokedError(
+            'The authentication session is no longer active'
+        )
+
+    auth_session.mfa_verified_at = utcnow()
+    auth_session.last_seen_at = utcnow()
+    access_token, refresh_token, refresh_jti = _issue_tokens(
+        user,
+        auth_session,
+    )
+    auth_session.refresh_jti_hash = _hash_jti(refresh_jti)
+    auth_session.expires_at = _expires_at(refresh_token)
+    return auth_session, access_token, refresh_token
+
+
 def revoke_session(auth_session: AuthSession, reason: str, token_jti=None, token_expires_at=None) -> None:
     if auth_session.revoked_at is None:
         auth_session.revoked_at = utcnow()
