@@ -43,3 +43,22 @@ class MfaEnrollmentStartSchema(Schema):
 
 class MfaRecoveryCodesSchema(Schema):
     code = fields.Str(required=True, validate=validate.Length(min=6, max=32))
+
+class MfaSelfEnrollmentStartSchema(Schema):
+    password = fields.Str(
+        required=True,
+        load_only=True,
+        validate=validate.Length(min=1, max=128),
+    )
+
+
+class MfaDisableSchema(Schema):
+    password = fields.Str(
+        required=True,
+        load_only=True,
+        validate=validate.Length(min=1, max=128),
+    )
+    code = fields.Str(
+        required=True,
+        validate=validate.Length(min=6, max=32),
+    )

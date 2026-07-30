@@ -5,4 +5,5 @@ export const userApi = {
   create: (payload) => apiClient.post('/users', payload),
   update: (id, payload) => apiClient.patch(`/users/${id}`, payload),
   updateRoles: (id, roles) => apiClient.patch(`/users/${id}/roles`, { roles }),
+  resetMfa: (id, payload) => apiClient.post(`/users/${id}/mfa/reset`, payload),
 };

@@ -5,10 +5,23 @@ from sqlalchemy.exc import IntegrityError
 
 from app.extensions import db
 from app.models import User
-from app.schemas.user_schema import UserCreateSchema, UserRoleUpdateSchema, UserUpdateSchema
+from app.schemas.user_schema import (
+    MfaAdminResetSchema,
+    UserCreateSchema,
+    UserRoleUpdateSchema,
+    UserUpdateSchema,
+)
 from app.services.auth_service import register_user
 from app.services.audit_service import log_event
 from app.services.employee_service import create_employee
+from app.services.mfa_policy_service import (
+    administrative_reset_mfa,
+)
+from app.services.mfa_service import (
+    MfaError,
+    password_is_valid,
+    verify_current_totp,
+)
 from app.services.rbac_service import set_user_roles, validate_role_assignment
 from app.utils.decorators import permission_required, tenant_query
 from app.utils.pagination import get_pagination, paginated_response
@@ -110,3 +123,67 @@ def update_roles(user_id):
         db.session.rollback()
         return fail('ROLE_UPDATE_FAILED', getattr(err, 'messages', str(err)), 400)
     return success(user.to_dict(), 'User roles updated')
+
+@user_bp.post('/<user_id>/mfa/reset')
+@jwt_required()
+@permission_required('security:mfa_reset')
+def reset_user_mfa(user_id):
+    target = User.query.filter_by(
+        id=user_id,
+        deleted_at=None,
+    ).first_or_404()
+    if (
+        not current_user.has_role('SUPER_ADMIN')
+        and str(current_user.tenant_id) != str(target.tenant_id)
+    ):
+        return fail(
+            'FORBIDDEN',
+            'MFA can only be reset within your organization',
+            403,
+        )
+
+    try:
+        payload = MfaAdminResetSchema().load(
+            request.get_json(silent=True) or {}
+        )
+        if not password_is_valid(
+            current_user,
+            payload['password'],
+        ):
+            raise MfaError('invalid_password')
+        verify_current_totp(
+            current_user,
+            payload['code'],
+        )
+        result = administrative_reset_mfa(
+            target,
+            current_user,
+            payload['reason'],
+        )
+    except ValidationError as err:
+        return fail('VALIDATION_ERROR', err.messages, 422)
+    except PermissionError as exc:
+        return fail('FORBIDDEN', str(exc), 403)
+    except MfaError:
+        db.session.rollback()
+        return fail(
+            'MFA_STEP_UP_REQUIRED',
+            'A valid administrator password and authenticator code are required',
+            401,
+        )
+    except ValueError as exc:
+        return fail('MFA_RESET_FAILED', str(exc), 409)
+
+    log_event(
+        'security.mfa_reset',
+        'User',
+        target.id,
+        tenant_id=target.tenant_id,
+        actor=current_user,
+        metadata={
+            'reason': payload['reason'],
+            'revoked_sessions': result['revoked_sessions'],
+        },
+    )
+    db.session.commit()
+    return success(result, 'User MFA enrollment reset')

@@ -70,7 +70,7 @@ export default function MfaChallenge() {
     <Card className="w-full max-w-lg">
       <h1 className="text-2xl font-bold">{enrollmentRequired ? 'Set up multi-factor authentication' : 'Enter your authentication code'}</h1>
       <p className="mt-1 text-sm text-slate-500">
-        {enrollmentRequired ? 'Privileged accounts must use an authenticator app.' : 'Use your authenticator code or a single-use recovery code.'}
+        {enrollmentRequired ? 'Your security policy requires an authenticator app.' : 'Use your authenticator code or a single-use recovery code.'}
       </p>
       {error && <div className="mt-4"><Alert type="error">{error}</Alert></div>}
       {enrollmentRequired && enrollment && (

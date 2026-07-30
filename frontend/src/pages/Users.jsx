@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom';
 import { tenantApi } from '../api/tenantApi';
 import { userApi } from '../api/userApi';
 import UserProvisionForm from '../components/users/UserProvisionForm.jsx';
+import MfaPolicyPanel from '../components/security/MfaPolicyPanel.jsx';
 import Alert from '../components/ui/Alert.jsx';
 import Avatar from '../components/ui/Avatar.jsx';
 import Badge from '../components/ui/Badge.jsx';
@@ -13,6 +14,8 @@ import PageHeader from '../components/ui/PageHeader.jsx';
 import StatCard from '../components/ui/StatCard.jsx';
 import Table from '../components/ui/Table.jsx';
 import usePermissions from '../hooks/usePermissions.js';
+import useAuth from '../hooks/useAuth.js';
+import useTenant from '../hooks/useTenant.js';
 
 export default function Users() {
   const [users, setUsers] = useState([]);
@@ -21,8 +24,14 @@ export default function Users() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const { user } = useAuth();
+  const { tenantId } = useTenant();
   const { hasRole, hasPermission } = usePermissions();
   const isSuperAdmin = hasRole('SUPER_ADMIN');
+  const canManageMfa = hasPermission('security:mfa_policy');
+  const policyTenantId = isSuperAdmin
+    ? tenantId
+    : user?.tenant_id;
 
   const load = async () => {
     try {
@@ -99,6 +108,7 @@ export default function Users() {
     ...(isSuperAdmin ? [{ key: 'tenant_id', label: 'Organization', render: (row) => tenantNames[row.tenant_id] || 'Platform' }] : []),
     { key: 'roles', label: 'Access', render: (row) => <div className="flex flex-wrap gap-1">{row.roles.map((role) => <Badge key={role} tone={role.includes('ADMIN') ? 'violet' : 'blue'}>{role.replaceAll('_', ' ')}</Badge>)}</div> },
     { key: 'email_verified', label: 'Verified', render: (row) => <Badge tone={row.email_verified ? 'green' : 'amber'}>{row.email_verified ? 'Verified' : 'Pending'}</Badge> },
+    { key: 'mfa_enabled', label: 'MFA', render: (row) => <Badge tone={row.mfa_enabled ? 'green' : 'slate'}>{row.mfa_enabled ? 'Enabled' : 'Not enabled'}</Badge> },
     { key: 'is_active', label: 'Status', render: (row) => <Badge tone={row.is_active ? 'green' : 'red'}>{row.is_active ? 'Active' : 'Inactive'}</Badge> },
   ];
 
@@ -119,6 +129,13 @@ export default function Users() {
         <StatCard label="Verified identities" value={stats.verified} detail="Email ownership confirmed" icon={UserCheck} tone="emerald" />
         <StatCard label="Privileged users" value={stats.admins} detail="Admin access should remain limited" icon={ShieldCheck} tone="violet" />
       </div>
+
+      {canManageMfa && policyTenantId && (
+        <MfaPolicyPanel
+          tenantId={policyTenantId}
+          currentUserId={user?.id}
+        />
+      )}
 
       <div className="rounded-3xl border border-amber-200 bg-amber-50/80 px-5 py-4 text-sm text-amber-900">
         <div className="flex items-start gap-3"><KeyRound className="mt-0.5 shrink-0" size={18} /><div><p className="font-semibold">Least-privilege administration</p><p className="mt-1 text-amber-800">Organization administrators can create managers and employees, but only platform super administrators can appoint another organization administrator.</p></div></div>
