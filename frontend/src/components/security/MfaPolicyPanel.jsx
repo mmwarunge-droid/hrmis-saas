@@ -112,7 +112,11 @@ export default function MfaPolicyPanel({
     try {
       const response = await userApi.resetMfa(
         resetTarget.id,
-        { reason: resetReason },
+        {
+          reason: resetReason,
+          password: resetPassword,
+          code: resetCode,
+        },
       );
       setMessage(response.message || 'MFA enrollment reset.');
       setResetTarget(null);

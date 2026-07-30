@@ -259,8 +259,17 @@ export default function LeaveRequests() {
   );
 
   const openRequest = () => {
+    setError('');
+
     if (!setup?.ready_to_request) {
-      setSetupOpen(true);
+      if (setup?.can_configure) {
+        setSetupOpen(true);
+      } else {
+        setError(
+          'Time-off requests are not available yet. '
+          + 'Contact HR or your organization administrator.',
+        );
+      }
       return;
     }
     setRequestOpen(true);
@@ -298,7 +307,7 @@ export default function LeaveRequests() {
       {error && <Alert type="error">{error}</Alert>}
       {message && <Alert type="success">{message}</Alert>}
 
-      {setup && !setup.ready_to_request && (
+      {setup && !setup.ready_to_request && setup.can_configure && (
         <Card className="border-amber-200 bg-amber-50/80">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div>

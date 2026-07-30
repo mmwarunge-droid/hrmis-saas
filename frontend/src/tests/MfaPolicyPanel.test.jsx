@@ -1,6 +1,7 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { tenantApi } from '../api/tenantApi.js';
+import { userApi } from '../api/userApi.js';
 import MfaPolicyPanel from '../components/security/MfaPolicyPanel.jsx';
 
 vi.mock('../api/tenantApi.js', () => ({
@@ -123,4 +124,70 @@ test('administrator schedules tenant-wide MFA enforcement', async () => {
   ));
   expect(await screen.findByText('MFA policy updated'))
     .toBeInTheDocument();
+});
+
+test('administrator reset sends step-up credentials and reason', async () => {
+  tenantApi.mfaCompliance.mockResolvedValue({
+    data: {
+      ...compliance,
+      summary: {
+        ...compliance.summary,
+        enabled_users: 2,
+      },
+      items: compliance.items.map((item) => (
+        item.id === 'employee-1'
+          ? {
+              ...item,
+              mfa_enabled: true,
+              compliant: true,
+            }
+          : item
+      )),
+    },
+  });
+  userApi.resetMfa.mockResolvedValue({
+    message: 'User MFA enrollment reset',
+    data: {},
+  });
+
+  const user = userEvent.setup();
+  render(
+    <MfaPolicyPanel
+      tenantId="tenant-1"
+      currentUserId="admin-1"
+    />,
+  );
+
+  await screen.findByText('Employee User');
+  const resetButtons = screen.getAllByRole('button', {
+    name: /^reset mfa$/i,
+  });
+  await user.click(resetButtons[1]);
+
+  await user.type(
+    screen.getByLabelText(/your current password/i),
+    'StrongPass123!',
+  );
+  await user.type(
+    screen.getByLabelText(/your authenticator code/i),
+    '123456',
+  );
+  await user.type(
+    screen.getByLabelText(/administrative reason/i),
+    'Lost authenticator device',
+  );
+  await user.click(screen.getByRole('button', {
+    name: /reset mfa and revoke sessions/i,
+  }));
+
+  await waitFor(() => expect(
+    userApi.resetMfa,
+  ).toHaveBeenCalledWith(
+    'employee-1',
+    {
+      reason: 'Lost authenticator device',
+      password: 'StrongPass123!',
+      code: '123456',
+    },
+  ));
 });
