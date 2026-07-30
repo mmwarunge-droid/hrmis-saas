@@ -87,7 +87,11 @@ class User(db.Model, TimestampMixin, SoftDeleteMixin, ReprMixin):
     mfa_enabled_at = db.Column(db.DateTime, nullable=True, index=True)
     mfa_last_used_timecode = db.Column(db.BigInteger, nullable=True)
 
-    tenant = db.relationship('Tenant', back_populates='users')
+    tenant = db.relationship(
+        'Tenant',
+        back_populates='users',
+        foreign_keys=[tenant_id],
+    )
     role_links = db.relationship('UserRole', back_populates='user', cascade='all, delete-orphan', foreign_keys=[UserRole.user_id])
     employee_profile = db.relationship('Employee', back_populates='user', uselist=False, foreign_keys='Employee.user_id')
     notifications = db.relationship('Notification', back_populates='user', passive_deletes=True)

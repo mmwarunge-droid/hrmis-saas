@@ -1,41 +1,387 @@
+from datetime import timedelta
+from decimal import Decimal
+
+from sqlalchemy import false, or_
+
 from app.extensions import db
-from app.models import Employee, LeaveBalance, LeaveRequest, LeaveType
+from app.models import Employee, LeaveBalance, LeaveRequest, LeaveType, Tenant, User
 from app.models.base import utcnow
 from app.services.audit_service import log_event
+from app.services.leave_policy_service import (
+    SUBMIT_FOR_OTHERS_ROLES,
+    find_fallback_owner,
+)
 
 
-def create_leave_request(payload, tenant_id):
-    employee = Employee.query.filter_by(id=payload['employee_id'], tenant_id=tenant_id, deleted_at=None).first()
-    leave_type = LeaveType.query.filter_by(id=payload['leave_type_id'], tenant_id=tenant_id, is_active=True).first()
+def calculate_working_days(start_date, end_date):
+    if end_date < start_date:
+        raise ValueError('end_date must be on or after start_date')
+
+    total = 0
+    current = start_date
+    while current <= end_date:
+        if current.weekday() < 5:
+            total += 1
+        current += timedelta(days=1)
+
+    if total <= 0:
+        raise ValueError(
+            'The selected period does not contain a working day'
+        )
+    return Decimal(total)
+
+
+def _employee_user(employee):
+    if not employee.user_id:
+        return None
+    return db.session.get(User, employee.user_id)
+
+
+def _manager_approver(employee):
+    manager = employee.manager
+    if not manager or not manager.user_id:
+        return None
+    return User.query.filter(
+        User.id == manager.user_id,
+        User.tenant_id == employee.tenant_id,
+        User.is_active.is_(True),
+        User.deleted_at.is_(None),
+    ).first()
+
+
+def resolve_required_approver(employee, tenant, requester_user):
+    employee_user = _employee_user(employee)
+    requester_is_employee = bool(
+        requester_user.employee_profile
+        and str(requester_user.employee_profile.id)
+        == str(employee.id)
+    )
+    requester_roles = set(
+        employee_user.role_names
+        if employee_user
+        else (
+            requester_user.role_names
+            if requester_is_employee
+            else []
+        )
+    )
+
+    if 'ORGANIZATION_OWNER' in requester_roles:
+        approver = tenant.leave_alternate_approver
+        route = 'owner_to_alternate'
+    elif requester_roles.intersection(
+        {'CLIENT_ADMIN', 'HR_CONSULTANT'}
+    ):
+        approver = tenant.organization_owner
+        route = 'hr_to_owner'
+    else:
+        approver = _manager_approver(employee)
+        route = (
+            'manager_to_manager'
+            if 'MANAGER' in requester_roles
+            else 'employee_to_manager'
+        )
+        if approver is None:
+            approver = tenant.organization_owner
+            route = (
+                'manager_to_owner'
+                if 'MANAGER' in requester_roles
+                else 'employee_to_owner'
+            )
+
+    requester_id = (
+        employee_user.id
+        if employee_user
+        else requester_user.id
+    )
+    if approver and str(approver.id) == str(requester_id):
+        approver = find_fallback_owner(
+            employee.tenant_id,
+            exclude_user_id=requester_id,
+        )
+        route = 'self_approval_fallback'
+
+    if not approver:
+        raise ValueError(
+            'No independent leave approver is configured. '
+            'Assign a manager, organization owner or alternate approver.'
+        )
+    return approver, route
+
+
+def _get_balance(leave_request, *, lock=False):
+    query = LeaveBalance.query.filter_by(
+        tenant_id=leave_request.tenant_id,
+        employee_id=leave_request.employee_id,
+        leave_type_id=leave_request.leave_type_id,
+        year=leave_request.start_date.year,
+    )
+    if lock:
+        query = query.with_for_update()
+    return query.first()
+
+
+def _apply_balance(leave_request):
+    leave_type = leave_request.leave_type
+    if leave_type.entitlement_mode == 'unlimited':
+        return
+
+    balance = _get_balance(leave_request, lock=True)
+    if balance is None:
+        raise ValueError(
+            'The employee has no initialized balance for this '
+            'leave policy and year'
+        )
+
+    available = Decimal(balance.balance_days or 0)
+    requested = Decimal(leave_request.total_days or 0)
+    if (
+        not leave_type.allow_negative_balance
+        and available < requested
+    ):
+        raise ValueError(
+            f'Insufficient leave balance: {available} days available'
+        )
+
+    balance.used_days = Decimal(balance.used_days or 0) + requested
+    balance.balance_days = available - requested
+
+
+def _assert_balance_available(
+    employee,
+    leave_type,
+    start_date,
+    total_days,
+):
+    if leave_type.entitlement_mode == 'unlimited':
+        return
+
+    balance = LeaveBalance.query.filter_by(
+        tenant_id=employee.tenant_id,
+        employee_id=employee.id,
+        leave_type_id=leave_type.id,
+        year=start_date.year,
+    ).first()
+    if balance is None:
+        raise ValueError(
+            'Opening balances have not been initialized for '
+            'this leave policy'
+        )
+
+    available = Decimal(balance.balance_days or 0)
+    if (
+        not leave_type.allow_negative_balance
+        and available < total_days
+    ):
+        raise ValueError(
+            f'Insufficient leave balance: {available} days available'
+        )
+
+
+def create_leave_request(payload, tenant_id, actor):
+    employee_id = payload.pop('employee_id', None)
+    if employee_id is None and actor.employee_profile:
+        employee_id = actor.employee_profile.id
+
+    employee = Employee.query.filter_by(
+        id=employee_id,
+        tenant_id=tenant_id,
+        deleted_at=None,
+    ).first()
+    leave_type = LeaveType.query.filter_by(
+        id=payload['leave_type_id'],
+        tenant_id=tenant_id,
+        is_active=True,
+    ).first()
+    tenant = db.session.get(Tenant, tenant_id)
+
     if not employee:
-        raise ValueError('employee_id is invalid for this tenant')
+        raise ValueError(
+            'employee_id is invalid for this organization'
+        )
     if not leave_type:
-        raise ValueError('leave_type_id is invalid for this tenant')
-    request = LeaveRequest(tenant_id=tenant_id, **payload)
-    db.session.add(request)
+        raise ValueError(
+            'leave_type_id is invalid for this organization'
+        )
+    if not tenant or tenant.deleted_at is not None:
+        raise ValueError('Organization was not found')
+
+    can_submit_for_others = actor.has_any_role(
+        SUBMIT_FOR_OTHERS_ROLES
+    )
+    if (
+        not can_submit_for_others
+        and (
+            not actor.employee_profile
+            or str(actor.employee_profile.id) != str(employee.id)
+        )
+    ):
+        raise ValueError(
+            'Users may only submit leave for their own '
+            'employee profile'
+        )
+
+    start_date = payload['start_date']
+    end_date = payload['end_date']
+    total_days = calculate_working_days(
+        start_date,
+        end_date,
+    )
+
+    overlap = LeaveRequest.query.filter(
+        LeaveRequest.tenant_id == tenant_id,
+        LeaveRequest.employee_id == employee.id,
+        LeaveRequest.status.in_(['pending', 'approved']),
+        LeaveRequest.start_date <= end_date,
+        LeaveRequest.end_date >= start_date,
+    ).first()
+    if overlap:
+        raise ValueError(
+            'The employee already has an overlapping leave request'
+        )
+
+    _assert_balance_available(
+        employee,
+        leave_type,
+        start_date,
+        total_days,
+    )
+
+    approver = None
+    approval_route = 'automatic'
+    status = 'approved'
+    if leave_type.requires_approval:
+        approver, approval_route = resolve_required_approver(
+            employee,
+            tenant,
+            actor,
+        )
+        status = 'pending'
+
+    request_obj = LeaveRequest(
+        tenant_id=tenant_id,
+        employee_id=employee.id,
+        leave_type_id=leave_type.id,
+        start_date=start_date,
+        end_date=end_date,
+        total_days=total_days,
+        reason=payload.get('reason'),
+        status=status,
+        requested_by_user_id=actor.id,
+        required_approver_id=(
+            approver.id
+            if approver
+            else None
+        ),
+        approval_route=approval_route,
+    )
+    db.session.add(request_obj)
     db.session.flush()
-    log_event('leave.request', 'LeaveRequest', request.id, tenant_id=tenant_id)
+
+    if status == 'approved':
+        request_obj.decided_at = utcnow()
+        _apply_balance(request_obj)
+
+    log_event(
+        'leave.request',
+        'LeaveRequest',
+        request_obj.id,
+        tenant_id=tenant_id,
+        metadata={
+            'employee_id': str(employee.id),
+            'required_approver_id': (
+                str(approver.id)
+                if approver
+                else None
+            ),
+            'approval_route': approval_route,
+            'total_days': float(total_days),
+        },
+    )
     db.session.commit()
-    return request
+    return request_obj
 
 
-def decide_leave_request(leave_request, status, approver_id, notes=None):
+def decide_leave_request(
+    leave_request,
+    status,
+    actor,
+    notes=None,
+):
+    if status not in {'approved', 'rejected'}:
+        raise ValueError('Unsupported leave decision')
     if leave_request.status != 'pending':
-        raise ValueError('Only pending leave requests can be decided')
+        raise ValueError(
+            'Only pending leave requests can be decided'
+        )
+
+    employee_user_id = leave_request.employee.user_id
+    if (
+        str(leave_request.requested_by_user_id) == str(actor.id)
+        or (
+            employee_user_id
+            and str(employee_user_id) == str(actor.id)
+        )
+    ):
+        raise ValueError(
+            'A user cannot approve or reject their own leave request'
+        )
+
+    if (
+        not leave_request.required_approver_id
+        or str(leave_request.required_approver_id) != str(actor.id)
+    ):
+        raise ValueError(
+            'This leave request is assigned to another approver'
+        )
+
+    if status == 'approved':
+        _apply_balance(leave_request)
+
     leave_request.status = status
-    leave_request.approver_id = approver_id
+    leave_request.approver_id = actor.id
     leave_request.decision_notes = notes
     leave_request.decided_at = utcnow()
-    if status == 'approved':
-        balance = LeaveBalance.query.filter_by(
-            tenant_id=leave_request.tenant_id,
-            employee_id=leave_request.employee_id,
-            leave_type_id=leave_request.leave_type_id,
-            year=leave_request.start_date.year,
-        ).first()
-        if balance:
-            balance.used_days = (balance.used_days or 0) + leave_request.total_days
-            balance.balance_days = (balance.balance_days or 0) - leave_request.total_days
-    log_event(f'leave.{status}', 'LeaveRequest', leave_request.id, tenant_id=leave_request.tenant_id)
+
+    log_event(
+        f'leave.{status}',
+        'LeaveRequest',
+        leave_request.id,
+        tenant_id=leave_request.tenant_id,
+        metadata={
+            'required_approver_id': str(
+                leave_request.required_approver_id
+            ),
+        },
+    )
     db.session.commit()
     return leave_request
+
+
+def request_scope_query(user, query):
+    if user.has_any_role(
+        {
+            'SUPER_ADMIN',
+            'CLIENT_ADMIN',
+            'HR_CONSULTANT',
+            'ORGANIZATION_OWNER',
+        }
+    ):
+        return query
+
+    if not user.employee_profile:
+        return query.filter(false())
+
+    if user.has_role('MANAGER'):
+        return query.filter(
+            or_(
+                LeaveRequest.employee_id
+                == user.employee_profile.id,
+                LeaveRequest.required_approver_id == user.id,
+            )
+        )
+
+    return query.filter(
+        LeaveRequest.employee_id
+        == user.employee_profile.id
+    )

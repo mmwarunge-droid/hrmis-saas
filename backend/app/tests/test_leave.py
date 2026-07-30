@@ -1,8 +1,377 @@
-def test_leave_approval_flow(client, auth_headers):
-    employee = client.post('/api/employees', headers=auth_headers, json={'employee_number': 'EMP-003', 'first_name': 'Leave', 'last_name': 'User', 'email': 'leave@acme.test', 'hire_date': '2026-01-01'}).get_json()['data']
-    leave_type = client.post('/api/leave/types', headers=auth_headers, json={'name': 'Annual Leave', 'annual_entitlement_days': '21'}).get_json()['data']
-    req = client.post('/api/leave/requests', headers=auth_headers, json={'employee_id': employee['id'], 'leave_type_id': leave_type['id'], 'start_date': '2026-06-01', 'end_date': '2026-06-05', 'total_days': '5', 'reason': 'Rest'})
-    assert req.status_code == 201
-    approve = client.patch(f"/api/leave/requests/{req.get_json()['data']['id']}/approve", headers=auth_headers, json={'decision_notes': 'Approved'})
-    assert approve.status_code == 200
-    assert approve.get_json()['data']['status'] == 'approved'
+from datetime import date
+
+import pytest
+from sqlalchemy import inspect
+
+from app.extensions import db
+from app.models import Employee, LeaveBalance, LeaveRequest, LeaveType, Tenant, User
+from app.services.auth_service import register_user
+from app.services.leave_policy_service import (
+    apply_standard_policy_pack,
+    configure_leave_governance,
+    leave_setup_status,
+)
+from app.services.leave_service import (
+    create_leave_request,
+    decide_leave_request,
+)
+
+
+def _identity(model):
+    return inspect(model).identity[0]
+
+
+def _create_user_employee(
+    tenant_id,
+    *,
+    email,
+    employee_number,
+    first_name,
+    roles=None,
+    manager_id=None,
+):
+    user = register_user(
+        {
+            'tenant_id': tenant_id,
+            'email': email,
+            'first_name': first_name,
+            'last_name': 'User',
+            'password': 'StrongLeavePass123!',
+            'roles': roles or ['EMPLOYEE'],
+        },
+        commit=False,
+    )
+    employee = Employee(
+        tenant_id=tenant_id,
+        user_id=user.id,
+        employee_number=employee_number,
+        first_name=first_name,
+        last_name='User',
+        email=email,
+        hire_date=date(2026, 1, 1),
+        employment_status='active',
+        employment_type='full_time',
+        manager_id=manager_id,
+    )
+    db.session.add(employee)
+    db.session.commit()
+    return user.id, employee.id
+
+
+def _configure_governance_and_pack(
+    tenant_id,
+    actor,
+    *,
+    owner_id,
+    alternate_id,
+):
+    configure_leave_governance(
+        tenant_id,
+        actor,
+        owner_id,
+        alternate_id,
+    )
+    apply_standard_policy_pack(
+        tenant_id,
+        actor,
+        as_of_date=date(2026, 7, 31),
+    )
+
+
+def test_standard_pack_configures_governance_and_balances(
+    app,
+    tenant,
+    admin_user,
+):
+    tenant_id = tenant.id
+    admin_id = _identity(admin_user)
+
+    with app.app_context():
+        owner_id, _ = _create_user_employee(
+            tenant_id,
+            email='owner@acme.test',
+            employee_number='OWN-001',
+            first_name='Owner',
+            roles=['MANAGER'],
+        )
+        alternate_id, _ = _create_user_employee(
+            tenant_id,
+            email='alternate@acme.test',
+            employee_number='ALT-001',
+            first_name='Alternate',
+            roles=['MANAGER'],
+        )
+        actor = db.session.get(User, admin_id)
+
+        _configure_governance_and_pack(
+            tenant_id,
+            actor,
+            owner_id=owner_id,
+            alternate_id=alternate_id,
+        )
+
+        saved_tenant = db.session.get(Tenant, tenant_id)
+        assert saved_tenant.organization_owner_user_id == owner_id
+        assert (
+            saved_tenant.leave_alternate_approver_user_id
+            == alternate_id
+        )
+
+        owner = db.session.get(User, owner_id)
+        assert 'ORGANIZATION_OWNER' in owner.role_names
+
+        annual = LeaveType.query.filter_by(
+            tenant_id=tenant_id,
+            code='annual_leave',
+        ).one()
+        assert annual.accrual_method == 'monthly'
+        assert annual.entitlement_mode == 'accrued'
+
+        balance_count = LeaveBalance.query.filter_by(
+            tenant_id=tenant_id,
+            year=2026,
+        ).count()
+        assert balance_count > 0
+
+        status = leave_setup_status(tenant_id, actor)
+        assert status['active_policy_count'] == 12
+        assert status['organization_owner']['id'] == str(owner_id)
+
+
+def test_employee_request_routes_to_manager_and_blocks_self_approval(
+    app,
+    tenant,
+    admin_user,
+):
+    tenant_id = tenant.id
+    admin_id = _identity(admin_user)
+
+    with app.app_context():
+        owner_id, _ = _create_user_employee(
+            tenant_id,
+            email='owner2@acme.test',
+            employee_number='OWN-002',
+            first_name='Owner',
+            roles=['MANAGER'],
+        )
+        alternate_id, _ = _create_user_employee(
+            tenant_id,
+            email='alternate2@acme.test',
+            employee_number='ALT-002',
+            first_name='Alternate',
+            roles=['MANAGER'],
+        )
+        manager_user_id, manager_employee_id = _create_user_employee(
+            tenant_id,
+            email='manager@acme.test',
+            employee_number='MGR-001',
+            first_name='Manager',
+            roles=['MANAGER'],
+        )
+        employee_user_id, employee_id = _create_user_employee(
+            tenant_id,
+            email='employee@acme.test',
+            employee_number='EMP-001',
+            first_name='Employee',
+            manager_id=manager_employee_id,
+        )
+
+        actor = db.session.get(User, admin_id)
+        _configure_governance_and_pack(
+            tenant_id,
+            actor,
+            owner_id=owner_id,
+            alternate_id=alternate_id,
+        )
+
+        annual = LeaveType.query.filter_by(
+            tenant_id=tenant_id,
+            code='annual_leave',
+        ).one()
+        employee_user = db.session.get(User, employee_user_id)
+        request_obj = create_leave_request(
+            {
+                'employee_id': employee_id,
+                'leave_type_id': annual.id,
+                'start_date': date(2026, 8, 3),
+                'end_date': date(2026, 8, 7),
+                'reason': 'Rest',
+            },
+            tenant_id,
+            employee_user,
+        )
+
+        assert request_obj.status == 'pending'
+        assert request_obj.required_approver_id == manager_user_id
+        assert request_obj.approval_route == 'employee_to_manager'
+
+        with pytest.raises(ValueError, match='own leave'):
+            decide_leave_request(
+                request_obj,
+                'approved',
+                employee_user,
+            )
+
+        manager_user = db.session.get(User, manager_user_id)
+        decided = decide_leave_request(
+            request_obj,
+            'approved',
+            manager_user,
+            'Approved',
+        )
+        assert decided.status == 'approved'
+
+        balance = LeaveBalance.query.filter_by(
+            tenant_id=tenant_id,
+            employee_id=employee_id,
+            leave_type_id=annual.id,
+            year=2026,
+        ).one()
+        assert float(balance.used_days) == 5.0
+
+
+def test_client_admin_request_routes_to_organization_owner(
+    app,
+    tenant,
+    admin_user,
+):
+    tenant_id = tenant.id
+    admin_id = _identity(admin_user)
+
+    with app.app_context():
+        owner_id, _ = _create_user_employee(
+            tenant_id,
+            email='owner3@acme.test',
+            employee_number='OWN-003',
+            first_name='Owner',
+            roles=['MANAGER'],
+        )
+        alternate_id, _ = _create_user_employee(
+            tenant_id,
+            email='alternate3@acme.test',
+            employee_number='ALT-003',
+            first_name='Alternate',
+            roles=['MANAGER'],
+        )
+
+        actor = db.session.get(User, admin_id)
+        admin_employee = Employee(
+            tenant_id=tenant_id,
+            user_id=actor.id,
+            employee_number='HR-001',
+            first_name=actor.first_name,
+            last_name=actor.last_name,
+            email=actor.email,
+            hire_date=date(2026, 1, 1),
+            employment_status='active',
+            employment_type='full_time',
+        )
+        db.session.add(admin_employee)
+        db.session.commit()
+
+        _configure_governance_and_pack(
+            tenant_id,
+            actor,
+            owner_id=owner_id,
+            alternate_id=alternate_id,
+        )
+
+        annual = LeaveType.query.filter_by(
+            tenant_id=tenant_id,
+            code='annual_leave',
+        ).one()
+        request_obj = create_leave_request(
+            {
+                'employee_id': admin_employee.id,
+                'leave_type_id': annual.id,
+                'start_date': date(2026, 9, 7),
+                'end_date': date(2026, 9, 9),
+                'reason': 'Personal leave',
+            },
+            tenant_id,
+            actor,
+        )
+
+        assert request_obj.required_approver_id == owner_id
+        assert request_obj.approval_route == 'hr_to_owner'
+
+        owner = db.session.get(User, owner_id)
+        decided = decide_leave_request(
+            request_obj,
+            'approved',
+            owner,
+        )
+        assert decided.status == 'approved'
+
+
+def test_leave_request_rejects_overlapping_dates(
+    app,
+    tenant,
+    admin_user,
+):
+    tenant_id = tenant.id
+    admin_id = _identity(admin_user)
+
+    with app.app_context():
+        owner_id, _ = _create_user_employee(
+            tenant_id,
+            email='owner4@acme.test',
+            employee_number='OWN-004',
+            first_name='Owner',
+            roles=['MANAGER'],
+        )
+        alternate_id, _ = _create_user_employee(
+            tenant_id,
+            email='alternate4@acme.test',
+            employee_number='ALT-004',
+            first_name='Alternate',
+            roles=['MANAGER'],
+        )
+        employee_user_id, employee_id = _create_user_employee(
+            tenant_id,
+            email='employee2@acme.test',
+            employee_number='EMP-002',
+            first_name='Employee',
+        )
+
+        actor = db.session.get(User, admin_id)
+        _configure_governance_and_pack(
+            tenant_id,
+            actor,
+            owner_id=owner_id,
+            alternate_id=alternate_id,
+        )
+
+        annual = LeaveType.query.filter_by(
+            tenant_id=tenant_id,
+            code='annual_leave',
+        ).one()
+        employee_user = db.session.get(User, employee_user_id)
+
+        create_leave_request(
+            {
+                'employee_id': employee_id,
+                'leave_type_id': annual.id,
+                'start_date': date(2026, 10, 5),
+                'end_date': date(2026, 10, 7),
+            },
+            tenant_id,
+            employee_user,
+        )
+
+        with pytest.raises(ValueError, match='overlapping'):
+            create_leave_request(
+                {
+                    'employee_id': employee_id,
+                    'leave_type_id': annual.id,
+                    'start_date': date(2026, 10, 7),
+                    'end_date': date(2026, 10, 9),
+                },
+                tenant_id,
+                employee_user,
+            )
+
+        assert LeaveRequest.query.filter_by(
+            tenant_id=tenant_id,
+            employee_id=employee_id,
+        ).count() == 1
