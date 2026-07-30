@@ -8,6 +8,7 @@ from app.extensions import db
 from app.models import (
     Employee,
     LeaveBalance,
+    LeaveLedgerEntry,
     LeaveType,
     Role,
     Tenant,
@@ -16,6 +17,10 @@ from app.models import (
 )
 from app.models.base import utcnow
 from app.services.audit_service import log_event
+from app.services.leave_accrual_service import (
+    get_or_create_balance,
+    initialize_balance_for_policy,
+)
 from app.services.rbac_service import seed_roles_permissions
 
 
@@ -43,6 +48,7 @@ STANDARD_POLICY_PACK = [
         'requires_approval': True,
         'carryover_allowed': True,
         'max_carryover_days': Decimal('5'),
+        'carryover_expiry_months': 3,
         'allow_negative_balance': False,
         'minimum_notice_days': 7,
         'documentation_after_days': None,
@@ -58,6 +64,7 @@ STANDARD_POLICY_PACK = [
         'requires_approval': True,
         'carryover_allowed': False,
         'max_carryover_days': Decimal('0'),
+        'carryover_expiry_months': None,
         'allow_negative_balance': False,
         'minimum_notice_days': 0,
         'documentation_after_days': 2,
@@ -73,6 +80,7 @@ STANDARD_POLICY_PACK = [
         'requires_approval': True,
         'carryover_allowed': False,
         'max_carryover_days': Decimal('0'),
+        'carryover_expiry_months': None,
         'allow_negative_balance': False,
         'minimum_notice_days': 0,
         'documentation_after_days': 2,
@@ -88,6 +96,7 @@ STANDARD_POLICY_PACK = [
         'requires_approval': True,
         'carryover_allowed': False,
         'max_carryover_days': Decimal('0'),
+        'carryover_expiry_months': None,
         'allow_negative_balance': False,
         'minimum_notice_days': 30,
         'documentation_after_days': 0,
@@ -103,6 +112,7 @@ STANDARD_POLICY_PACK = [
         'requires_approval': True,
         'carryover_allowed': False,
         'max_carryover_days': Decimal('0'),
+        'carryover_expiry_months': None,
         'allow_negative_balance': False,
         'minimum_notice_days': 14,
         'documentation_after_days': 0,
@@ -118,6 +128,7 @@ STANDARD_POLICY_PACK = [
         'requires_approval': True,
         'carryover_allowed': False,
         'max_carryover_days': Decimal('0'),
+        'carryover_expiry_months': None,
         'allow_negative_balance': False,
         'minimum_notice_days': 14,
         'documentation_after_days': 0,
@@ -133,6 +144,7 @@ STANDARD_POLICY_PACK = [
         'requires_approval': True,
         'carryover_allowed': False,
         'max_carryover_days': Decimal('0'),
+        'carryover_expiry_months': None,
         'allow_negative_balance': False,
         'minimum_notice_days': 0,
         'documentation_after_days': None,
@@ -148,6 +160,7 @@ STANDARD_POLICY_PACK = [
         'requires_approval': True,
         'carryover_allowed': False,
         'max_carryover_days': Decimal('0'),
+        'carryover_expiry_months': None,
         'allow_negative_balance': False,
         'minimum_notice_days': 14,
         'documentation_after_days': 0,
@@ -163,6 +176,7 @@ STANDARD_POLICY_PACK = [
         'requires_approval': True,
         'carryover_allowed': False,
         'max_carryover_days': Decimal('0'),
+        'carryover_expiry_months': None,
         'allow_negative_balance': False,
         'minimum_notice_days': 3,
         'documentation_after_days': None,
@@ -178,6 +192,7 @@ STANDARD_POLICY_PACK = [
         'requires_approval': True,
         'carryover_allowed': False,
         'max_carryover_days': Decimal('0'),
+        'carryover_expiry_months': None,
         'allow_negative_balance': False,
         'minimum_notice_days': 7,
         'documentation_after_days': None,
@@ -193,6 +208,7 @@ STANDARD_POLICY_PACK = [
         'requires_approval': True,
         'carryover_allowed': False,
         'max_carryover_days': Decimal('0'),
+        'carryover_expiry_months': None,
         'allow_negative_balance': True,
         'minimum_notice_days': 7,
         'documentation_after_days': None,
@@ -208,6 +224,7 @@ STANDARD_POLICY_PACK = [
         'requires_approval': True,
         'carryover_allowed': False,
         'max_carryover_days': Decimal('0'),
+        'carryover_expiry_months': None,
         'allow_negative_balance': False,
         'minimum_notice_days': 7,
         'documentation_after_days': None,
@@ -342,6 +359,7 @@ def initialize_leave_balances(
     year=None,
     as_of_date=None,
     overwrite_unused=False,
+    actor_user_id=None,
 ):
     as_of = as_of_date or date.today()
     resolved_year = year or as_of.year
@@ -364,45 +382,23 @@ def initialize_leave_balances(
 
     for employee in employees:
         for policy in policies:
-            allocation = allocation_for(
+            balance, was_created = get_or_create_balance(
+                tenant_id,
+                employee.id,
+                policy.id,
+                resolved_year,
+            )
+            outcome = initialize_balance_for_policy(
+                balance,
                 policy,
                 employee,
                 as_of,
+                actor_user_id=actor_user_id,
+                overwrite_unused=overwrite_unused,
             )
-            balance = LeaveBalance.query.filter_by(
-                tenant_id=tenant_id,
-                employee_id=employee.id,
-                leave_type_id=policy.id,
-                year=resolved_year,
-            ).first()
-            if balance is None:
-                balance = LeaveBalance(
-                    tenant_id=tenant_id,
-                    employee_id=employee.id,
-                    leave_type_id=policy.id,
-                    year=resolved_year,
-                    accrued_days=allocation,
-                    used_days=Decimal('0'),
-                    balance_days=allocation,
-                )
-                db.session.add(balance)
-                created += 1
-                continue
-
-            used = Decimal(balance.used_days or 0)
-            if used > 0 and not overwrite_unused:
-                skipped += 1
-                continue
-            if not overwrite_unused and (
-                Decimal(balance.accrued_days or 0) != 0
-                or Decimal(balance.balance_days or 0) != 0
-            ):
-                skipped += 1
-                continue
-
-            balance.accrued_days = allocation
-            balance.balance_days = allocation - used
-            updated += 1
+            created += int(was_created)
+            updated += int(outcome == 'updated' and not was_created)
+            skipped += int(outcome == 'skipped')
 
     log_event(
         'leave.balances_initialized',
@@ -493,6 +489,7 @@ def apply_standard_policy_pack(
             'requires_approval',
             'carryover_allowed',
             'max_carryover_days',
+            'carryover_expiry_months',
             'allow_negative_balance',
             'minimum_notice_days',
             'documentation_after_days',
@@ -507,6 +504,7 @@ def apply_standard_policy_pack(
         balance_result = initialize_leave_balances(
             tenant_id,
             as_of_date=as_of_date,
+            actor_user_id=actor.id,
         )
 
     _refresh_setup_completion(tenant)
@@ -642,6 +640,23 @@ def leave_setup_status(tenant_id, user):
         tenant_id=tenant_id,
         year=year,
     ).count()
+    ledger_entry_count = LeaveLedgerEntry.query.filter_by(
+        tenant_id=tenant_id,
+        year=year,
+    ).count()
+    reserved_days = (
+        db.session.query(
+            db.func.coalesce(
+                db.func.sum(LeaveBalance.reserved_days),
+                0,
+            )
+        )
+        .filter(
+            LeaveBalance.tenant_id == tenant_id,
+            LeaveBalance.year == year,
+        )
+        .scalar()
+    )
 
     current_employee = None
     if (
@@ -730,6 +745,8 @@ def leave_setup_status(tenant_id, user):
         'active_policy_count': len(active_policies),
         'eligible_employee_count': eligible_employees,
         'balance_count': balance_count,
+        'ledger_entry_count': ledger_entry_count,
+        'reserved_days': float(reserved_days or 0),
         'policies': [
             policy.to_dict()
             for policy in active_policies

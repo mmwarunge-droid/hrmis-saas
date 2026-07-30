@@ -1,4 +1,6 @@
+import json
 import os
+from datetime import date
 
 import click
 from flask import Flask
@@ -6,6 +8,7 @@ from flask import Flask
 from app.models import User
 from app.models.base import utcnow
 from app.services.auth_service import register_user
+from app.services.leave_accrual_service import run_scheduled_accruals
 from app.services.rbac_service import seed_roles_permissions
 
 
@@ -40,3 +43,32 @@ def register_commands(app: Flask) -> None:
             }
         )
         click.echo(f'Created SUPER_ADMIN user {user.email}')
+
+    @app.cli.command('leave-accruals')
+    @click.option(
+        '--as-of',
+        'as_of_value',
+        default=None,
+        help='Accrue through an ISO date such as 2026-08-31.',
+    )
+    @click.option(
+        '--tenant-id',
+        default=None,
+        help='Limit the run to one organization UUID.',
+    )
+    def leave_accruals(as_of_value, tenant_id) -> None:
+        """Apply idempotent leave accrual, carryover and expiry entries."""
+        try:
+            as_of_date = (
+                date.fromisoformat(as_of_value)
+                if as_of_value
+                else date.today()
+            )
+            result = run_scheduled_accruals(
+                as_of_date=as_of_date,
+                tenant_id=tenant_id,
+            )
+        except ValueError as exc:
+            raise click.ClickException(str(exc)) from exc
+
+        click.echo(json.dumps(result, sort_keys=True))

@@ -5,6 +5,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Clock3,
+  Hourglass,
   Plus,
   Settings2,
   Umbrella,
@@ -12,6 +13,7 @@ import {
 
 import { employeeApi } from '../api/employeeApi';
 import { leaveApi } from '../api/leaveApi';
+import LeaveLedgerPanel from '../components/leave/LeaveLedgerPanel.jsx';
 import LeaveRequestForm from '../components/leave/LeaveRequestForm.jsx';
 import LeaveSetupPanel from '../components/leave/LeaveSetupPanel.jsx';
 import Alert from '../components/ui/Alert.jsx';
@@ -42,11 +44,13 @@ function formatDate(value) {
 export default function LeaveRequests() {
   const { hasPermission } = usePermissions();
   const canApprove = hasPermission('leave:approve');
+  const canAdjust = hasPermission('leave:adjust');
 
   const [requests, setRequests] = useState([]);
   const [employees, setEmployees] = useState([]);
   const [types, setTypes] = useState([]);
   const [balances, setBalances] = useState([]);
+  const [ledgerEntries, setLedgerEntries] = useState([]);
   const [setup, setSetup] = useState(null);
   const [requestOpen, setRequestOpen] = useState(false);
   const [setupOpen, setSetupOpen] = useState(false);
@@ -70,18 +74,21 @@ export default function LeaveRequests() {
         typeResponse,
         balanceResponse,
         setupResponse,
+        ledgerResponse,
       ] = await Promise.all([
         leaveApi.requests(),
         employeeApi.list({ per_page: 100 }),
         leaveApi.types(),
         leaveApi.balances(),
         leaveApi.setup(),
+        leaveApi.ledger({ per_page: 50 }),
       ]);
       setRequests(requestResponse.data.items || []);
       setEmployees(employeeResponse.data.items || []);
       setTypes(typeResponse.data.items || []);
       setBalances(balanceResponse.data.items || []);
       setSetup(setupResponse.data);
+      setLedgerEntries(ledgerResponse.data.items || []);
     } catch (err) {
       setError(
         err.error?.message
@@ -122,6 +129,12 @@ export default function LeaveRequests() {
   const totalUsed = balances.reduce(
     (sum, balance) => (
       sum + Number(balance.used_days || 0)
+    ),
+    0,
+  );
+  const totalReserved = balances.reduce(
+    (sum, balance) => (
+      sum + Number(balance.reserved_days || 0)
     ),
     0,
   );
@@ -230,6 +243,21 @@ export default function LeaveRequests() {
     );
   };
 
+  const runAccruals = async (payload = {}) => runAction(
+    () => leaveApi.runAccruals(payload),
+    'Scheduled leave allocations processed.',
+  );
+
+  const adjustBalance = async (balanceId, payload) => runAction(
+    () => leaveApi.adjustBalance(balanceId, payload),
+    'Leave balance adjustment posted.',
+  );
+
+  const cancelRequest = async (id) => runAction(
+    () => leaveApi.cancel(id),
+    'Leave request cancelled and balance restored.',
+  );
+
   const openRequest = () => {
     if (!setup?.ready_to_request) {
       setSetupOpen(true);
@@ -305,7 +333,7 @@ export default function LeaveRequests() {
         </Card>
       )}
 
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <StatCard
           label="Awaiting your decision"
           value={approvalQueue.length}
@@ -330,6 +358,13 @@ export default function LeaveRequests() {
           detail={`${totalUsed.toFixed(1)} days used`}
           icon={Umbrella}
           tone="blue"
+        />
+        <StatCard
+          label="Reserved balance"
+          value={`${totalReserved.toFixed(1)} d`}
+          detail="Held by pending requests"
+          icon={Hourglass}
+          tone="amber"
         />
       </div>
 
@@ -472,6 +507,14 @@ export default function LeaveRequests() {
                     </p>
                     <p className="text-xs text-slate-500">
                       {type.entitlement_mode.replaceAll('_', ' ')}
+                      {' · '}
+                      {typeBalances.reduce(
+                        (sum, item) => (
+                          sum + Number(item.reserved_days || 0)
+                        ),
+                        0,
+                      ).toFixed(1)}
+                      {' reserved'}
                     </p>
                   </div>
                   <Badge tone="blue">
@@ -580,10 +623,31 @@ export default function LeaveRequests() {
                   </Button>
                 </div>
               )}
+              {item.can_cancel && (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  disabled={saving}
+                  onClick={() => cancelRequest(item.id)}
+                >
+                  Cancel
+                </Button>
+              )}
             </div>
           ))}
         </div>
       </Card>
+
+      <LeaveLedgerPanel
+        entries={ledgerEntries}
+        balances={balances}
+        employees={employees}
+        leaveTypes={types}
+        canAdjust={canAdjust}
+        onAdjust={adjustBalance}
+        onRunAccruals={runAccruals}
+        loading={saving}
+      />
 
       <Modal
         title="Submit time-off request"
@@ -619,6 +683,7 @@ export default function LeaveRequests() {
             onSaveGovernance={saveGovernance}
             onApplyPack={applyPack}
             onInitializeBalances={initializeBalances}
+            onRunAccruals={runAccruals}
             loading={saving}
           />
         ) : (

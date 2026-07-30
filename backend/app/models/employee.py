@@ -34,6 +34,11 @@ class Employee(db.Model, TenantMixin, TimestampMixin, SoftDeleteMixin, ReprMixin
     documents = db.relationship('Document', back_populates='employee')
     leave_balances = db.relationship('LeaveBalance', back_populates='employee', cascade='all, delete-orphan')
     leave_requests = db.relationship('LeaveRequest', back_populates='employee', cascade='all, delete-orphan')
+    leave_ledger_entries = db.relationship(
+        'LeaveLedgerEntry',
+        back_populates='employee',
+        passive_deletes=True,
+    )
     attendance_records = db.relationship('AttendanceRecord', back_populates='employee', cascade='all, delete-orphan')
     onboarding_assignments = db.relationship('EmployeeOnboardingTask', back_populates='employee', cascade='all, delete-orphan')
 

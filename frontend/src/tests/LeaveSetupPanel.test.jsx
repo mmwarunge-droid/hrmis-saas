@@ -39,6 +39,7 @@ const setup = {
     requires_approval: true,
     carryover_allowed: true,
     max_carryover_days: 5,
+    carryover_expiry_months: 3,
     allow_negative_balance: false,
     minimum_notice_days: 7,
     documentation_after_days: null,
@@ -56,6 +57,7 @@ describe('LeaveSetupPanel', () => {
         onSaveGovernance={saveGovernance}
         onApplyPack={applyPack}
         onInitializeBalances={vi.fn()}
+        onRunAccruals={vi.fn()}
       />,
     );
 

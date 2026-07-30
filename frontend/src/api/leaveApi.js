@@ -18,6 +18,11 @@ export const leaveApi = {
     payload,
   ),
 
+  runAccruals: (payload = {}) => apiClient.post(
+    '/leave/setup/run-accruals',
+    payload,
+  ),
+
   types: (params = {}) => apiClient.get(
     '/leave/types',
     { params },
@@ -48,8 +53,23 @@ export const leaveApi = {
     payload,
   ),
 
+  cancel: (id, payload = {}) => apiClient.patch(
+    `/leave/requests/${id}/cancel`,
+    payload,
+  ),
+
   balances: (params = {}) => apiClient.get(
     '/leave/balances',
+    { params },
+  ),
+
+  adjustBalance: (id, payload) => apiClient.post(
+    `/leave/balances/${id}/adjustments`,
+    payload,
+  ),
+
+  ledger: (params = {}) => apiClient.get(
+    '/leave/ledger',
     { params },
   ),
 };

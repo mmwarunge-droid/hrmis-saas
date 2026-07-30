@@ -55,6 +55,11 @@ class LeaveTypeCreateSchema(Schema):
         as_string=False,
         validate=validate.Range(min=0),
     )
+    carryover_expiry_months = fields.Int(
+        required=False,
+        allow_none=True,
+        validate=validate.Range(min=0, max=24),
+    )
     allow_negative_balance = fields.Bool(required=False)
     minimum_notice_days = fields.Int(
         required=False,
@@ -108,6 +113,11 @@ class LeavePolicyOverrideSchema(Schema):
         as_string=False,
         validate=validate.Range(min=0),
     )
+    carryover_expiry_months = fields.Int(
+        required=False,
+        allow_none=True,
+        validate=validate.Range(min=0, max=24),
+    )
     allow_negative_balance = fields.Bool(required=False)
     minimum_notice_days = fields.Int(
         required=False,
@@ -153,6 +163,26 @@ class LeaveBalanceInitializeSchema(Schema):
     )
 
 
+class LeaveAccrualRunSchema(Schema):
+    tenant_id = fields.UUID(required=False, allow_none=True)
+    as_of_date = fields.Date(required=False, allow_none=True)
+
+
+class LeaveBalanceAdjustmentSchema(Schema):
+    tenant_id = fields.UUID(required=False, allow_none=True)
+    amount_days = fields.Decimal(
+        required=True,
+        places=2,
+        as_string=False,
+        validate=validate.Range(min=-365, max=365),
+    )
+    reason = fields.Str(
+        required=True,
+        validate=validate.Length(min=3, max=500),
+    )
+    effective_date = fields.Date(required=False, allow_none=True)
+
+
 class LeaveRequestCreateSchema(Schema):
     tenant_id = fields.UUID(required=False, allow_none=True)
     employee_id = fields.UUID(required=False, allow_none=True)
@@ -168,4 +198,8 @@ class LeaveRequestCreateSchema(Schema):
 
 
 class LeaveDecisionSchema(Schema):
+    decision_notes = fields.Str(required=False, allow_none=True)
+
+
+class LeaveCancellationSchema(Schema):
     decision_notes = fields.Str(required=False, allow_none=True)
