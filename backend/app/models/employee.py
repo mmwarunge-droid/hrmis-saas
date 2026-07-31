@@ -14,6 +14,17 @@ class Employee(db.Model, TenantMixin, TimestampMixin, SoftDeleteMixin, ReprMixin
     email = db.Column(db.String(255), nullable=False)
     phone = db.Column(db.String(60))
     date_of_birth = db.Column(db.Date)
+    birthday_visibility = db.Column(
+        db.String(30),
+        nullable=False,
+        default='colleagues',
+    )
+    profile_photo_url = db.Column(db.String(1000))
+    profile_cover_url = db.Column(db.String(1000))
+    biography = db.Column(db.Text)
+    hobbies_json = db.Column(db.JSON, nullable=False, default=list)
+    gender_identity = db.Column(db.String(40))
+    gender_self_description = db.Column(db.String(120))
     national_identifier_last4 = db.Column(db.String(12))
     hire_date = db.Column(db.Date, nullable=False)
     termination_date = db.Column(db.Date)
@@ -48,6 +59,16 @@ class Employee(db.Model, TenantMixin, TimestampMixin, SoftDeleteMixin, ReprMixin
         db.UniqueConstraint('tenant_id', 'email', name='uq_employees_tenant_email'),
         db.CheckConstraint("employment_status IN ('active','probation','suspended','terminated')", name='ck_employees_status'),
         db.CheckConstraint("employment_type IN ('full_time','part_time','contractor','intern','temporary')", name='ck_employees_type'),
+        db.CheckConstraint(
+            "birthday_visibility IN ('colleagues','hr_only','hidden')",
+            name='ck_employees_birthday_visibility',
+        ),
+        db.CheckConstraint(
+            "gender_identity IS NULL OR gender_identity IN ("
+            "'woman','man','non_binary','self_described','prefer_not_to_say'"
+            ")",
+            name='ck_employees_gender_identity',
+        ),
     )
 
     @property
@@ -64,5 +85,19 @@ class Employee(db.Model, TenantMixin, TimestampMixin, SoftDeleteMixin, ReprMixin
             'employment_status': self.employment_status, 'employment_type': self.employment_type,
             'job_title': self.job_title, 'department_id': str(self.department_id) if self.department_id else None,
             'manager_id': str(self.manager_id) if self.manager_id else None, 'work_location': self.work_location,
+            'profile_photo_url': self.profile_photo_url,
+            'profile_cover_url': self.profile_cover_url,
+            'biography': self.biography,
+            'hobbies': list(self.hobbies_json or []),
+            'birthday_day': (
+                self.date_of_birth.day
+                if self.date_of_birth and self.birthday_visibility == 'colleagues'
+                else None
+            ),
+            'birthday_month': (
+                self.date_of_birth.month
+                if self.date_of_birth and self.birthday_visibility == 'colleagues'
+                else None
+            ),
             'external_hris_id': self.external_hris_id,
         }
