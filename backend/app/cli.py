@@ -8,7 +8,10 @@ from flask import Flask
 from app.models import User
 from app.models.base import utcnow
 from app.services.auth_service import register_user
-from app.services.leave_accrual_service import run_scheduled_accruals
+from app.services.leave_accrual_service import (
+    repair_event_based_balances,
+    run_scheduled_accruals,
+)
 from app.services.rbac_service import seed_roles_permissions
 
 
@@ -71,4 +74,24 @@ def register_commands(app: Flask) -> None:
         except ValueError as exc:
             raise click.ClickException(str(exc)) from exc
 
+        click.echo(json.dumps(result, sort_keys=True))
+    @app.cli.command('leave-repair-event-balances')
+    @click.option(
+        '--tenant-id',
+        default=None,
+        help='Limit the repair to one organization UUID.',
+    )
+    @click.option(
+        '--apply',
+        'apply_changes',
+        is_flag=True,
+        help='Persist corrections. Without this flag the command is dry-run.',
+    )
+    def leave_repair_event_balances(tenant_id, apply_changes) -> None:
+        """Remove legacy banked balances from event-based policies."""
+        result = repair_event_based_balances(
+            tenant_id=tenant_id,
+            dry_run=not apply_changes,
+            commit=apply_changes,
+        )
         click.echo(json.dumps(result, sort_keys=True))

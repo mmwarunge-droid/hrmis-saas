@@ -27,6 +27,10 @@ import PageHeader from '../components/ui/PageHeader.jsx';
 import ProgressRing from '../components/ui/ProgressRing.jsx';
 import StatCard from '../components/ui/StatCard.jsx';
 import usePermissions from '../hooks/usePermissions.js';
+import {
+  annualLeaveMetrics,
+  leaveEntitlementPresentation,
+} from '../utils/leaveBalances.js';
 
 function isoDate(date) {
   return date.toISOString().slice(0, 10);
@@ -120,31 +124,20 @@ export default function LeaveRequests() {
   const approved = requests.filter(
     (item) => item.status === 'approved',
   );
-  const totalBalance = balances.reduce(
-    (sum, balance) => (
-      sum + Number(balance.balance_days || 0)
-    ),
-    0,
-  );
-  const totalUsed = balances.reduce(
-    (sum, balance) => (
-      sum + Number(balance.used_days || 0)
-    ),
-    0,
-  );
-  const totalReserved = balances.reduce(
-    (sum, balance) => (
-      sum + Number(balance.reserved_days || 0)
-    ),
-    0,
-  );
-  const utilization = totalBalance + totalUsed > 0
-    ? Math.round(
-      (totalUsed / (totalBalance + totalUsed)) * 100,
-    )
-    : 0;
-
   const currentEmployeeId = setup?.current_employee?.id || '';
+  const annualMetrics = annualLeaveMetrics(
+    types,
+    balances,
+    currentEmployeeId,
+  );
+  const {
+    personalBalances,
+    available: annualAvailable,
+    used: annualUsed,
+    reserved: annualReserved,
+    utilization,
+  } = annualMetrics;
+
   const requestEmployees = setup?.can_submit_for_others
     ? employees
     : employees.filter(
@@ -362,16 +355,16 @@ export default function LeaveRequests() {
           tone="emerald"
         />
         <StatCard
-          label="Available balance"
-          value={`${totalBalance.toFixed(1)} d`}
-          detail={`${totalUsed.toFixed(1)} days used`}
+          label="Annual leave available"
+          value={`${annualAvailable.toFixed(1)} d`}
+          detail={`${annualUsed.toFixed(1)} days used`}
           icon={Umbrella}
           tone="blue"
         />
         <StatCard
-          label="Reserved balance"
-          value={`${totalReserved.toFixed(1)} d`}
-          detail="Held by pending requests"
+          label="Annual leave reserved"
+          value={`${annualReserved.toFixed(1)} d`}
+          detail="Held by pending annual-leave requests"
           icon={Hourglass}
           tone="amber"
         />
@@ -490,19 +483,17 @@ export default function LeaveRequests() {
               value={utilization}
               size={148}
               stroke={12}
-              label="Leave utilization"
+              label="Annual leave utilization"
             />
           </div>
           <div className="mt-6 space-y-3">
             {types.slice(0, 8).map((type) => {
-              const typeBalances = balances.filter(
-                (balance) => balance.leave_type_id === type.id,
+              const balance = personalBalances.find(
+                (item) => item.leave_type_id === type.id,
               );
-              const available = typeBalances.reduce(
-                (sum, item) => (
-                  sum + Number(item.balance_days || 0)
-                ),
-                0,
+              const presentation = leaveEntitlementPresentation(
+                type,
+                balance,
               );
 
               return (
@@ -515,21 +506,11 @@ export default function LeaveRequests() {
                       {type.name}
                     </p>
                     <p className="text-xs text-slate-500">
-                      {type.entitlement_mode.replaceAll('_', ' ')}
-                      {' · '}
-                      {typeBalances.reduce(
-                        (sum, item) => (
-                          sum + Number(item.reserved_days || 0)
-                        ),
-                        0,
-                      ).toFixed(1)}
-                      {' reserved'}
+                      {presentation.detail}
                     </p>
                   </div>
                   <Badge tone="blue">
-                    {type.is_unlimited
-                      ? 'Unlimited'
-                      : `${available.toFixed(1)} d`}
+                    {presentation.value}
                   </Badge>
                 </div>
               );

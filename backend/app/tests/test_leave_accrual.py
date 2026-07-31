@@ -15,9 +15,11 @@ from app.models import (
 from app.services.auth_service import register_user
 from app.services.leave_accrual_service import (
     adjust_leave_balance,
+    assert_balance_available,
     balance_scope_query,
     get_or_create_balance,
     initialize_balance_for_policy,
+    repair_event_based_balances,
     run_scheduled_accruals,
 )
 from app.services.leave_service import (
@@ -445,3 +447,149 @@ def test_balance_scope_ignores_other_employee_filter_for_employee(
         assert [item.id for item in own_visible] == [
             own_balance.id,
         ]
+
+def test_event_based_entitlement_is_not_banked_and_caps_each_request(
+    app,
+    tenant,
+):
+    with app.app_context():
+        employee = Employee(
+            tenant_id=tenant.id,
+            employee_number='EVENT-001',
+            first_name='Event',
+            last_name='Employee',
+            email='event@example.test',
+            hire_date=date(2026, 1, 1),
+            employment_status='active',
+            employment_type='full_time',
+        )
+        policy = LeaveType(
+            tenant_id=tenant.id,
+            code='bereavement_event',
+            name='Bereavement event',
+            annual_entitlement_days=Decimal('5'),
+            accrual_method='annual',
+            entitlement_mode='event_based',
+            requires_approval=True,
+        )
+        db.session.add_all([employee, policy])
+        db.session.commit()
+
+        result = run_scheduled_accruals(
+            tenant_id=tenant.id,
+            as_of_date=date(2026, 7, 31),
+        )
+        assert result['balances_created'] == 0
+        assert LeaveBalance.query.filter_by(
+            employee_id=employee.id,
+            leave_type_id=policy.id,
+        ).count() == 0
+        assert assert_balance_available(
+            employee,
+            policy,
+            date(2026, 8, 3),
+            Decimal('5'),
+        ) is None
+        with pytest.raises(ValueError, match='per qualifying event'):
+            assert_balance_available(
+                employee,
+                policy,
+                date(2026, 8, 3),
+                Decimal('6'),
+            )
+
+
+def test_event_balance_repair_zeroes_legacy_allocation(
+    app,
+    tenant,
+):
+    with app.app_context():
+        employee = Employee(
+            tenant_id=tenant.id,
+            employee_number='EVENT-LEGACY',
+            first_name='Legacy',
+            last_name='Event',
+            email='legacy-event@example.test',
+            hire_date=date(2026, 1, 1),
+            employment_status='active',
+            employment_type='full_time',
+        )
+        policy = LeaveType(
+            tenant_id=tenant.id,
+            code='legacy_maternity',
+            name='Legacy maternity',
+            annual_entitlement_days=Decimal('90'),
+            accrual_method='annual',
+            entitlement_mode='event_based',
+        )
+        db.session.add_all([employee, policy])
+        db.session.flush()
+        balance = LeaveBalance(
+            tenant_id=tenant.id,
+            employee_id=employee.id,
+            leave_type_id=policy.id,
+            year=2026,
+            opening_days=Decimal('90'),
+            balance_days=Decimal('90'),
+        )
+        db.session.add(balance)
+        db.session.commit()
+
+        preview = repair_event_based_balances(
+            tenant_id=tenant.id,
+            dry_run=True,
+        )
+        assert preview['balances_corrected'] == 1
+        assert float(balance.balance_days) == 90.0
+
+        applied = repair_event_based_balances(
+            tenant_id=tenant.id,
+            as_of_date=date(2026, 7, 31),
+            dry_run=False,
+        )
+        assert applied['balances_corrected'] == 1
+        assert float(balance.balance_days) == 0.0
+        assert float(balance.opening_days) == 0.0
+        assert balance.balance_reconciled is True
+        repair_entry = LeaveLedgerEntry.query.filter_by(
+            tenant_id=tenant.id,
+            idempotency_key=f'event-balance-repair:v1:{balance.id}',
+        ).one()
+        assert float(repair_entry.amount_days) == -90.0
+
+
+def test_balance_serialization_exposes_formula_components(app, tenant):
+    with app.app_context():
+        employee = Employee(
+            tenant_id=tenant.id,
+            employee_number='FORMULA-001',
+            first_name='Formula',
+            last_name='Employee',
+            email='formula@example.test',
+            hire_date=date(2026, 1, 1),
+            employment_status='active',
+            employment_type='full_time',
+        )
+        policy = _policy(tenant.id)
+        db.session.add(employee)
+        db.session.flush()
+        balance = LeaveBalance(
+            tenant_id=tenant.id,
+            employee_id=employee.id,
+            leave_type_id=policy.id,
+            year=2026,
+            opening_days=Decimal('10'),
+            adjusted_days=Decimal('1'),
+            expired_days=Decimal('2'),
+            used_days=Decimal('3'),
+            reserved_days=Decimal('1'),
+            balance_days=Decimal('5'),
+        )
+        db.session.add(balance)
+        db.session.commit()
+
+        data = balance.to_dict()
+        assert data['earned_days'] == 9.0
+        assert data['posted_days'] == 6.0
+        assert data['available_days'] == 5.0
+        assert data['balance_reconciled'] is True

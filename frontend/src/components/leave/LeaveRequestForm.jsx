@@ -61,7 +61,26 @@ export default function LeaveRequestForm({
   const selectedType = leaveTypes.find(
     (item) => String(item.id) === String(form.leave_type_id),
   );
-  const isUnlimited = selectedType?.entitlement_mode === 'unlimited';
+  const entitlementMode = selectedType?.entitlement_mode;
+  const balanceLabel = (() => {
+    if (!selectedType) return 'Select a leave category';
+    if (entitlementMode === 'event_based') {
+      return `Up to ${Number(
+        selectedType.annual_entitlement_days || 0,
+      ).toFixed(1)} days per event`;
+    }
+    if (entitlementMode === 'unlimited') {
+      return 'Subject to approval';
+    }
+    if (entitlementMode === 'manual' && !selectedBalance) {
+      return 'Managed by HR';
+    }
+    return `${Number(
+      selectedBalance?.available_days
+      ?? selectedBalance?.balance_days
+      ?? 0,
+    ).toFixed(1)} days`;
+  })();
 
   const submit = (event) => {
     event.preventDefault();
@@ -139,7 +158,7 @@ export default function LeaveRequestForm({
 
       <div className="rounded-xl bg-slate-50 px-4 py-3">
         <p className="text-xs font-bold uppercase tracking-wider text-slate-500">
-          Requested working days
+          Requested weekdays
         </p>
         <p className="mt-1 text-xl font-bold text-slate-950">
           {totalDays}
@@ -151,9 +170,7 @@ export default function LeaveRequestForm({
           Available balance
         </p>
         <p className="mt-1 text-xl font-bold text-cyan-950">
-          {isUnlimited
-            ? 'Unlimited'
-            : `${Number(selectedBalance?.balance_days || 0).toFixed(1)} days`}
+          {balanceLabel}
         </p>
       </div>
 
