@@ -110,6 +110,7 @@ ROLE_PERMISSIONS = {
         'leave:ledger',
         'attendance:write',
         'onboarding:assign',
+        'dashboard:read',
     ],
 }
 

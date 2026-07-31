@@ -57,6 +57,12 @@ const groups = [
       { to: '/organizations', label: 'Organizations', icon: Building2, role: 'SUPER_ADMIN' },
       { to: '/departments', label: 'Departments', icon: Briefcase, permission: 'employee:update' },
       { to: '/users', label: 'Access & users', icon: Users, permission: 'user:read' },
+      {
+        to: '/settings/employee-experience',
+        label: 'Employee experience',
+        icon: Sparkles,
+        roles: ['SUPER_ADMIN', 'ORGANIZATION_OWNER', 'CLIENT_ADMIN'],
+      },
       { to: '/settings', label: 'Settings', icon: Settings },
     ],
   },
@@ -120,7 +126,12 @@ export default function Sidebar({ open = false, onClose }) {
 
       <nav className="mt-8 flex-1 space-y-6 overflow-y-auto pr-1">
         {groups.map((group) => {
-          const visible = group.links.filter((link) => (!link.permission || hasPermission(link.permission)) && (!link.permissionAny || link.permissionAny.some(hasPermission)) && (!link.role || hasRole(link.role)));
+          const visible = group.links.filter((link) => (
+            (!link.permission || hasPermission(link.permission))
+            && (!link.permissionAny || link.permissionAny.some(hasPermission))
+            && (!link.role || hasRole(link.role))
+            && (!link.roles || link.roles.some(hasRole))
+          ));
           if (!visible.length) return null;
           return (
             <div key={group.label}>

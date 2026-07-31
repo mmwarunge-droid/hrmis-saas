@@ -4,7 +4,10 @@ import DashboardLayout from './layouts/DashboardLayout.jsx';
 import ProtectedRoute from './routes/ProtectedRoute.jsx';
 import RoleRoute from './routes/RoleRoute.jsx';
 import Attendance from './pages/Attendance.jsx';
-import Dashboard from './pages/Dashboard.jsx';
+import AskAce from './pages/AskAce.jsx';
+import EmployeeExperienceSettings from './pages/EmployeeExperienceSettings.jsx';
+import EmployeeHome from './pages/EmployeeHome.jsx';
+import HomeRouter from './pages/HomeRouter.jsx';
 import Departments from './pages/Departments.jsx';
 import Documents from './pages/Documents.jsx';
 import EmployeeDetails from './pages/EmployeeDetails.jsx';
@@ -15,6 +18,7 @@ import Login from './pages/Login.jsx';
 import MfaChallenge from './pages/MfaChallenge.jsx';
 import Onboarding from './pages/Onboarding.jsx';
 import Organizations from './pages/Organizations.jsx';
+import OrganizationEventDetails from './pages/OrganizationEventDetails.jsx';
 import OrgChart from './pages/OrgChart.jsx';
 import ResetPassword from './pages/ResetPassword.jsx';
 import Settings from './pages/Settings.jsx';
@@ -37,7 +41,10 @@ export default function App() {
       <Route element={<ProtectedRoute />}>
         <Route element={<DashboardLayout />}>
           <Route path="/" element={<Navigate to="/dashboard" replace />} />
-          <Route path="/dashboard" element={<Dashboard />} />
+          <Route path="/dashboard" element={<HomeRouter />} />
+          <Route path="/employee-home" element={<EmployeeHome />} />
+          <Route path="/ask-ace" element={<AskAce />} />
+          <Route path="/events/:id" element={<OrganizationEventDetails />} />
           <Route path="/employees" element={<Employees />} />
           <Route path="/employees/:id" element={<EmployeeDetails />} />
           <Route path="/org-chart" element={<OrgChart />} />
@@ -53,6 +60,22 @@ export default function App() {
           <Route path="/onboarding" element={<Onboarding />} />
           <Route path="/users" element={<Users />} />
           <Route path="/settings" element={<Settings />} />
+          <Route
+            element={
+              <RoleRoute
+                roles={[
+                  'SUPER_ADMIN',
+                  'ORGANIZATION_OWNER',
+                  'CLIENT_ADMIN',
+                ]}
+              />
+            }
+          >
+            <Route
+              path="/settings/employee-experience"
+              element={<EmployeeExperienceSettings />}
+            />
+          </Route>
           <Route element={<RoleRoute roles={['SUPER_ADMIN']} />}>
             <Route path="/organizations" element={<Organizations />} />
           </Route>

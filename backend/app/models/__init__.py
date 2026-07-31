@@ -5,6 +5,11 @@ from app.models.account_token import AccountToken
 from app.models.mfa_recovery_code import MfaRecoveryCode
 from app.models.department import Department
 from app.models.employee import Employee
+from app.models.employee_home import (
+    HomepageEssential,
+    OrganizationEvent,
+    TenantHomepageSettings,
+)
 from app.models.emergency_contact import EmergencyContact
 from app.models.job_history import JobHistory
 from app.models.document import Document
@@ -30,6 +35,7 @@ from app.models.audit_log import AuditLog, Notification
 
 __all__ = [
     'Tenant', 'AuthSession', 'AccountToken', 'MfaRecoveryCode', 'Permission', 'Role', 'RolePermission', 'User', 'UserRole', 'Department', 'Employee',
+    'TenantHomepageSettings', 'OrganizationEvent', 'HomepageEssential',
     'EmergencyContact', 'JobHistory', 'Document',
     'SignatureRequest', 'SignatureRecipient',
     'SignatureReminderRule', 'SignatureEvent',

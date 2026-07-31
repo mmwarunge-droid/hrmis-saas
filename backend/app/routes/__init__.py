@@ -4,6 +4,7 @@ def register_blueprints(app):
     from app.routes.dashboard_routes import dashboard_bp
     from app.routes.document_routes import document_bp
     from app.routes.employee_routes import employee_bp
+    from app.routes.employee_home_routes import employee_home_bp
     from app.routes.leave_routes import leave_bp
     from app.routes.onboarding_routes import onboarding_bp
     from app.routes.signature_provider_routes import (
@@ -18,6 +19,7 @@ def register_blueprints(app):
         tenant_bp,
         user_bp,
         employee_bp,
+        employee_home_bp,
         document_bp,
         leave_bp,
         attendance_bp,

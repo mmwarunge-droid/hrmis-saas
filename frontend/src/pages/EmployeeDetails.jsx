@@ -120,10 +120,25 @@ export default function EmployeeDetails() {
       {error && <Alert type="error">{error}</Alert>}
       {success && <Alert type="success">{success}</Alert>}
 
-      <Card>
+      <Card className="overflow-hidden">
+        {employee.profile_cover_url && (
+          <img
+            src={employee.profile_cover_url}
+            alt=""
+            className="-mx-5 -mt-5 mb-6 h-44 w-[calc(100%+2.5rem)] object-cover md:-mx-6 md:-mt-6 md:w-[calc(100%+3rem)]"
+          />
+        )}
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="flex items-center gap-4">
-            <Avatar name={employee.full_name} size="lg" />
+            {employee.profile_photo_url ? (
+              <img
+                src={employee.profile_photo_url}
+                alt=""
+                className="h-16 w-16 rounded-2xl object-cover ring-1 ring-slate-200"
+              />
+            ) : (
+              <Avatar name={employee.full_name} size="lg" />
+            )}
             <div>
               <div className="flex flex-wrap items-center gap-2">
                 <h1 className="text-2xl font-bold">{employee.full_name}</h1>
@@ -163,6 +178,25 @@ export default function EmployeeDetails() {
             <b>Reports to:</b> {employeeNames[employee.manager_id] || 'Top level'}
           </p>
         </div>
+
+        {(employee.biography || employee.hobbies?.length > 0) && (
+          <div className="mt-6 grid gap-5 border-t border-slate-100 pt-6 md:grid-cols-[1.4fr_1fr]">
+            <div>
+              <h2 className="text-sm font-bold uppercase tracking-[0.16em] text-slate-400">About</h2>
+              <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-700">
+                {employee.biography || 'No introduction added yet.'}
+              </p>
+            </div>
+            <div>
+              <h2 className="text-sm font-bold uppercase tracking-[0.16em] text-slate-400">Interests</h2>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {(employee.hobbies || []).map((hobby) => (
+                  <Badge key={hobby} tone="cyan">{hobby}</Badge>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
       </Card>
 
       <Card>
