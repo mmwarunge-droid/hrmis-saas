@@ -1,6 +1,7 @@
 import { Navigate, Route, Routes } from 'react-router-dom';
 import AuthLayout from './layouts/AuthLayout.jsx';
 import DashboardLayout from './layouts/DashboardLayout.jsx';
+import PermissionRoute from './routes/PermissionRoute.jsx';
 import ProtectedRoute from './routes/ProtectedRoute.jsx';
 import RoleRoute from './routes/RoleRoute.jsx';
 import Attendance from './pages/Attendance.jsx';
@@ -50,17 +51,25 @@ export default function App() {
           <Route path="/employees" element={<Employees />} />
           <Route path="/employees/:id" element={<EmployeeDetails />} />
           <Route path="/org-chart" element={<OrgChart />} />
-          <Route path="/departments" element={<Departments />} />
+          <Route element={<PermissionRoute permission="employee:update" />}>
+            <Route path="/departments" element={<Departments />} />
+          </Route>
           <Route path="/documents" element={<Documents />} />
-          <Route
-            path="/signature-requests"
-            element={<SignatureRequests />}
-          />
+          <Route element={<PermissionRoute permission="document:approve" />}>
+            <Route
+              path="/signature-requests"
+              element={<SignatureRequests />}
+            />
+          </Route>
           <Route path="/leave" element={<LeaveRequests />} />
           <Route path="/attendance" element={<Attendance />} />
           <Route path="/tasks" element={<Tasks />} />
-          <Route path="/onboarding" element={<Onboarding />} />
-          <Route path="/users" element={<Users />} />
+          <Route element={<PermissionRoute permission="onboarding:create" />}>
+            <Route path="/onboarding" element={<Onboarding />} />
+          </Route>
+          <Route element={<PermissionRoute permission="user:read" />}>
+            <Route path="/users" element={<Users />} />
+          </Route>
           <Route path="/settings" element={<Settings />} />
           <Route
             element={

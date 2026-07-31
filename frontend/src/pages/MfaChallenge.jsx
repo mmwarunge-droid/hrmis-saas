@@ -13,7 +13,7 @@ export default function MfaChallenge() {
   const { user, confirmMfaEnrollment, verifyMfaChallenge } = useAuth();
   const challengeToken = location.state?.challengeToken;
   const enrollmentRequired = Boolean(location.state?.enrollmentRequired);
-  const destination = location.state?.destination || '/dashboard';
+  const destination = '/dashboard';
   const [enrollment, setEnrollment] = useState(null);
   const [code, setCode] = useState('');
   const [recoveryCodes, setRecoveryCodes] = useState([]);
