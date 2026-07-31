@@ -11,6 +11,7 @@ import {
   Settings,
   Sparkles,
   UserPlus,
+  UserRound,
   Users,
   X,
 } from 'lucide-react';
@@ -26,6 +27,12 @@ const groups = [
     label: 'Workspace',
     links: [
       { to: '/dashboard', label: 'Home', icon: Home, permission: 'dashboard:read' },
+      {
+        to: '/profile',
+        label: 'My profile',
+        icon: UserRound,
+        roles: ['EMPLOYEE', 'MANAGER'],
+      },
       { to: '/tasks', label: 'My tasks', icon: CheckSquare2, permission: 'onboarding:assign' },
     ],
   },

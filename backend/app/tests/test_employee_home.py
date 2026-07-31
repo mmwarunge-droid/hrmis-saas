@@ -178,3 +178,51 @@ def test_client_admin_manages_homepage_settings(
     asset = client.get(logo_url)
     assert asset.status_code == 200
     assert asset.data == image
+
+
+def test_employee_uploads_own_profile_image(
+    client,
+    app,
+    tenant,
+    tmp_path,
+):
+    app.config['UPLOAD_FOLDER'] = str(tmp_path)
+    with app.app_context():
+        employee_user = register_user({
+            'tenant_id': tenant.id,
+            'email': 'profile-upload@acme.test',
+            'first_name': 'Nia',
+            'last_name': 'Wambui',
+            'password': 'StrongPass123!',
+            'roles': ['EMPLOYEE'],
+        })
+        employee = Employee(
+            tenant_id=tenant.id,
+            user_id=employee_user.id,
+            employee_number='EMP-UPLOAD',
+            first_name='Nia',
+            last_name='Wambui',
+            email='profile-upload@acme.test',
+            hire_date=date.today(),
+            employment_status='active',
+            employment_type='full_time',
+        )
+        db.session.add(employee)
+        db.session.commit()
+
+    _login(client, 'profile-upload@acme.test')
+    image = b'\x89PNG\r\n\x1a\n' + (b'profile' * 8)
+    upload = client.post(
+        '/api/employee-home/profile-image/photo',
+        data={'file': (io.BytesIO(image), 'profile.png')},
+        content_type='multipart/form-data',
+        headers=_csrf_header(client),
+    )
+
+    assert upload.status_code == 200
+    profile = upload.get_json()['data']
+    assert '/employee-home/profile-images/' in profile['profile_photo_url']
+
+    asset = client.get(profile['profile_photo_url'])
+    assert asset.status_code == 200
+    assert asset.data == image

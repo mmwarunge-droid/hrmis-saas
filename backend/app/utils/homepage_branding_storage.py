@@ -83,3 +83,83 @@ def delete_homepage_branding_image(tenant_id, filename: str | None) -> None:
         homepage_branding_path(tenant_id, filename).unlink(missing_ok=True)
     except ValueError:
         return
+
+
+MAX_PROFILE_IMAGE_BYTES = 5 * 1024 * 1024
+
+
+def _profile_asset_root(tenant_id, employee_id) -> Path:
+    return (
+        Path(current_app.config['UPLOAD_FOLDER'])
+        / str(tenant_id)
+        / 'employee-profiles'
+        / str(employee_id)
+    )
+
+
+def save_employee_profile_image(
+    file: FileStorage,
+    tenant_id,
+    employee_id,
+    asset: str,
+) -> str:
+    if asset not in {'photo', 'cover'}:
+        raise ValueError('Unsupported employee profile image')
+    if not file or not file.filename:
+        raise ValueError('Choose a PNG, JPEG or WebP image')
+
+    header = file.stream.read(32)
+    extension = _detect_extension(header)
+    if extension is None:
+        raise ValueError('Profile images must be PNG, JPEG or WebP')
+    file.stream.seek(0)
+
+    folder = _profile_asset_root(tenant_id, employee_id)
+    folder.mkdir(parents=True, exist_ok=True)
+    filename = f'{asset}-{uuid.uuid4().hex}.{extension}'
+    destination = folder / filename
+
+    written = 0
+    try:
+        with destination.open('wb') as output:
+            while True:
+                chunk = file.stream.read(64 * 1024)
+                if not chunk:
+                    break
+                written += len(chunk)
+                if written > MAX_PROFILE_IMAGE_BYTES:
+                    raise ValueError('Profile images must be 5 MB or smaller')
+                output.write(chunk)
+    except Exception:
+        destination.unlink(missing_ok=True)
+        raise
+
+    if written == 0:
+        destination.unlink(missing_ok=True)
+        raise ValueError('The profile image is empty')
+    return filename
+
+
+def employee_profile_image_path(tenant_id, employee_id, filename: str) -> Path:
+    if not filename or Path(filename).name != filename:
+        raise ValueError('Invalid employee profile image filename')
+    if not filename.startswith(('photo-', 'cover-')):
+        raise ValueError('Invalid employee profile image filename')
+    return _profile_asset_root(tenant_id, employee_id) / filename
+
+
+def delete_employee_profile_image(
+    tenant_id,
+    employee_id,
+    filename: str | None,
+) -> None:
+    if not filename:
+        return
+    try:
+        employee_profile_image_path(
+            tenant_id,
+            employee_id,
+            filename,
+        ).unlink(missing_ok=True)
+    except ValueError:
+        return

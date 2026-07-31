@@ -3,6 +3,15 @@ import apiClient from './apiClient';
 export const employeeHomeApi = {
   get: () => apiClient.get('/employee-home'),
   updateProfile: (payload) => apiClient.patch('/employee-home/profile', payload),
+  uploadProfileImage: (asset, file) => {
+    const form = new FormData();
+    form.append('file', file);
+    return apiClient.post(
+      `/employee-home/profile-image/${asset}`,
+      form,
+      { headers: { 'Content-Type': 'multipart/form-data' } },
+    );
+  },
   event: (id) => apiClient.get(`/employee-home/events/${id}`),
   settings: (tenantId) => apiClient.get(`/tenants/${tenantId}/homepage-settings`),
   updateSettings: (tenantId, payload) => apiClient.patch(
