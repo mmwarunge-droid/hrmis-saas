@@ -35,6 +35,16 @@ class HomepageSettingsUpdateSchema(Schema):
 
 
 class EmployeeSelfProfileSchema(Schema):
+    preferred_name = fields.Str(
+        required=False,
+        allow_none=True,
+        validate=validate.Length(max=120),
+    )
+    phone = fields.Str(
+        required=False,
+        allow_none=True,
+        validate=validate.Length(max=40),
+    )
     date_of_birth = fields.Date(required=False, allow_none=True)
     birthday_visibility = fields.Str(
         required=False,

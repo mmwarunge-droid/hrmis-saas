@@ -31,8 +31,11 @@ from app.schemas.employee_home_schema import (
 from app.services.audit_service import log_event
 from app.services.document_service import can_access_document
 from app.utils.homepage_branding_storage import (
+    delete_employee_profile_image,
     delete_homepage_branding_image,
+    employee_profile_image_path,
     homepage_branding_path,
+    save_employee_profile_image,
     save_homepage_branding_image,
 )
 from app.utils.response import fail, success
@@ -103,6 +106,13 @@ def _settings_for(tenant_id, *, create=False):
 
 def _managed_branding_filename(url, tenant_id):
     fragment = f'/employee-home/branding/{tenant_id}/'
+    if not url or fragment not in url:
+        return None
+    return url.rsplit('/', 1)[-1]
+
+
+def _managed_profile_filename(url, employee_id):
+    fragment = f'/employee-home/profile-images/{employee_id}/'
     if not url or fragment not in url:
         return None
     return url.rsplit('/', 1)[-1]
@@ -235,6 +245,9 @@ def _self_profile(employee):
         'birthday_visibility': employee.birthday_visibility,
         'gender_identity': employee.gender_identity,
         'gender_self_description': employee.gender_self_description,
+        'department_name': (
+            employee.department.name if employee.department else None
+        ),
     }
 
 
@@ -407,6 +420,86 @@ def update_own_home_profile():
     )
     db.session.commit()
     return success(_self_profile(employee), 'Your profile was updated')
+
+
+@employee_home_bp.post('/employee-home/profile-image/<asset>')
+@jwt_required()
+def upload_own_profile_image(asset):
+    employee = current_user.employee_profile
+    if not employee:
+        return fail(
+            'EMPLOYEE_PROFILE_REQUIRED',
+            'Your user account is not linked to an employee profile',
+            409,
+        )
+    if asset not in {'photo', 'cover'}:
+        return fail('INVALID_PROFILE_IMAGE', 'Unsupported profile image', 404)
+
+    file = request.files.get('file')
+    try:
+        filename = save_employee_profile_image(
+            file,
+            employee.tenant_id,
+            employee.id,
+            asset,
+        )
+    except ValueError as exc:
+        return fail('INVALID_PROFILE_IMAGE', str(exc), 422)
+
+    field = 'profile_photo_url' if asset == 'photo' else 'profile_cover_url'
+    previous_url = getattr(employee, field)
+    previous_filename = _managed_profile_filename(previous_url, employee.id)
+    image_url = url_for(
+        'employee_home.employee_profile_image_asset',
+        employee_id=employee.id,
+        filename=filename,
+    )
+    setattr(employee, field, image_url)
+
+    log_event(
+        'employee.self_profile_image_update',
+        'Employee',
+        employee.id,
+        tenant_id=employee.tenant_id,
+        actor=current_user,
+        metadata={'asset': asset},
+    )
+    db.session.commit()
+    if previous_filename:
+        delete_employee_profile_image(
+            employee.tenant_id,
+            employee.id,
+            previous_filename,
+        )
+    return success(_self_profile(employee), 'Your profile image was updated')
+
+
+@employee_home_bp.get(
+    '/employee-home/profile-images/<employee_id>/<filename>',
+)
+@jwt_required()
+def employee_profile_image_asset(employee_id, filename):
+    tenant, error = _require_tenant()
+    if error:
+        return error
+    employee = Employee.query.filter_by(
+        id=employee_id,
+        tenant_id=tenant.id,
+        deleted_at=None,
+    ).first()
+    if not employee:
+        return fail('PROFILE_IMAGE_NOT_FOUND', 'Profile image not found', 404)
+    try:
+        path = employee_profile_image_path(
+            tenant.id,
+            employee.id,
+            filename,
+        )
+    except ValueError:
+        return fail('PROFILE_IMAGE_NOT_FOUND', 'Profile image not found', 404)
+    if not path.is_file():
+        return fail('PROFILE_IMAGE_NOT_FOUND', 'Profile image not found', 404)
+    return send_file(path, conditional=True)
 
 
 @employee_home_bp.get('/employee-home/events/<event_id>')

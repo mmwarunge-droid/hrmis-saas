@@ -491,7 +491,7 @@ export default function EmployeeHome() {
             </div>
             <div className="flex flex-wrap gap-2">
               {viewer.id && (
-                <Link to={`/employees/${viewer.id}`}>
+                <Link to="/profile">
                   <Button variant="secondary" size="sm">View my profile</Button>
                 </Link>
               )}

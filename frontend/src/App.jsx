@@ -8,6 +8,7 @@ import AskAce from './pages/AskAce.jsx';
 import EmployeeExperienceSettings from './pages/EmployeeExperienceSettings.jsx';
 import EmployeeHome from './pages/EmployeeHome.jsx';
 import HomeRouter from './pages/HomeRouter.jsx';
+import MyProfile from './pages/MyProfile.jsx';
 import Departments from './pages/Departments.jsx';
 import Documents from './pages/Documents.jsx';
 import EmployeeDetails from './pages/EmployeeDetails.jsx';
@@ -43,6 +44,7 @@ export default function App() {
           <Route path="/" element={<Navigate to="/dashboard" replace />} />
           <Route path="/dashboard" element={<HomeRouter />} />
           <Route path="/employee-home" element={<EmployeeHome />} />
+          <Route path="/profile" element={<MyProfile />} />
           <Route path="/ask-ace" element={<AskAce />} />
           <Route path="/events/:id" element={<OrganizationEventDetails />} />
           <Route path="/employees" element={<Employees />} />
