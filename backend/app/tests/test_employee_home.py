@@ -203,6 +203,7 @@ def test_employee_uploads_own_profile_image(
             first_name='Nia',
             last_name='Wambui',
             email='profile-upload@acme.test',
+            hire_date=date.today(),
             employment_status='active',
             employment_type='full_time',
         )
