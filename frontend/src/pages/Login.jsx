@@ -1,6 +1,6 @@
 import { ArrowRight, LockKeyhole } from 'lucide-react';
 import { useState } from 'react';
-import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom';
+import { Link, Navigate, useNavigate } from 'react-router-dom';
 import Alert from '../components/ui/Alert.jsx';
 import Button from '../components/ui/Button.jsx';
 import Card from '../components/ui/Card.jsx';
@@ -23,7 +23,7 @@ export default function Login() {
     setLoading(true);
     try {
       const result = await login(form);
-      const destination = location.state?.from?.pathname || '/dashboard';
+      const destination = '/dashboard';
       if (result.mfa_required) {
         navigate('/mfa', {
           replace: true,

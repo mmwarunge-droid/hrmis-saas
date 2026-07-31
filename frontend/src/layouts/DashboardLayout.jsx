@@ -9,6 +9,7 @@ import {
 import Navbar from '../components/navigation/Navbar.jsx';
 import Sidebar from '../components/navigation/Sidebar.jsx';
 import Button from '../components/ui/Button.jsx';
+import useAuth from '../hooks/useAuth.js';
 import usePermissions from '../hooks/usePermissions.js';
 import useTenant from '../hooks/useTenant.js';
 
@@ -37,6 +38,7 @@ function isTenantScopedRoute(pathname) {
 export default function DashboardLayout() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const location = useLocation();
+  const { user } = useAuth();
   const { hasRole } = usePermissions();
   const {
     tenantId,
@@ -82,7 +84,7 @@ export default function DashboardLayout() {
         key={
           hasRole('SUPER_ADMIN')
             ? tenantId || 'platform'
-            : 'tenant-user'
+            : user?.id || user?.email || 'tenant-user'
         }
       />
     );
