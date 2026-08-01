@@ -44,14 +44,14 @@ export default function Login() {
 
   return (
     <Card className="w-full border-white/80 p-7 shadow-2xl">
-      <span className="grid h-11 w-11 place-items-center rounded-2xl bg-cyan-50 text-cyan-700"><LockKeyhole size={20} /></span>
+      <span className="grid h-11 w-11 place-items-center rounded-lg bg-blue-50 text-blue-700"><LockKeyhole size={20} /></span>
       <h1 className="mt-5 text-3xl font-bold tracking-tight text-slate-950">Welcome back</h1>
       <p className="mt-2 text-sm leading-6 text-slate-500">Sign in to your organization’s people workspace.</p>
       <form onSubmit={submit} className="mt-7 space-y-4">
         {error && <Alert type="error">{error}</Alert>}
         <Input label="Work email" type="email" value={form.email} onChange={(event) => setForm({ ...form, email: event.target.value })} autoComplete="email" required />
         <Input label="Password" type="password" value={form.password} onChange={(event) => setForm({ ...form, password: event.target.value })} autoComplete="current-password" required />
-        <div className="text-right"><Link className="text-sm font-semibold text-cyan-700 hover:text-cyan-900" to="/forgot-password">Forgot password?</Link></div>
+        <div className="text-right"><Link className="text-sm font-semibold text-blue-700 hover:text-blue-900" to="/forgot-password">Forgot password?</Link></div>
         <Button variant="accent" className="w-full" size="lg" disabled={loading}>{loading ? 'Signing in...' : <>Sign in <ArrowRight size={17} /></>}</Button>
       </form>
       <p className="mt-5 text-center text-xs text-slate-400">Protected by secure cookies, CSRF controls and privileged-role MFA.</p>

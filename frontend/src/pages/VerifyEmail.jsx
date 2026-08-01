@@ -34,7 +34,7 @@ export default function VerifyEmail() {
   return (
     <Card className="w-full max-w-md">
       <h1 className="text-2xl font-bold">Verify your email</h1>
-      <p className="mt-1 text-sm text-slate-500">Confirm this one-time link to verify your ACE account email address.</p>
+      <p className="mt-1 text-sm text-slate-500">Confirm this one-time link to verify your Kinetic account email address.</p>
       <div className="mt-6 space-y-4">
         {message && <Alert>{message}</Alert>}
         {error && <Alert type="error">{error}</Alert>}

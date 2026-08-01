@@ -149,7 +149,7 @@ class BaseConfig:
     MFA_REQUIRED_ROLES = _csv_or_default(os.getenv('MFA_REQUIRED_ROLES'), ['SUPER_ADMIN', 'CLIENT_ADMIN'])
     MFA_CHALLENGE_MINUTES = int(os.getenv('MFA_CHALLENGE_MINUTES', '5'))
     MFA_MAX_CHALLENGE_ATTEMPTS = int(os.getenv('MFA_MAX_CHALLENGE_ATTEMPTS', '5'))
-    MFA_TOTP_ISSUER = os.getenv('MFA_TOTP_ISSUER', 'ACE')
+    MFA_TOTP_ISSUER = os.getenv('MFA_TOTP_ISSUER', 'Kinetic')
     MFA_TOTP_VALID_WINDOW = int(os.getenv('MFA_TOTP_VALID_WINDOW', '1'))
     MFA_RECOVERY_CODE_COUNT = int(os.getenv('MFA_RECOVERY_CODE_COUNT', '10'))
     MFA_ENCRYPTION_KEYS = _csv_or_default(

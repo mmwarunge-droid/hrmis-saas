@@ -13,7 +13,7 @@ from app.utils.response import fail, success
 
 
 def create_app(config_name: str | None = None) -> Flask:
-    """Create and configure the ACE Flask application."""
+    """Create and configure the Kinetic Flask application."""
     environment = (config_name or os.getenv('APP_ENV') or os.getenv('FLASK_ENV') or 'development').lower()
     config_class = config_by_name.get(environment)
     if config_class is None:

@@ -15,14 +15,14 @@ function PersonCard({ employee, collapsed, onToggle }) {
   const hasReports = employee.children.length > 0;
 
   return (
-    <div className="relative z-10 inline-block min-w-64 rounded-3xl border border-slate-200 bg-white p-4 text-left shadow-sm">
+    <div className="relative z-10 inline-block min-w-64 rounded-xl border border-slate-200 bg-white p-4 text-left shadow-sm">
       <div className="flex items-start gap-3">
         <Avatar name={employee.full_name} />
         <div className="min-w-0 flex-1">
-          <Link to={`/employees/${employee.id}`} className="block truncate font-bold text-slate-950 hover:text-cyan-700">
+          <Link to={`/employees/${employee.id}`} className="block truncate font-bold text-slate-950 hover:text-blue-700">
             {employee.full_name}
           </Link>
-          <p className="truncate text-xs font-medium text-cyan-700">
+          <p className="truncate text-xs font-medium text-blue-700">
             {employee.job_title || 'Role not assigned'}
           </p>
         </div>
@@ -143,7 +143,7 @@ export default function OrgChart() {
   };
 
   return (
-    <div className="space-y-7">
+    <div className="space-y-6">
       <PageHeader
         eyebrow="People structure"
         title="Organization chart"

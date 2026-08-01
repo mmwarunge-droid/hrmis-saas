@@ -1,4 +1,5 @@
-const ACTIVE_TENANT_STORAGE_KEY = 'ace.activeTenantId';
+const ACTIVE_TENANT_STORAGE_KEY = 'kinetic.activeTenantId';
+const LEGACY_ACTIVE_TENANT_STORAGE_KEY = 'ace.activeTenantId';
 
 const TENANT_SCOPED_PREFIXES = [
   '/dashboard',
@@ -12,7 +13,7 @@ const TENANT_SCOPED_PREFIXES = [
 
 function normalizePath(url = '') {
   try {
-    const path = new URL(url, 'https://ace.invalid').pathname;
+    const path = new URL(url, 'https://kinetic.invalid').pathname;
     return path.replace(/^\/api(?=\/)/, '');
   } catch {
     return String(url).split('?')[0].replace(/^\/api(?=\/)/, '');
@@ -21,17 +22,24 @@ function normalizePath(url = '') {
 
 export function isTenantScopedRequest(url) {
   const path = normalizePath(url);
-
-  return TENANT_SCOPED_PREFIXES.some(
-    (prefix) => path === prefix || path.startsWith(`${prefix}/`),
-  );
+  return TENANT_SCOPED_PREFIXES.some((prefix) => path === prefix || path.startsWith(`${prefix}/`));
 }
 
 export function readActiveTenantId() {
   if (typeof window === 'undefined') return null;
 
   try {
-    return window.sessionStorage.getItem(ACTIVE_TENANT_STORAGE_KEY);
+    const current = window.sessionStorage.getItem(ACTIVE_TENANT_STORAGE_KEY);
+    if (current) return current;
+
+    const legacy = window.sessionStorage.getItem(LEGACY_ACTIVE_TENANT_STORAGE_KEY);
+    if (legacy) {
+      window.sessionStorage.setItem(ACTIVE_TENANT_STORAGE_KEY, legacy);
+      window.sessionStorage.removeItem(LEGACY_ACTIVE_TENANT_STORAGE_KEY);
+      return legacy;
+    }
+
+    return null;
   } catch {
     return null;
   }
@@ -42,13 +50,11 @@ export function writeActiveTenantId(tenantId) {
 
   try {
     if (tenantId) {
-      window.sessionStorage.setItem(
-        ACTIVE_TENANT_STORAGE_KEY,
-        String(tenantId),
-      );
+      window.sessionStorage.setItem(ACTIVE_TENANT_STORAGE_KEY, String(tenantId));
     } else {
       window.sessionStorage.removeItem(ACTIVE_TENANT_STORAGE_KEY);
     }
+    window.sessionStorage.removeItem(LEGACY_ACTIVE_TENANT_STORAGE_KEY);
   } catch {
     // Storage can be unavailable in restricted browser contexts.
   }
@@ -57,9 +63,7 @@ export function writeActiveTenantId(tenantId) {
 export function withActiveTenantParams(url, params = {}) {
   const tenantId = readActiveTenantId();
 
-  if (!tenantId || !isTenantScopedRequest(url)) {
-    return params;
-  }
+  if (!tenantId || !isTenantScopedRequest(url)) return params;
 
   if (params instanceof URLSearchParams) {
     const next = new URLSearchParams(params);
@@ -67,10 +71,7 @@ export function withActiveTenantParams(url, params = {}) {
     return next;
   }
 
-  return {
-    ...params,
-    tenant_id: params?.tenant_id || tenantId,
-  };
+  return { ...params, tenant_id: params?.tenant_id || tenantId };
 }
 
 export { ACTIVE_TENANT_STORAGE_KEY };

@@ -64,7 +64,7 @@ export default function Organizations() {
   };
 
   return (
-    <div className="space-y-7">
+    <div className="space-y-6">
       <PageHeader
         eyebrow="Platform administration"
         title="Organizations"
@@ -96,7 +96,7 @@ export default function Organizations() {
               <Card key={tenant.id} className="overflow-hidden">
                 <div className="flex items-start justify-between gap-4">
                   <div className="flex items-center gap-4">
-                    <Avatar name={tenant.name} size="lg" className="rounded-3xl" />
+                    <Avatar name={tenant.name} size="lg" className="rounded-xl" />
                     <div>
                       <div className="flex flex-wrap items-center gap-2">
                         <h2 className="text-lg font-bold text-slate-950">{tenant.name}</h2>
@@ -108,9 +108,9 @@ export default function Organizations() {
                   <Badge tone="blue">{tenant.billing_plan || 'mvp'}</Badge>
                 </div>
                 <div className="mt-6 grid grid-cols-3 gap-3">
-                  <div className="rounded-2xl bg-slate-50 p-3"><p className="text-xs text-slate-500">People</p><p className="mt-1 text-xl font-bold">{members.length}</p></div>
-                  <div className="rounded-2xl bg-slate-50 p-3"><p className="text-xs text-slate-500">Admins</p><p className="mt-1 text-xl font-bold">{admins.length}</p></div>
-                  <div className="rounded-2xl bg-slate-50 p-3"><p className="text-xs text-slate-500">Region</p><p className="mt-1 truncate text-sm font-bold">{tenant.compliance_region || 'Default'}</p></div>
+                  <div className="rounded-lg bg-slate-50 p-3"><p className="text-xs text-slate-500">People</p><p className="mt-1 text-xl font-bold">{members.length}</p></div>
+                  <div className="rounded-lg bg-slate-50 p-3"><p className="text-xs text-slate-500">Admins</p><p className="mt-1 text-xl font-bold">{admins.length}</p></div>
+                  <div className="rounded-lg bg-slate-50 p-3"><p className="text-xs text-slate-500">Region</p><p className="mt-1 truncate text-sm font-bold">{tenant.compliance_region || 'Default'}</p></div>
                 </div>
                 <div className="mt-5 border-t border-slate-100 pt-4">
                   <p className="text-xs font-bold uppercase tracking-wider text-slate-400">Workspace administrator</p>

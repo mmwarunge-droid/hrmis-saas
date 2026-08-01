@@ -6,11 +6,11 @@ eID-backed requests.
 ## Completion boundary
 
 A provider callback that says a request is downloadable does **not**
-complete the ACE workflow. It queues an evidence job. The request becomes
-`completed` only after ACE has:
+complete the Kinetic workflow. It queues an evidence job. The request becomes
+`completed` only after Kinetic has:
 
 1. retrieved the final signed PDF and provider audit trail;
-2. matched the provider request and signer to the ACE request;
+2. matched the provider request and signer to the Kinetic request;
 3. checked that both artifacts are PDFs;
 4. calculated and persisted SHA-256 hashes;
 5. stored the artifacts in tenant-scoped private storage; and

@@ -211,8 +211,8 @@ export default function SignatureRequestForm({
 
   return (
     <form onSubmit={submit} className="space-y-6">
-      <div className="rounded-2xl border border-cyan-100 bg-cyan-50 p-4">
-        <p className="text-xs font-bold uppercase tracking-wider text-cyan-700">
+      <div className="rounded-lg border border-blue-100 bg-blue-50 p-4">
+        <p className="text-xs font-bold uppercase tracking-wider text-blue-700">
           Selected document
         </p>
         <p className="mt-2 font-semibold text-slate-950">
@@ -226,7 +226,7 @@ export default function SignatureRequestForm({
       {error && (
         <div
           role="alert"
-          className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700"
+          className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700"
         >
           {error}
         </div>
@@ -242,32 +242,32 @@ export default function SignatureRequestForm({
           onChange={(event) => updateAssurance(
             event.target.value,
           )}
-          className="w-full rounded-2xl border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none transition focus:border-cyan-400 focus:ring-4 focus:ring-cyan-100"
+          className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-100"
         >
           <option value="qes">
             Qualified electronic signature target — eID
           </option>
           <option value="standard">
-            Standard ACE electronic signature
+            Standard Kinetic electronic signature
           </option>
         </select>
       </label>
 
       {isQes && (
-        <div className="rounded-2xl border border-violet-200 bg-violet-50 p-4 text-violet-950">
+        <div className="rounded-lg border border-blue-200 bg-blue-50 p-4 text-blue-950">
           <div className="flex items-start gap-3">
             <ShieldCheck className="mt-0.5 shrink-0" size={19} />
             <div>
               <p className="text-sm font-semibold">
                 Identity-verified provider signing
               </p>
-              <p className="mt-1 text-xs leading-5 text-violet-800">
+              <p className="mt-1 text-xs leading-5 text-blue-800">
                 Dropbox Sign will email one signatory and require
-                an eID signing ceremony. ACE will treat QES as a
+                an eID signing ceremony. Kinetic will treat QES as a
                 target until the signed PDF and provider evidence
                 are captured and verified.
               </p>
-              <p className="mt-2 text-xs font-medium text-violet-900">
+              <p className="mt-2 text-xs font-medium text-blue-900">
                 The deadline must be 1–90 days ahead and is
                 rounded down to the nearest UTC hour by the
                 provider.
@@ -312,7 +312,7 @@ export default function SignatureRequestForm({
             ...form,
             message: event.target.value,
           })}
-          className="w-full rounded-2xl border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none transition focus:border-cyan-400 focus:ring-4 focus:ring-cyan-100"
+          className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-100"
           placeholder="Explain what the recipient should review before signing."
         />
       </label>
@@ -329,7 +329,7 @@ export default function SignatureRequestForm({
             ...form,
             signing_mode: event.target.value,
           })}
-          className="w-full rounded-2xl border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none transition disabled:bg-slate-100 disabled:text-slate-500 focus:border-cyan-400 focus:ring-4 focus:ring-cyan-100"
+          className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none transition disabled:bg-slate-100 disabled:text-slate-500 focus:border-blue-400 focus:ring-4 focus:ring-blue-100"
         >
           <option value="sequential">
             Sequential — notify one stage at a time
@@ -349,7 +349,7 @@ export default function SignatureRequestForm({
             <p className="text-xs text-slate-500">
               {isQes
                 ? 'Qualified eID signing supports exactly one employee.'
-                : 'Employees must have ACE platform access before they can receive a signing task.'}
+                : 'Employees must have Kinetic platform access before they can receive a signing task.'}
             </p>
           </div>
 
@@ -369,7 +369,7 @@ export default function SignatureRequestForm({
         {recipients.map((recipient, index) => (
           <div
             key={`${index}-${recipient.employee_id}`}
-            className="grid gap-3 rounded-2xl border border-slate-200 p-4 md:grid-cols-[1.4fr_1fr_120px_auto]"
+            className="grid gap-3 rounded-lg border border-slate-200 p-4 md:grid-cols-[1.4fr_1fr_120px_auto]"
           >
             <label className="block space-y-1">
               <span className="text-sm font-medium text-slate-700">
@@ -383,7 +383,7 @@ export default function SignatureRequestForm({
                   { employee_id: event.target.value },
                 )}
                 required
-                className="w-full rounded-2xl border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none transition focus:border-cyan-400 focus:ring-4 focus:ring-cyan-100"
+                className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-100"
               >
                 <option value="">Select employee</option>
                 {eligibleEmployees.map((employee) => {

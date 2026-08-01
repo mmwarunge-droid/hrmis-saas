@@ -5,7 +5,7 @@ import PermissionRoute from './routes/PermissionRoute.jsx';
 import ProtectedRoute from './routes/ProtectedRoute.jsx';
 import RoleRoute from './routes/RoleRoute.jsx';
 import Attendance from './pages/Attendance.jsx';
-import AskAce from './pages/AskAce.jsx';
+import AskKinetic from './pages/AskKinetic.jsx';
 import EmployeeExperienceSettings from './pages/EmployeeExperienceSettings.jsx';
 import EmployeeHome from './pages/EmployeeHome.jsx';
 import HomeRouter from './pages/HomeRouter.jsx';
@@ -46,7 +46,8 @@ export default function App() {
           <Route path="/dashboard" element={<HomeRouter />} />
           <Route path="/employee-home" element={<EmployeeHome />} />
           <Route path="/profile" element={<MyProfile />} />
-          <Route path="/ask-ace" element={<AskAce />} />
+          <Route path="/ask-kinetic" element={<AskKinetic />} />
+          <Route path="/ask-ace" element={<Navigate to="/ask-kinetic" replace />} />
           <Route path="/events/:id" element={<OrganizationEventDetails />} />
           <Route path="/employees" element={<Employees />} />
           <Route path="/employees/:id" element={<EmployeeDetails />} />

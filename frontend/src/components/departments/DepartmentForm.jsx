@@ -88,7 +88,7 @@ export default function DepartmentForm({
           </option>
         ))}
       </Select>
-      <p className="md:col-span-2 rounded-2xl bg-cyan-50 p-4 text-sm text-cyan-900">
+      <p className="md:col-span-2 rounded-lg bg-blue-50 p-4 text-sm text-blue-900">
         Assigning a department head also moves that employee into this department and records the change in their employment history.
       </p>
       <div className="md:col-span-2">

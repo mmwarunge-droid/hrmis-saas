@@ -557,5 +557,5 @@ def test_unverified_privileged_login_sends_verification_and_blocks_enrollment(cl
     assert response.status_code == 403
     assert response.get_json()['error']['code'] == 'EMAIL_VERIFICATION_REQUIRED'
     assert len(app.extensions['mail_outbox']) == 1
-    assert 'Verify your ACE email address' in app.extensions['mail_outbox'][0]['subject']
+    assert 'Verify your Kinetic email address' in app.extensions['mail_outbox'][0]['subject']
     assert client.get_cookie('access_token_cookie', path='/api/') is None

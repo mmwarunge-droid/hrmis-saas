@@ -321,7 +321,7 @@ export default function SignatureRequests() {
 
           <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-slate-100">
             <div
-              className="h-full rounded-full bg-cyan-600"
+              className="h-full rounded-full bg-blue-600"
               style={{
                 width: `${
                   request.recipient_count
@@ -377,7 +377,7 @@ export default function SignatureRequests() {
   ];
 
   return (
-    <div className="space-y-7">
+    <div className="space-y-6">
       <PageHeader
         eyebrow="Docs"
         title="Signature requests"
@@ -441,7 +441,7 @@ export default function SignatureRequests() {
             onChange={(event) => setStatus(
               event.target.value,
             )}
-            className="w-full rounded-2xl border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none transition focus:border-cyan-400 focus:ring-4 focus:ring-cyan-100"
+            className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-100"
           >
             <option value="all">All statuses</option>
             <option value="sent">Sent</option>

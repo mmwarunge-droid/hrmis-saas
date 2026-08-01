@@ -21,7 +21,7 @@ export default function DepartmentArchiveForm({ department, departments, loading
 
   return (
     <form onSubmit={submit} className="space-y-5">
-      <div className="rounded-2xl bg-amber-50 p-4 text-sm text-amber-900">
+      <div className="rounded-lg bg-amber-50 p-4 text-sm text-amber-900">
         <p className="font-semibold">{department.name} has {department.employee_count || 0} active employee(s).</p>
         <p className="mt-1">Employees will be reassigned before the department is archived. Historical records are preserved.</p>
       </div>
@@ -46,7 +46,7 @@ export default function DepartmentArchiveForm({ department, departments, loading
       <label className="block space-y-1">
         <span className="text-sm font-medium text-slate-700">Reason</span>
         <textarea
-          className="min-h-24 w-full rounded-2xl border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none transition focus:border-cyan-400 focus:ring-4 focus:ring-cyan-100"
+          className="min-h-24 w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-100"
           value={reason}
           onChange={(event) => setReason(event.target.value)}
           maxLength={255}

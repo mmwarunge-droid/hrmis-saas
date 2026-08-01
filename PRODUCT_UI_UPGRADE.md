@@ -1,6 +1,6 @@
-# People Experience Upgrade
+# Kinetic People Experience Upgrade
 
-This implementation translates the supplied HR platform references into an original HRMIS experience rather than reproducing another product's interface.
+This implementation translates the supplied HR platform references into an original Kinetic experience rather than reproducing another product's interface. The current BambooHR-inspired redesign, design system, page plan, migration notes, and regression matrix are documented in [`docs/KINETIC_REDESIGN.md`](docs/KINETIC_REDESIGN.md).
 
 ## Delivered in this upgrade
 
@@ -67,6 +67,6 @@ Now accepts an optional `employee_profile` object. When supplied, the user accou
 3. Position management, headcount planning and vacancy visualization.
 4. Goals, continuous feedback, performance reviews and talent calibration.
 5. Custom reporting builder with saved dashboards and scheduled exports.
-6. Electronic signatures and policy acknowledgement campaigns.
-7. Recruiting and applicant tracking.
-8. Payroll and benefits connectors.
+6. Recruiting and applicant tracking.
+7. Payroll and benefits connectors.
+8. Performance reviews, goals, feedback, and talent calibration APIs.

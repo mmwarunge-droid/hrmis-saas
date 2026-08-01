@@ -616,7 +616,7 @@ def update_homepage_settings(tenant_id):
     if assistant_enabled and not assistant_url:
         return fail(
             'VALIDATION_ERROR',
-            {'assistant_url': ['An assistant URL is required when Ask ACE is enabled.']},
+            {'assistant_url': ['An assistant URL is required when Ask Kinetic is enabled.']},
             422,
         )
     if 'section_order' in payload:

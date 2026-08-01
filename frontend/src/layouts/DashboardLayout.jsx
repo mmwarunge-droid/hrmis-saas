@@ -1,14 +1,13 @@
 import { Building2 } from 'lucide-react';
-import { useState } from 'react';
-import {
-  Link,
-  Outlet,
-  useLocation,
-} from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { Link, Outlet, useLocation } from 'react-router-dom';
 
 import Navbar from '../components/navigation/Navbar.jsx';
+import { getPageTitle } from '../config/navigation.js';
 import Sidebar from '../components/navigation/Sidebar.jsx';
 import Button from '../components/ui/Button.jsx';
+import Card from '../components/ui/Card.jsx';
+import Skeleton from '../components/ui/Skeleton.jsx';
 import useAuth from '../hooks/useAuth.js';
 import usePermissions from '../hooks/usePermissions.js';
 import useTenant from '../hooks/useTenant.js';
@@ -27,78 +26,86 @@ const TENANT_SCOPED_ROUTES = [
 ];
 
 function isTenantScopedRoute(pathname) {
-  return TENANT_SCOPED_ROUTES.some(
-    (route) => (
-      pathname === route
-      || pathname.startsWith(`${route}/`)
-    ),
-  );
+  return TENANT_SCOPED_ROUTES.some((route) => pathname === route || pathname.startsWith(`${route}/`));
+}
+
+function initialCollapsedState() {
+  try {
+    return window.localStorage.getItem('kinetic.sidebarCollapsed') === 'true';
+  } catch {
+    return false;
+  }
 }
 
 export default function DashboardLayout() {
-  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [sidebarOpenPath, setSidebarOpenPath] = useState(null);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(initialCollapsedState);
   const location = useLocation();
+  const sidebarOpen = sidebarOpenPath === location.pathname;
   const { user } = useAuth();
   const { hasRole } = usePermissions();
-  const {
-    tenantId,
-    loading: tenantLoading,
-  } = useTenant();
+  const { tenantId, loading: tenantLoading } = useTenant();
 
-  const needsTenant = (
-    hasRole('SUPER_ADMIN')
-    && isTenantScopedRoute(location.pathname)
-  );
+  useEffect(() => {
+    document.title = `${getPageTitle(location.pathname)} | Kinetic`;
+  }, [location.pathname]);
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem('kinetic.sidebarCollapsed', String(sidebarCollapsed));
+    } catch {
+      // Storage is optional; the shell still works without persistence.
+    }
+  }, [sidebarCollapsed]);
+
+  const needsTenant = hasRole('SUPER_ADMIN') && isTenantScopedRoute(location.pathname);
 
   let content;
 
   if (needsTenant && tenantLoading) {
     content = (
-      <div className="h-72 animate-pulse rounded-[2rem] bg-slate-100" />
+      <div className="space-y-5">
+        <Skeleton className="h-8 w-72" />
+        <Skeleton className="h-48 w-full" />
+        <div className="grid gap-4 md:grid-cols-3"><Skeleton className="h-32" /><Skeleton className="h-32" /><Skeleton className="h-32" /></div>
+      </div>
     );
   } else if (needsTenant && !tenantId) {
     content = (
-      <section className="mx-auto max-w-2xl rounded-[2rem] border border-slate-200 bg-white p-8 text-center shadow-sm">
-        <span className="mx-auto grid h-14 w-14 place-items-center rounded-2xl bg-cyan-50 text-cyan-700">
-          <Building2 size={24} />
+      <Card className="mx-auto max-w-2xl py-10 text-center">
+        <span className="mx-auto grid h-12 w-12 place-items-center rounded-xl border border-blue-100 bg-blue-50 text-blue-700">
+          <Building2 size={22} />
         </span>
-        <h1 className="mt-5 text-2xl font-bold text-slate-950">
-          Select an organization
-        </h1>
+        <h1 className="mt-4 text-xl font-bold text-slate-950">Select an organization</h1>
         <p className="mx-auto mt-2 max-w-lg text-sm leading-6 text-slate-600">
-          Platform administrators must choose an organization before
-          opening tenant-scoped people, leave, document, onboarding or
-          signature workflows.
+          Platform administrators must choose an organization before opening tenant-scoped people, time, file, onboarding, or signature workflows.
         </p>
-        <Link to="/organizations" className="mt-6 inline-flex">
-          <Button variant="accent">
-            <Building2 size={17} />
-            Choose organization
-          </Button>
+        <Link to="/organizations" className="mt-5 inline-flex">
+          <Button variant="primary"><Building2 size={16} /> Choose organization</Button>
         </Link>
-      </section>
+      </Card>
     );
   } else {
     content = (
-      <Outlet
-        key={
-          hasRole('SUPER_ADMIN')
-            ? tenantId || 'platform'
-            : user?.id || user?.email || 'tenant-user'
-        }
-      />
+      <div className="kinetic-page-enter" key={location.pathname}>
+        <Outlet
+          key={hasRole('SUPER_ADMIN') ? tenantId || 'platform' : user?.id || user?.email || 'tenant-user'}
+        />
+      </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-slate-50">
+    <div className="min-h-screen bg-[#f4f6f8]">
       <Sidebar
         open={sidebarOpen}
-        onClose={() => setSidebarOpen(false)}
+        onClose={() => setSidebarOpenPath(null)}
+        collapsed={sidebarCollapsed}
+        onToggleCollapsed={() => setSidebarCollapsed((value) => !value)}
       />
-      <div className="lg:pl-72">
-        <Navbar onMenu={() => setSidebarOpen(true)} />
-        <main className="mx-auto max-w-[1600px] p-4 md:p-8">
+      <div className={`min-h-screen transition-[padding] duration-200 ${sidebarCollapsed ? 'lg:pl-[76px]' : 'lg:pl-[236px]'}`}>
+        <Navbar onMenu={() => setSidebarOpenPath(location.pathname)} />
+        <main className="mx-auto max-w-[1540px] p-4 md:p-5 lg:p-6">
           {content}
         </main>
       </div>

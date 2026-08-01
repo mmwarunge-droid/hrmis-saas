@@ -58,7 +58,7 @@ function PersonAvatar({ person, size = 'md' }) {
       <img
         src={person.profile_photo_url}
         alt=""
-        className={`${sizes[size]} rounded-2xl object-cover ring-1 ring-slate-200`}
+        className={`${sizes[size]} rounded-lg object-cover ring-1 ring-slate-200`}
       />
     );
   }
@@ -69,17 +69,17 @@ function PersonLink({ person, detail, badge }) {
   return (
     <Link
       to={`/employees/${person.id}`}
-      className="group flex items-center gap-3 rounded-2xl border border-slate-100 bg-slate-50/70 p-3 transition hover:-translate-y-0.5 hover:border-cyan-200 hover:bg-cyan-50/40"
+      className="group flex items-center gap-3 rounded-lg border border-slate-100 bg-slate-50/70 p-3 transition hover:-translate-y-0.5 hover:border-blue-200 hover:bg-blue-50/40"
     >
       <PersonAvatar person={person} />
       <span className="min-w-0 flex-1">
-        <span className="block truncate text-sm font-semibold text-slate-950 group-hover:text-cyan-800">
+        <span className="block truncate text-sm font-semibold text-slate-950 group-hover:text-blue-800">
           {person.full_name}
         </span>
         <span className="mt-0.5 block truncate text-xs text-slate-500">{detail}</span>
       </span>
       {badge}
-      <ArrowRight size={15} className="shrink-0 text-slate-300 group-hover:text-cyan-700" />
+      <ArrowRight size={15} className="shrink-0 text-slate-300 group-hover:text-blue-700" />
     </Link>
   );
 }
@@ -89,12 +89,12 @@ function SectionCard({ icon: Icon, eyebrow, title, action, children, id }) {
     <Card id={id} className="h-full">
       <div className="flex items-start justify-between gap-4">
         <div className="flex items-center gap-3">
-          <span className="grid h-10 w-10 place-items-center rounded-2xl bg-cyan-50 text-cyan-700">
+          <span className="grid h-10 w-10 place-items-center rounded-lg bg-blue-50 text-blue-700">
             <Icon size={19} />
           </span>
           <div>
             {eyebrow && (
-              <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-cyan-700">
+              <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-blue-700">
                 {eyebrow}
               </p>
             )}
@@ -110,7 +110,7 @@ function SectionCard({ icon: Icon, eyebrow, title, action, children, id }) {
 
 function EmptyMessage({ children }) {
   return (
-    <p className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-5 text-sm text-slate-500">
+    <p className="rounded-lg border border-dashed border-slate-200 bg-slate-50 px-4 py-5 text-sm text-slate-500">
       {children}
     </p>
   );
@@ -165,7 +165,7 @@ function ProfileForm({ viewer, onSave, loading }) {
           <select
             value={form.birthday_visibility}
             onChange={change('birthday_visibility')}
-            className="w-full rounded-2xl border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none focus:border-cyan-400 focus:ring-4 focus:ring-cyan-100"
+            className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none focus:border-blue-400 focus:ring-4 focus:ring-blue-100"
           >
             <option value="colleagues">Show day and month to colleagues</option>
             <option value="hr_only">HR only</option>
@@ -191,7 +191,7 @@ function ProfileForm({ viewer, onSave, loading }) {
           <select
             value={form.gender_identity}
             onChange={change('gender_identity')}
-            className="w-full rounded-2xl border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none focus:border-cyan-400 focus:ring-4 focus:ring-cyan-100"
+            className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none focus:border-blue-400 focus:ring-4 focus:ring-blue-100"
           >
             <option value="prefer_not_to_say">Prefer not to say</option>
             <option value="woman">Woman</option>
@@ -215,7 +215,7 @@ function ProfileForm({ viewer, onSave, loading }) {
           onChange={change('biography')}
           rows={4}
           maxLength={2000}
-          className="w-full rounded-2xl border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none focus:border-cyan-400 focus:ring-4 focus:ring-cyan-100"
+          className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none focus:border-blue-400 focus:ring-4 focus:ring-blue-100"
           placeholder="Share a short introduction colleagues can see."
         />
       </label>
@@ -279,14 +279,14 @@ export default function EmployeeHome() {
 
   if (error && !data) return <Alert type="error">{error}</Alert>;
   if (!data) {
-    return <div className="h-[38rem] animate-pulse rounded-[2rem] bg-slate-100" />;
+    return <div className="h-[28rem] animate-pulse rounded-xl bg-slate-100" />;
   }
 
   const { branding, viewer } = data;
   const firstName = viewer.preferred_name || viewer.first_name || viewer.full_name?.split(' ')[0] || 'there';
   const quickActions = [
     { to: '/leave', label: 'Request time off', detail: 'Submit and track leave', icon: Plane },
-    { to: '/ask-ace', label: 'Ask a question', detail: 'Find help from approved resources', icon: Bot },
+    { to: '/ask-kinetic', label: 'Ask a question', detail: 'Find help from approved resources', icon: Bot },
     { to: '#essentials', label: 'Essentials', detail: 'Policies and training', icon: BookOpenCheck },
     { to: '/employees', label: 'People directory', detail: 'Find a colleague', icon: UsersRound },
   ];
@@ -313,9 +313,9 @@ export default function EmployeeHome() {
             <a
               key={item.id}
               href={item.download_url}
-              className="group flex items-center gap-3 rounded-2xl border border-slate-100 bg-slate-50/70 p-3 transition hover:border-cyan-200 hover:bg-cyan-50/40"
+              className="group flex items-center gap-3 rounded-lg border border-slate-100 bg-slate-50/70 p-3 transition hover:border-blue-200 hover:bg-blue-50/40"
             >
-              <span className="grid h-10 w-10 place-items-center rounded-xl bg-white text-cyan-700 shadow-sm">
+              <span className="grid h-10 w-10 place-items-center rounded-xl bg-white text-blue-700 shadow-sm">
                 <FileText size={18} />
               </span>
               <span className="min-w-0 flex-1">
@@ -353,7 +353,7 @@ export default function EmployeeHome() {
             <Link
               key={event.id}
               to={`/events/${event.id}`}
-              className="group block overflow-hidden rounded-2xl border border-slate-100 bg-slate-50/70 transition hover:-translate-y-0.5 hover:border-cyan-200"
+              className="group block overflow-hidden rounded-lg border border-slate-100 bg-slate-50/70 transition hover:-translate-y-0.5 hover:border-blue-200"
             >
               {event.image_url && (
                 <img src={event.image_url} alt="" className="h-24 w-full object-cover" />
@@ -361,10 +361,10 @@ export default function EmployeeHome() {
               <div className="p-4">
                 <div className="flex items-start justify-between gap-3">
                   <div>
-                    <p className="font-semibold text-slate-950 group-hover:text-cyan-800">{event.title}</p>
+                    <p className="font-semibold text-slate-950 group-hover:text-blue-800">{event.title}</p>
                     <p className="mt-1 text-xs text-slate-500">{formatDateTime(event.starts_at)}</p>
                   </div>
-                  <ArrowRight size={16} className="text-slate-300 group-hover:text-cyan-700" />
+                  <ArrowRight size={16} className="text-slate-300 group-hover:text-blue-700" />
                 </div>
                 {event.location && (
                   <p className="mt-3 flex items-center gap-1.5 text-xs text-slate-500">
@@ -411,7 +411,7 @@ export default function EmployeeHome() {
           <EmptyMessage>Organization people insights are disabled.</EmptyMessage>
         ) : (
           <div className="space-y-5">
-            <div className="rounded-2xl bg-slate-950 p-5 text-white">
+            <div className="rounded-lg bg-slate-950 p-5 text-white">
               <p className="text-3xl font-bold">{data.people_statistics.total_employees}</p>
               <p className="mt-1 text-sm text-slate-300">Active colleagues</p>
             </div>
@@ -447,21 +447,21 @@ export default function EmployeeHome() {
       {message && <Alert type="success">{message}</Alert>}
 
       <section
-        className="relative min-h-[19rem] overflow-hidden rounded-[2rem] bg-gradient-to-br from-slate-950 via-blue-950 to-cyan-900 p-6 text-white shadow-xl md:p-9"
+        className="relative min-h-[15rem] overflow-hidden rounded-xl bg-gradient-to-br from-slate-950 via-blue-950 to-blue-900 p-6 text-white shadow-sm md:p-9"
         style={branding.banner_url ? {
           backgroundImage: `linear-gradient(110deg, rgba(2,6,23,.93), rgba(8,47,73,.65)), url(${branding.banner_url})`,
           backgroundPosition: 'center',
           backgroundSize: 'cover',
         } : undefined}
       >
-        <div className="absolute -right-16 -top-20 h-72 w-72 rounded-full bg-cyan-300/20 blur-3xl" />
+        <div className="absolute -right-16 -top-20 h-72 w-72 rounded-full bg-blue-300/20 blur-3xl" />
         <div className="relative flex h-full flex-col justify-between gap-12">
           <div className="flex items-start justify-between gap-5">
             <div>
-              <p className="text-xs font-bold uppercase tracking-[0.22em] text-cyan-200">
+              <p className="text-xs font-bold uppercase tracking-[0.22em] text-blue-200">
                 {branding.organization_name}
               </p>
-              <h1 className="mt-4 max-w-3xl text-3xl font-bold tracking-tight md:text-5xl">
+              <h1 className="mt-4 max-w-3xl text-3xl font-bold tracking-tight md:text-4xl">
                 Hi {firstName}, glad you’re here <span aria-hidden="true">👋</span>
               </h1>
               <p className="mt-4 max-w-2xl text-sm leading-6 text-slate-200 md:text-base">
@@ -472,16 +472,16 @@ export default function EmployeeHome() {
               <img
                 src={branding.logo_url}
                 alt={`${branding.organization_name} logo`}
-                className="h-16 w-16 rounded-2xl bg-white object-contain p-2 shadow-xl md:h-20 md:w-20"
+                className="h-16 w-16 rounded-lg bg-white object-contain p-2 shadow-sm md:h-20 md:w-20"
               />
             ) : (
-              <span className="grid h-16 w-16 shrink-0 place-items-center rounded-2xl bg-white/10 text-2xl font-bold ring-1 ring-white/20 md:h-20 md:w-20">
+              <span className="grid h-16 w-16 shrink-0 place-items-center rounded-lg bg-white/10 text-2xl font-bold ring-1 ring-white/20 md:h-20 md:w-20">
                 {branding.organization_name?.slice(0, 1)}
               </span>
             )}
           </div>
 
-          <div className="flex flex-wrap items-center justify-between gap-4 rounded-3xl border border-white/10 bg-white/10 p-4 backdrop-blur-md">
+          <div className="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-white/10 bg-white/10 p-4 backdrop-blur-md">
             <div className="flex items-center gap-3">
               <PersonAvatar person={viewer} size="lg" />
               <div>
@@ -512,8 +512,8 @@ export default function EmployeeHome() {
       <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         {quickActions.map(({ to, label, detail, icon: Icon }) => {
           const content = (
-            <Card className="group h-full transition hover:-translate-y-1 hover:border-cyan-200">
-              <span className="grid h-11 w-11 place-items-center rounded-2xl bg-cyan-50 text-cyan-700 group-hover:bg-cyan-100">
+            <Card className="group h-full transition hover:-translate-y-0.5 hover:border-blue-200">
+              <span className="grid h-11 w-11 place-items-center rounded-lg bg-blue-50 text-blue-700 group-hover:bg-blue-100">
                 <Icon size={20} />
               </span>
               <div className="mt-4 flex items-end justify-between gap-3">
@@ -521,7 +521,7 @@ export default function EmployeeHome() {
                   <p className="font-bold text-slate-950">{label}</p>
                   <p className="mt-1 text-xs leading-5 text-slate-500">{detail}</p>
                 </div>
-                <ArrowRight size={17} className="text-slate-300 group-hover:text-cyan-700" />
+                <ArrowRight size={17} className="text-slate-300 group-hover:text-blue-700" />
               </div>
             </Card>
           );
@@ -530,21 +530,21 @@ export default function EmployeeHome() {
         })}
       </section>
 
-      <Card className="overflow-hidden bg-gradient-to-r from-violet-50 via-white to-cyan-50">
+      <Card className="overflow-hidden bg-gradient-to-r from-blue-50 via-white to-blue-50">
         <div className="flex flex-wrap items-center justify-between gap-5">
           <div className="flex items-center gap-4">
-            <span className="grid h-12 w-12 place-items-center rounded-2xl bg-violet-600 text-white shadow-lg shadow-violet-200">
+            <span className="grid h-12 w-12 place-items-center rounded-lg bg-blue-600 text-white shadow-lg shadow-blue-200">
               <Bot size={22} />
             </span>
             <div>
-              <p className="text-xs font-bold uppercase tracking-[0.18em] text-violet-700">Ask ACE</p>
+              <p className="text-xs font-bold uppercase tracking-[0.18em] text-blue-700">Ask Kinetic</p>
               <h2 className="mt-1 text-xl font-bold text-slate-950">Have a workplace question?</h2>
               <p className="mt-1 text-sm text-slate-600">
                 Use your organization’s approved employee help experience.
               </p>
             </div>
           </div>
-          <Link to="/ask-ace">
+          <Link to="/ask-kinetic">
             <Button variant="accent">
               <Sparkles size={17} /> Ask a question
             </Button>

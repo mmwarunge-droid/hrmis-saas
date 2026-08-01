@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Clock3, LogIn, LogOut, TimerReset } from 'lucide-react';
 import { attendanceApi } from '../api/attendanceApi';
 import Alert from '../components/ui/Alert.jsx';
@@ -17,27 +17,31 @@ function formatTime(value) {
 
 export default function Attendance() {
   const [rows, setRows] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const { hasPermission } = usePermissions();
   const canRead = hasPermission('attendance:read');
   const canWrite = hasPermission('attendance:write');
 
-  const load = async () => {
+  const load = useCallback(async () => {
+    setError('');
     try {
       const response = await attendanceApi.list();
       setRows(response.data.items || []);
     } catch (err) {
       setError(err.error?.message || 'Unable to load attendance');
+    } finally {
+      setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
-    if (!canRead) return;
-    attendanceApi
-      .list()
-      .then((response) => setRows(response.data.items || []))
-      .catch((err) => setError(err.error?.message || 'Unable to load attendance'));
-  }, [canRead]);
+    if (!canRead) {
+      setLoading(false);
+      return;
+    }
+    load();
+  }, [canRead, load]);
 
   const today = new Date().toISOString().slice(0, 10);
   const todayRecord = rows.find((row) => row.work_date === today);
@@ -55,15 +59,15 @@ export default function Attendance() {
   };
 
   const columns = [
-    { key: 'work_date', label: 'Date' },
-    { key: 'check_in_at', label: 'Check in', render: (row) => formatTime(row.check_in_at) },
-    { key: 'check_out_at', label: 'Check out', render: (row) => formatTime(row.check_out_at) },
-    { key: 'source', label: 'Source', render: (row) => <Badge tone="blue">{row.source.replaceAll('_', ' ')}</Badge> },
-    { key: 'status', label: 'Status', render: (row) => <Badge tone={row.check_out_at ? 'green' : row.check_in_at ? 'amber' : 'slate'}>{row.check_out_at ? 'Complete' : row.check_in_at ? 'In progress' : 'Missing'}</Badge> },
+    { key: 'work_date', label: 'Date', sortable: true },
+    { key: 'check_in_at', label: 'Check in', sortable: true, render: (row) => formatTime(row.check_in_at) },
+    { key: 'check_out_at', label: 'Check out', sortable: true, render: (row) => formatTime(row.check_out_at) },
+    { key: 'source', label: 'Source', sortable: true, render: (row) => <Badge tone="blue">{row.source?.replaceAll('_', ' ') || 'Unknown'}</Badge> },
+    { key: 'status', label: 'Status', sortable: true, render: (row) => <Badge tone={row.check_out_at ? 'green' : row.check_in_at ? 'amber' : 'slate'}>{row.check_out_at ? 'Complete' : row.check_in_at ? 'In progress' : 'Missing'}</Badge> },
   ];
 
   return (
-    <div className="space-y-7">
+    <div className="space-y-6">
       <PageHeader
         eyebrow="Time"
         title="Attendance"
@@ -78,7 +82,7 @@ export default function Attendance() {
         <StatCard label="Open session" value={todayRecord?.check_in_at && !todayRecord?.check_out_at ? '1' : '0'} detail="Attendance sessions awaiting checkout" icon={LogIn} tone="violet" />
       </div>
 
-      {canRead ? <Table columns={columns} rows={rows} empty="No attendance records yet." /> : (
+      {canRead ? <Table caption="Attendance records" columns={columns} rows={rows} loading={loading} pageSize={15} density="compact" empty="No attendance records yet." /> : (
         <Card className="text-center"><p className="font-semibold text-slate-900">Self-service attendance</p><p className="mt-2 text-sm text-slate-500">Your role can check in and out. Detailed attendance reporting is available to managers and administrators.</p></Card>
       )}
     </div>

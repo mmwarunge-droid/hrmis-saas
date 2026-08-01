@@ -21,12 +21,12 @@ function personImage(viewer, size = 'h-28 w-28') {
       <img
         src={viewer.profile_photo_url}
         alt={`${viewer.full_name} profile`}
-        className={`${size} rounded-[2rem] border-4 border-white object-cover shadow-xl`}
+        className={`${size} rounded-xl border-4 border-white object-cover shadow-sm`}
       />
     );
   }
   return (
-    <span className="grid h-28 w-28 place-items-center rounded-[2rem] border-4 border-white bg-white shadow-xl">
+    <span className="grid h-28 w-28 place-items-center rounded-xl border-4 border-white bg-white shadow-sm">
       <Avatar name={viewer.full_name} size="lg" />
     </span>
   );
@@ -134,7 +134,7 @@ export default function MyProfile() {
   };
 
   if (loading) {
-    return <div className="h-[38rem] animate-pulse rounded-[2rem] bg-slate-100" />;
+    return <div className="h-[28rem] animate-pulse rounded-xl bg-slate-100" />;
   }
   if (!viewer || !form) return <Alert type="error">{error}</Alert>;
 
@@ -147,14 +147,14 @@ export default function MyProfile() {
 
       <Card padded={false} className="overflow-hidden">
         <div
-          className="relative h-52 bg-gradient-to-br from-slate-950 via-blue-950 to-cyan-800"
+          className="relative h-40 bg-gradient-to-br from-slate-950 via-blue-950 to-blue-800"
           style={cover ? {
             backgroundImage: `linear-gradient(110deg, rgba(2,6,23,.72), rgba(8,47,73,.32)), url(${cover})`,
             backgroundPosition: 'center',
             backgroundSize: 'cover',
           } : undefined}
         >
-          <label className="absolute right-5 top-5 cursor-pointer rounded-2xl border border-white/20 bg-slate-950/60 px-4 py-2 text-sm font-semibold text-white backdrop-blur transition hover:bg-slate-950/80">
+          <label className="absolute right-5 top-5 cursor-pointer rounded-lg border border-white/20 bg-slate-950/60 px-4 py-2 text-sm font-semibold text-white backdrop-blur transition hover:bg-slate-950/80">
             <input
               aria-label="Upload profile cover"
               type="file"
@@ -175,7 +175,7 @@ export default function MyProfile() {
             <div className="flex flex-wrap items-end gap-5">
               <div className="relative">
                 {personImage(viewer)}
-                <label className="absolute -bottom-2 -right-2 grid h-10 w-10 cursor-pointer place-items-center rounded-2xl bg-cyan-700 text-white shadow-lg transition hover:bg-cyan-600">
+                <label className="absolute -bottom-2 -right-2 grid h-10 w-10 cursor-pointer place-items-center rounded-lg bg-blue-700 text-white shadow-lg transition hover:bg-blue-600">
                   <input
                     aria-label="Upload profile photo"
                     type="file"
@@ -188,7 +188,7 @@ export default function MyProfile() {
                 </label>
               </div>
               <div className="pb-1">
-                <p className="text-xs font-bold uppercase tracking-[0.18em] text-cyan-700">
+                <p className="text-xs font-bold uppercase tracking-[0.18em] text-blue-700">
                   My profile
                 </p>
                 <h1 className="mt-1 text-3xl font-bold text-slate-950">{viewer.full_name}</h1>
@@ -210,11 +210,11 @@ export default function MyProfile() {
       <form onSubmit={save} className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
         <Card>
           <div className="flex items-center gap-3">
-            <span className="grid h-11 w-11 place-items-center rounded-2xl bg-cyan-50 text-cyan-700">
+            <span className="grid h-11 w-11 place-items-center rounded-lg bg-blue-50 text-blue-700">
               <UserRound size={20} />
             </span>
             <div>
-              <p className="text-xs font-bold uppercase tracking-[0.17em] text-cyan-700">
+              <p className="text-xs font-bold uppercase tracking-[0.17em] text-blue-700">
                 Personal details
               </p>
               <h2 className="text-xl font-bold text-slate-950">How colleagues know you</h2>
@@ -247,7 +247,7 @@ export default function MyProfile() {
               <select
                 value={form.birthday_visibility}
                 onChange={change('birthday_visibility')}
-                className="w-full rounded-2xl border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none focus:border-cyan-400 focus:ring-4 focus:ring-cyan-100"
+                className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none focus:border-blue-400 focus:ring-4 focus:ring-blue-100"
               >
                 <option value="colleagues">Show day and month to colleagues</option>
                 <option value="hr_only">HR only</option>
@@ -259,7 +259,7 @@ export default function MyProfile() {
               <select
                 value={form.gender_identity}
                 onChange={change('gender_identity')}
-                className="w-full rounded-2xl border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none focus:border-cyan-400 focus:ring-4 focus:ring-cyan-100"
+                className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none focus:border-blue-400 focus:ring-4 focus:ring-blue-100"
               >
                 <option value="prefer_not_to_say">Prefer not to say</option>
                 <option value="woman">Woman</option>
@@ -285,7 +285,7 @@ export default function MyProfile() {
               onChange={change('biography')}
               rows={5}
               maxLength={2000}
-              className="w-full rounded-2xl border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none focus:border-cyan-400 focus:ring-4 focus:ring-cyan-100"
+              className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none focus:border-blue-400 focus:ring-4 focus:ring-blue-100"
               placeholder="Share a short introduction colleagues can see."
             />
           </label>
@@ -307,7 +307,7 @@ export default function MyProfile() {
         </Card>
 
         <Card>
-          <p className="text-xs font-bold uppercase tracking-[0.17em] text-violet-700">
+          <p className="text-xs font-bold uppercase tracking-[0.17em] text-blue-700">
             Work profile
           </p>
           <h2 className="mt-1 text-xl font-bold text-slate-950">Organization information</h2>
@@ -323,7 +323,7 @@ export default function MyProfile() {
               ['Work location', viewer.work_location || 'Not set'],
               ['Employee number', viewer.employee_number || 'Not set'],
             ].map(([label, value]) => (
-              <div key={label} className="rounded-2xl bg-slate-50 p-4">
+              <div key={label} className="rounded-lg bg-slate-50 p-4">
                 <dt className="text-xs font-bold uppercase tracking-[0.12em] text-slate-400">
                   {label}
                 </dt>
@@ -332,7 +332,7 @@ export default function MyProfile() {
             ))}
           </dl>
 
-          <p className="mt-6 rounded-2xl border border-cyan-100 bg-cyan-50 p-4 text-xs leading-5 text-cyan-900">
+          <p className="mt-6 rounded-lg border border-blue-100 bg-blue-50 p-4 text-xs leading-5 text-blue-900">
             Colleagues never see your birth year. Gender and hobbies are used only in privacy-protected organization totals.
           </p>
         </Card>

@@ -43,7 +43,7 @@ const employees = [
 ];
 
 describe('SignatureRequestForm', () => {
-  it('creates a standard ACE signature request by default', () => {
+  it('creates a standard Kinetic signature request by default', () => {
     const onSubmit = vi.fn();
     const deadline = futureLocalDate();
 
@@ -114,7 +114,7 @@ describe('SignatureRequestForm', () => {
     ).not.toBeInTheDocument();
   });
 
-  it('retains multi-signer controls for standard ACE signing', () => {
+  it('retains multi-signer controls for standard Kinetic signing', () => {
     const onSubmit = vi.fn();
     const deadline = futureLocalDate();
 

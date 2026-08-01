@@ -65,7 +65,7 @@ describe('SignatureTaskCard', () => {
     expect(onDecline).not.toHaveBeenCalled();
   });
 
-  it('retains internal actions for standard ACE tasks', () => {
+  it('retains internal actions for standard Kinetic tasks', () => {
     const onViewed = vi.fn();
     const onSign = vi.fn();
     const onDecline = vi.fn();

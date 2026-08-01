@@ -215,7 +215,7 @@ def _notify_recipient(
         f'your review and signature.\n\n'
         f'Document: {document.title}\n'
         f'Due: {_due_text(recipient.due_at)}\n\n'
-        f'Open ACE to review the task:\n{_task_url()}'
+        f'Open Kinetic to review the task:\n{_task_url()}'
     )
 
     _create_notification(
@@ -568,7 +568,7 @@ def create_signature_request(
 
     if is_qes:
         # Commit the local request before calling the provider. The
-        # provider metadata contains the ACE request ID, so callbacks
+        # provider metadata contains the Kinetic request ID, so callbacks
         # can still reconcile the request if the synchronous response
         # is interrupted.
         db.session.commit()
@@ -670,7 +670,7 @@ def create_signature_request(
                 (
                     'Dropbox Sign sent an identity-verified '
                     'signing invitation to your email address. '
-                    'Complete the eID process there; ACE cannot '
+                    'Complete the eID process there; Kinetic cannot '
                     'record this signature directly.'
                 ),
             )
@@ -975,7 +975,7 @@ def mark_recipient_signed(
     if _provider_backed(signature_request):
         raise ValueError(
             'This QES request is completed through Dropbox '
-            'Sign. ACE cannot record the signature directly.',
+            'Sign. Kinetic cannot record the signature directly.',
         )
 
     now = utcnow()
@@ -1195,7 +1195,7 @@ def send_signature_reminder(
                 f'{signature_request.document.title} is waiting '
                 f'for your signature.\n\n'
                 f'Due: {_due_text(recipient.due_at)}\n\n'
-                f'Open ACE to complete the task:\n{_task_url()}'
+                f'Open Kinetic to complete the task:\n{_task_url()}'
             )
             _create_notification(
                 signature_request.tenant_id,
@@ -1331,7 +1331,7 @@ def update_signature_deadline(
                 f'{recipient.name}, the deadline for signing '
                 f'{signature_request.document.title} has changed.'
                 f'\n\nNew due date: {_due_text(due_at)}\n\n'
-                f'Open ACE to review the task:\n{_task_url()}'
+                f'Open Kinetic to review the task:\n{_task_url()}'
             )
             _create_notification(
                 signature_request.tenant_id,
@@ -1434,7 +1434,7 @@ def cancel_signature_request(
                     f'{signature_request.subject}'
                 ),
                 (
-                    'ACE asked Dropbox Sign to cancel the QES '
+                    'Kinetic asked Dropbox Sign to cancel the QES '
                     'request. The request remains active until '
                     'the provider confirms cancellation.'
                 ),

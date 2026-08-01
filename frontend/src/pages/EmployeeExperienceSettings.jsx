@@ -20,6 +20,7 @@ import Button from '../components/ui/Button.jsx';
 import Card from '../components/ui/Card.jsx';
 import Input from '../components/ui/Input.jsx';
 import Modal from '../components/ui/Modal.jsx';
+import PageHeader from '../components/ui/PageHeader.jsx';
 import useTenant from '../hooks/useTenant.js';
 
 const SECTION_OPTIONS = [
@@ -287,45 +288,43 @@ export default function EmployeeExperienceSettings() {
   }
   if (!settings) {
     return error ? <Alert type="error">{error}</Alert> : (
-      <div className="h-[36rem] animate-pulse rounded-[2rem] bg-slate-100" />
+      <div className="h-[36rem] animate-pulse rounded-xl bg-slate-100" />
     );
   }
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <p className="text-xs font-bold uppercase tracking-[0.2em] text-cyan-700">Administration</p>
-          <h1 className="mt-2 text-3xl font-bold text-slate-950">Employee experience</h1>
-          <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
-            Configure the branded employee homepage, visible sections, Ask ACE handoff, events and essential documents.
-          </p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <Link to="/employee-home">
-            <Button variant="secondary">
-              <Eye size={17} /> Preview employee home
+      <PageHeader
+        eyebrow="Administration"
+        title="Employee experience"
+        description="Configure the branded employee homepage, visible sections, Ask Kinetic handoff, events and essential documents."
+        actions={(
+          <>
+            <Link to="/employee-home">
+              <Button variant="secondary">
+                <Eye size={17} /> Preview employee home
+              </Button>
+            </Link>
+            <Button variant="accent" onClick={saveSettings} disabled={saving}>
+              <Save size={17} /> {saving ? 'Saving…' : 'Save homepage'}
             </Button>
-          </Link>
-          <Button variant="accent" onClick={saveSettings} disabled={saving}>
-            <Save size={17} /> {saving ? 'Saving…' : 'Save homepage'}
-          </Button>
-        </div>
-      </div>
+          </>
+        )}
+      />
 
       {error && <Alert type="error">{error}</Alert>}
       {message && <Alert type="success">{message}</Alert>}
 
       <Card>
         <div className="flex items-center gap-3">
-          <span className="grid h-10 w-10 place-items-center rounded-2xl bg-cyan-50 text-cyan-700"><Image size={19} /></span>
+          <span className="grid h-10 w-10 place-items-center rounded-lg bg-blue-50 text-blue-700"><Image size={19} /></span>
           <div>
             <h2 className="text-lg font-bold text-slate-950">Branding and welcome</h2>
             <p className="text-sm text-slate-500">Upload PNG, JPEG or WebP images up to 5 MB, or use an approved HTTPS image URL.</p>
           </div>
         </div>
         <div className="mt-5 grid gap-4 md:grid-cols-2">
-          <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4">
+          <div className="rounded-lg border border-slate-200 bg-slate-50/70 p-4">
             <label className="block text-sm font-medium text-slate-700" htmlFor="homepage-banner-upload">
               Upload company banner
             </label>
@@ -347,7 +346,7 @@ export default function EmployeeExperienceSettings() {
               {brandingUpload === 'banner' ? 'Uploading…' : 'Upload banner'}
             </Button>
           </div>
-          <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4">
+          <div className="rounded-lg border border-slate-200 bg-slate-50/70 p-4">
             <label className="block text-sm font-medium text-slate-700" htmlFor="homepage-logo-upload">
               Upload company logo
             </label>
@@ -396,7 +395,7 @@ export default function EmployeeExperienceSettings() {
 
       <Card>
         <div className="flex items-center gap-3">
-          <span className="grid h-10 w-10 place-items-center rounded-2xl bg-violet-50 text-violet-700"><Settings2 size={19} /></span>
+          <span className="grid h-10 w-10 place-items-center rounded-lg bg-blue-50 text-blue-700"><Settings2 size={19} /></span>
           <div>
             <h2 className="text-lg font-bold text-slate-950">Homepage sections</h2>
             <p className="text-sm text-slate-500">Choose what employees see and arrange the card order.</p>
@@ -407,7 +406,7 @@ export default function EmployeeExperienceSettings() {
             const label = SECTION_OPTIONS.find(([key]) => key === section)?.[1] || section;
             const enabled = settings.enabled_sections.includes(section);
             return (
-              <div key={section} className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-100 bg-slate-50/70 p-3">
+              <div key={section} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-100 bg-slate-50/70 p-3">
                 <label className="flex items-center gap-3 text-sm font-semibold text-slate-900">
                   <input type="checkbox" checked={enabled} onChange={() => toggleSection(section)} />
                   {label}
@@ -438,7 +437,7 @@ export default function EmployeeExperienceSettings() {
             ['anniversaries_enabled', 'Enable anniversaries'],
             ['people_statistics_enabled', 'Enable people insights'],
           ].map(([key, label]) => (
-            <label key={key} className="flex items-center gap-3 rounded-2xl border border-slate-200 px-4 py-3 text-sm font-medium text-slate-700">
+            <label key={key} className="flex items-center gap-3 rounded-lg border border-slate-200 px-4 py-3 text-sm font-medium text-slate-700">
               <input type="checkbox" checked={Boolean(settings[key])} onChange={(event) => changeSetting(key, event.target.checked)} />
               {label}
             </label>
@@ -448,16 +447,16 @@ export default function EmployeeExperienceSettings() {
 
       <Card>
         <div className="flex items-center gap-3">
-          <span className="grid h-10 w-10 place-items-center rounded-2xl bg-violet-50 text-violet-700"><Settings2 size={19} /></span>
+          <span className="grid h-10 w-10 place-items-center rounded-lg bg-blue-50 text-blue-700"><Settings2 size={19} /></span>
           <div>
-            <h2 className="text-lg font-bold text-slate-950">Ask ACE handoff</h2>
+            <h2 className="text-lg font-bold text-slate-950">Ask Kinetic handoff</h2>
             <p className="text-sm text-slate-500">Connect an approved employee-help tool. Tenant-isolated policy retrieval is a separate integration.</p>
           </div>
         </div>
         <div className="mt-5 grid gap-4 md:grid-cols-[auto_1fr] md:items-end">
-          <label className="flex items-center gap-3 rounded-2xl border border-slate-200 px-4 py-3 text-sm font-medium text-slate-700">
+          <label className="flex items-center gap-3 rounded-lg border border-slate-200 px-4 py-3 text-sm font-medium text-slate-700">
             <input type="checkbox" checked={Boolean(settings.assistant_enabled)} onChange={(event) => changeSetting('assistant_enabled', event.target.checked)} />
-            Enable Ask ACE
+            Enable Ask Kinetic
           </label>
           <Input
             label="Approved assistant URL"
@@ -479,7 +478,7 @@ export default function EmployeeExperienceSettings() {
         </div>
         <div className="mt-5 space-y-2">
           {events.length ? events.map((event) => (
-            <div key={event.id} className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-100 bg-slate-50/70 p-4">
+            <div key={event.id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-100 bg-slate-50/70 p-4">
               <div>
                 <div className="flex flex-wrap items-center gap-2">
                   <p className="font-semibold text-slate-950">{event.title}</p>
@@ -492,7 +491,7 @@ export default function EmployeeExperienceSettings() {
                 <Button variant="ghost" size="sm" onClick={() => removeEvent(event.id)} aria-label={`Delete ${event.title}`}><Trash2 size={15} /></Button>
               </div>
             </div>
-          )) : <p className="rounded-2xl bg-slate-50 p-4 text-sm text-slate-500">No organization events created yet.</p>}
+          )) : <p className="rounded-lg bg-slate-50 p-4 text-sm text-slate-500">No organization events created yet.</p>}
         </div>
       </Card>
 
@@ -508,7 +507,7 @@ export default function EmployeeExperienceSettings() {
               required
               value={essentialForm.document_id}
               onChange={(event) => setEssentialForm((current) => ({ ...current, document_id: event.target.value }))}
-              className="w-full rounded-2xl border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none focus:border-cyan-400 focus:ring-4 focus:ring-cyan-100"
+              className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none focus:border-blue-400 focus:ring-4 focus:ring-blue-100"
             >
               <option value="">Select a document</option>
               {availableDocuments.map((document) => <option key={document.id} value={document.id}>{document.title}</option>)}
@@ -524,7 +523,7 @@ export default function EmployeeExperienceSettings() {
             <select
               value={essentialForm.importance}
               onChange={(event) => setEssentialForm((current) => ({ ...current, importance: event.target.value }))}
-              className="rounded-2xl border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none focus:border-cyan-400 focus:ring-4 focus:ring-cyan-100"
+              className="rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none focus:border-blue-400 focus:ring-4 focus:ring-blue-100"
             >
               <option value="recommended">Recommended</option>
               <option value="required">Required</option>
@@ -534,7 +533,7 @@ export default function EmployeeExperienceSettings() {
         </form>
         <div className="mt-5 space-y-2">
           {essentials.length ? essentials.map((item) => (
-            <div key={item.id} className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-100 bg-slate-50/70 p-4">
+            <div key={item.id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-100 bg-slate-50/70 p-4">
               <div>
                 <p className="font-semibold text-slate-950">{item.title}</p>
                 <div className="mt-1 flex gap-2"><Badge tone={item.importance === 'required' ? 'amber' : 'blue'}>{item.importance}</Badge><Badge tone={item.is_published ? 'green' : 'slate'}>{item.is_published ? 'published' : 'hidden'}</Badge></div>
@@ -544,7 +543,7 @@ export default function EmployeeExperienceSettings() {
                 <Button variant="ghost" size="sm" onClick={() => removeEssential(item.id)} aria-label={`Remove ${item.title}`}><Trash2 size={15} /></Button>
               </div>
             </div>
-          )) : <p className="rounded-2xl bg-slate-50 p-4 text-sm text-slate-500">No employee essentials configured yet.</p>}
+          )) : <p className="rounded-lg bg-slate-50 p-4 text-sm text-slate-500">No employee essentials configured yet.</p>}
         </div>
       </Card>
 
@@ -559,20 +558,20 @@ export default function EmployeeExperienceSettings() {
             <Input label="Event image URL" type="url" value={eventForm.image_url} onChange={(event) => setEventForm((current) => ({ ...current, image_url: event.target.value }))} />
             <label className="block space-y-1">
               <span className="text-sm font-medium text-slate-700">Audience</span>
-              <select value={eventForm.audience} onChange={(event) => setEventForm((current) => ({ ...current, audience: event.target.value }))} className="w-full rounded-2xl border border-slate-200 bg-white px-3 py-2.5 text-sm">
+              <select value={eventForm.audience} onChange={(event) => setEventForm((current) => ({ ...current, audience: event.target.value }))} className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm">
                 <option value="all">Everyone</option><option value="employees">Employees</option><option value="managers">Managers</option>
               </select>
             </label>
             <label className="block space-y-1">
               <span className="text-sm font-medium text-slate-700">Status</span>
-              <select value={eventForm.status} onChange={(event) => setEventForm((current) => ({ ...current, status: event.target.value }))} className="w-full rounded-2xl border border-slate-200 bg-white px-3 py-2.5 text-sm">
+              <select value={eventForm.status} onChange={(event) => setEventForm((current) => ({ ...current, status: event.target.value }))} className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm">
                 <option value="draft">Draft</option><option value="published">Published</option><option value="cancelled">Cancelled</option>
               </select>
             </label>
           </div>
           <label className="block space-y-1">
             <span className="text-sm font-medium text-slate-700">Description</span>
-            <textarea rows={5} value={eventForm.description} onChange={(event) => setEventForm((current) => ({ ...current, description: event.target.value }))} className="w-full rounded-2xl border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none focus:border-cyan-400 focus:ring-4 focus:ring-cyan-100" />
+            <textarea rows={5} value={eventForm.description} onChange={(event) => setEventForm((current) => ({ ...current, description: event.target.value }))} className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none focus:border-blue-400 focus:ring-4 focus:ring-blue-100" />
           </label>
           <div className="flex justify-end"><Button type="submit" variant="accent" disabled={saving}>{saving ? 'Saving…' : 'Save event'}</Button></div>
         </form>

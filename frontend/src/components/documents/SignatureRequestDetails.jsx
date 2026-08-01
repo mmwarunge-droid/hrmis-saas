@@ -166,10 +166,10 @@ export default function SignatureRequestDetails({
 
   return (
     <div className="space-y-6">
-      <section className="rounded-3xl bg-gradient-to-br from-slate-950 via-blue-950 to-cyan-950 p-6 text-white">
+      <section className="rounded-xl bg-gradient-to-br from-slate-950 via-blue-950 to-blue-950 p-6 text-white">
         <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
           <div className="flex gap-4">
-            <span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-white/10 text-cyan-200">
+            <span className="grid h-12 w-12 shrink-0 place-items-center rounded-lg bg-white/10 text-blue-200">
               <FileSignature size={22} />
             </span>
 
@@ -219,7 +219,7 @@ export default function SignatureRequestDetails({
 
           <div className="mt-2 h-2 overflow-hidden rounded-full bg-white/15">
             <div
-              className="h-full rounded-full bg-cyan-300 transition-all"
+              className="h-full rounded-full bg-blue-300 transition-all"
               style={{ width: `${progress}%` }}
             />
           </div>
@@ -230,7 +230,7 @@ export default function SignatureRequestDetails({
         <Card>
           <CalendarClock
             size={19}
-            className="text-cyan-700"
+            className="text-blue-700"
           />
           <p className="mt-3 text-xs font-bold uppercase tracking-wider text-slate-500">
             Deadline
@@ -243,7 +243,7 @@ export default function SignatureRequestDetails({
         <Card>
           <UserRoundCheck
             size={19}
-            className="text-violet-700"
+            className="text-blue-700"
           />
           <p className="mt-3 text-xs font-bold uppercase tracking-wider text-slate-500">
             Current signatory
@@ -283,11 +283,11 @@ export default function SignatureRequestDetails({
       {isActive && (
         <Card>
           <div className="flex items-center gap-3">
-            <span className="grid h-10 w-10 place-items-center rounded-2xl bg-cyan-50 text-cyan-700">
+            <span className="grid h-10 w-10 place-items-center rounded-lg bg-blue-50 text-blue-700">
               <CalendarClock size={18} />
             </span>
             <div>
-              <p className="text-xs font-bold uppercase tracking-wider text-cyan-700">
+              <p className="text-xs font-bold uppercase tracking-wider text-blue-700">
                 Follow-up
               </p>
               <h3 className="font-bold">
@@ -336,7 +336,7 @@ export default function SignatureRequestDetails({
           {showCancel && (
             <form
               onSubmit={submitCancel}
-              className="mt-5 rounded-2xl border border-red-200 bg-red-50 p-4"
+              className="mt-5 rounded-lg border border-red-200 bg-red-50 p-4"
             >
               <label className="block space-y-1">
                 <span className="text-sm font-medium text-red-800">
@@ -349,7 +349,7 @@ export default function SignatureRequestDetails({
                   onChange={(event) => setCancelReason(
                     event.target.value,
                   )}
-                  className="w-full rounded-2xl border border-red-200 bg-white px-3 py-2.5 text-sm outline-none transition focus:border-red-400 focus:ring-4 focus:ring-red-100"
+                  className="w-full rounded-lg border border-red-200 bg-white px-3 py-2.5 text-sm outline-none transition focus:border-red-400 focus:ring-4 focus:ring-red-100"
                 />
               </label>
 
@@ -372,11 +372,11 @@ export default function SignatureRequestDetails({
 
       <Card>
         <div className="flex items-center gap-3">
-          <span className="grid h-10 w-10 place-items-center rounded-2xl bg-violet-50 text-violet-700">
+          <span className="grid h-10 w-10 place-items-center rounded-lg bg-blue-50 text-blue-700">
             <UserRoundCheck size={18} />
           </span>
           <div>
-            <p className="text-xs font-bold uppercase tracking-wider text-violet-700">
+            <p className="text-xs font-bold uppercase tracking-wider text-blue-700">
               Routing
             </p>
             <h3 className="font-bold">Signatories</h3>
@@ -394,14 +394,14 @@ export default function SignatureRequestDetails({
             return (
               <div
                 key={recipient.id}
-                className="flex flex-col gap-4 rounded-2xl border border-slate-100 p-4 md:flex-row md:items-center"
+                className="flex flex-col gap-4 rounded-lg border border-slate-100 p-4 md:flex-row md:items-center"
               >
                 <span
-                  className={`grid h-11 w-11 shrink-0 place-items-center rounded-2xl ${
+                  className={`grid h-11 w-11 shrink-0 place-items-center rounded-lg ${
                     signed
                       ? 'bg-emerald-50 text-emerald-700'
                       : current
-                        ? 'bg-cyan-50 text-cyan-700'
+                        ? 'bg-blue-50 text-blue-700'
                         : 'bg-slate-100 text-slate-500'
                   }`}
                 >
@@ -446,7 +446,7 @@ export default function SignatureRequestDetails({
 
       <Card>
         <div className="flex items-center gap-3">
-          <span className="grid h-10 w-10 place-items-center rounded-2xl bg-slate-100 text-slate-700">
+          <span className="grid h-10 w-10 place-items-center rounded-lg bg-slate-100 text-slate-700">
             <History size={18} />
           </span>
           <div>
@@ -470,7 +470,7 @@ export default function SignatureRequestDetails({
                   key={event.id}
                   className="relative border-l-2 border-slate-100 pl-5"
                 >
-                  <span className="absolute -left-[7px] top-1 h-3 w-3 rounded-full border-2 border-white bg-cyan-500" />
+                  <span className="absolute -left-[7px] top-1 h-3 w-3 rounded-full border-2 border-white bg-blue-500" />
 
                   <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
                     <div>

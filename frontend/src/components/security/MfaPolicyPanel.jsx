@@ -224,7 +224,7 @@ export default function MfaPolicyPanel({
           <label className="space-y-1 text-sm font-medium text-slate-700">
             <span>Policy mode</span>
             <select
-              className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-2.5"
+              className="w-full rounded-lg border border-slate-200 bg-white px-4 py-2.5"
               value={mode}
               onChange={(event) => setMode(event.target.value)}
             >
@@ -316,7 +316,7 @@ export default function MfaPolicyPanel({
             <label className="block space-y-1 text-sm font-medium text-slate-700">
               <span>Administrative reason</span>
               <textarea
-                className="min-h-24 w-full rounded-2xl border border-slate-200 px-4 py-3"
+                className="min-h-24 w-full rounded-lg border border-slate-200 px-4 py-3"
                 value={resetReason}
                 onChange={(event) => setResetReason(event.target.value)}
                 required
