@@ -18,9 +18,9 @@ export default function EmployeeAccessForm({ employee, onSubmit, loading = false
 
   return (
     <form onSubmit={submit} className="space-y-6">
-      <section className="rounded-3xl border border-cyan-100 bg-cyan-50/70 p-5">
+      <section className="rounded-xl border border-blue-100 bg-blue-50/70 p-5">
         <div className="flex items-start gap-3">
-          <span className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-cyan-100 text-cyan-800">
+          <span className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-blue-100 text-blue-800">
             <ShieldCheck size={19} />
           </span>
           <div>

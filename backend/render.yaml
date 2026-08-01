@@ -126,7 +126,7 @@ services:
       - key: MFA_MAX_CHALLENGE_ATTEMPTS
         value: "5"
       - key: MFA_TOTP_ISSUER
-        value: HRMIS
+        value: Kinetic
       - key: MFA_TOTP_VALID_WINDOW
         value: "1"
       - key: MFA_RECOVERY_CODE_COUNT

@@ -3,13 +3,14 @@ import { authApi } from '../api/authApi';
 import Alert from '../components/ui/Alert.jsx';
 import Button from '../components/ui/Button.jsx';
 import Card from '../components/ui/Card.jsx';
+import PageHeader from '../components/ui/PageHeader.jsx';
 import Input from '../components/ui/Input.jsx';
 import useAuth from '../hooks/useAuth';
 
 function RecoveryCodes({ codes, onCopy }) {
   if (!codes.length) return null;
   return (
-    <div className="space-y-3 rounded-2xl border border-amber-200 bg-amber-50 p-4">
+    <div className="space-y-3 rounded-lg border border-amber-200 bg-amber-50 p-4">
       <div>
         <h3 className="font-semibold text-amber-950">Save these recovery codes now</h3>
         <p className="text-sm text-amber-800">
@@ -165,11 +166,22 @@ export default function Settings() {
     : '';
 
   return (
-    <div className="space-y-4">
-      <Card>
-        <h1 className="text-2xl font-bold">Settings</h1>
-        <p className="mt-2 text-slate-600">Current tenant: {user?.tenant_id || 'Platform'}</p>
-        <p className="text-slate-600">Environment API: {import.meta.env.VITE_API_BASE_URL}</p>
+    <div className="space-y-6">
+      <PageHeader
+        eyebrow="Account"
+        title="Settings"
+        description="Manage email verification, multi-factor authentication and account security."
+      />
+
+      <Card className="grid gap-4 sm:grid-cols-2">
+        <div>
+          <p className="text-xs font-bold uppercase tracking-[0.12em] text-slate-400">Workspace</p>
+          <p className="mt-1 text-sm font-semibold text-slate-900">{user?.tenant_id || 'Platform'}</p>
+        </div>
+        <div>
+          <p className="text-xs font-bold uppercase tracking-[0.12em] text-slate-400">API environment</p>
+          <p className="mt-1 truncate text-sm font-semibold text-slate-900">{import.meta.env.VITE_API_BASE_URL || 'Default'}</p>
+        </div>
       </Card>
 
       {message && <Alert type="success">{message}</Alert>}
@@ -225,7 +237,7 @@ export default function Settings() {
 
         {!mfa?.enabled && enrollment && (
           <div className="mt-5 max-w-lg space-y-4">
-            <div className="rounded-2xl border border-slate-200 p-4">
+            <div className="rounded-lg border border-slate-200 p-4">
               <img
                 className="mx-auto h-52 w-52"
                 src={enrollment.qr_code_data_uri}

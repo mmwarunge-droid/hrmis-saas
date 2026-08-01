@@ -79,7 +79,7 @@ export default function SignatureEvidencePanel({
     <Card>
       <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
         <div className="flex items-start gap-3">
-          <span className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-emerald-50 text-emerald-700">
+          <span className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-emerald-50 text-emerald-700">
             <FileCheck2 size={18} />
           </span>
 
@@ -117,14 +117,14 @@ export default function SignatureEvidencePanel({
       </div>
 
       {evidence.evidence_last_error && (
-        <div className="mt-5 flex gap-3 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-800">
+        <div className="mt-5 flex gap-3 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-800">
           <ShieldAlert size={18} className="shrink-0" />
           <p>{evidence.evidence_last_error}</p>
         </div>
       )}
 
       <div className="mt-5 grid gap-3 md:grid-cols-3">
-        <div className="rounded-2xl bg-slate-50 p-4">
+        <div className="rounded-lg bg-slate-50 p-4">
           <p className="text-xs font-bold uppercase tracking-wider text-slate-500">
             Provider
           </p>
@@ -132,7 +132,7 @@ export default function SignatureEvidencePanel({
             {label(evidence.provider || '—')}
           </p>
         </div>
-        <div className="rounded-2xl bg-slate-50 p-4">
+        <div className="rounded-lg bg-slate-50 p-4">
           <p className="text-xs font-bold uppercase tracking-wider text-slate-500">
             Last attempt
           </p>
@@ -140,7 +140,7 @@ export default function SignatureEvidencePanel({
             {formatDateTime(evidence.evidence_last_attempt_at)}
           </p>
         </div>
-        <div className="rounded-2xl bg-slate-50 p-4">
+        <div className="rounded-lg bg-slate-50 p-4">
           <p className="text-xs font-bold uppercase tracking-wider text-slate-500">
             Verified
           </p>
@@ -155,9 +155,9 @@ export default function SignatureEvidencePanel({
           {evidence.artifacts.map((artifact) => (
             <div
               key={artifact.id}
-              className="flex flex-col gap-3 rounded-2xl border border-slate-100 p-4 md:flex-row md:items-center"
+              className="flex flex-col gap-3 rounded-lg border border-slate-100 p-4 md:flex-row md:items-center"
             >
-              <span className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-cyan-50 text-cyan-700">
+              <span className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-blue-50 text-blue-700">
                 <Archive size={17} />
               </span>
 
@@ -186,10 +186,10 @@ export default function SignatureEvidencePanel({
       )}
 
       {evidence.evidence_status === 'verified' && (
-        <div className="mt-5 flex gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900">
+        <div className="mt-5 flex gap-3 rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900">
           <CheckCircle2 size={18} className="shrink-0" />
           <p>
-            ACE verified the provider request mapping, callback,
+            Kinetic verified the provider request mapping, callback,
             signed-file hashes, and audit-trail hashes. This
             operational check does not independently determine
             legal recognition or certification status.

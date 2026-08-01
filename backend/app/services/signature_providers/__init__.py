@@ -1,1 +1,1 @@
-# Signature-provider adapters for ACE.
+# Signature-provider adapters for Kinetic.

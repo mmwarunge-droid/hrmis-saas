@@ -38,32 +38,32 @@ export default function OrganizationEventDetails() {
   }, [id]);
 
   if (error) return <Alert type="error">{error}</Alert>;
-  if (!event) return <div className="h-96 animate-pulse rounded-[2rem] bg-slate-100" />;
+  if (!event) return <div className="h-96 animate-pulse rounded-xl bg-slate-100" />;
 
   return (
     <div className="mx-auto max-w-5xl space-y-5">
-      <Link to="/dashboard" className="inline-flex items-center gap-2 text-sm font-semibold text-cyan-800">
+      <Link to="/dashboard" className="inline-flex items-center gap-2 text-sm font-semibold text-blue-800">
         <ArrowLeft size={16} /> Back home
       </Link>
       <Card padded={false} className="overflow-hidden">
         {event.image_url ? (
           <img src={event.image_url} alt="" className="h-64 w-full object-cover md:h-80" />
         ) : (
-          <div className="h-48 bg-gradient-to-br from-violet-700 via-blue-800 to-cyan-700" />
+          <div className="h-48 bg-gradient-to-br from-blue-700 via-blue-800 to-blue-700" />
         )}
         <div className="p-6 md:p-9">
           <Badge tone={event.status === 'cancelled' ? 'red' : 'violet'}>{event.status}</Badge>
           <h1 className="mt-4 text-3xl font-bold text-slate-950 md:text-4xl">{event.title}</h1>
           <div className="mt-6 grid gap-3 text-sm text-slate-600 md:grid-cols-2">
             <p className="flex items-start gap-2">
-              <CalendarDays size={17} className="mt-0.5 text-cyan-700" />
+              <CalendarDays size={17} className="mt-0.5 text-blue-700" />
               <span>
                 <b className="text-slate-900">Starts:</b> {formatDateTime(event.starts_at)}
                 {event.ends_at && <><br /><b className="text-slate-900">Ends:</b> {formatDateTime(event.ends_at)}</>}
               </span>
             </p>
             <p className="flex items-start gap-2">
-              <MapPin size={17} className="mt-0.5 text-cyan-700" />
+              <MapPin size={17} className="mt-0.5 text-blue-700" />
               <span>{event.location || 'Location to be confirmed'}</span>
             </p>
           </div>

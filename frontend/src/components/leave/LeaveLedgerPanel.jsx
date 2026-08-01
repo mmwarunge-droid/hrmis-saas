@@ -78,9 +78,9 @@ export default function LeaveLedgerPanel({
     <Card>
       <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
         <div className="flex items-start gap-3">
-          <History className="mt-1 text-violet-600" size={22} />
+          <History className="mt-1 text-blue-600" size={22} />
           <div>
-            <p className="text-xs font-bold uppercase tracking-wider text-violet-700">
+            <p className="text-xs font-bold uppercase tracking-wider text-blue-700">
               Allocation ledger
             </p>
             <h2 className="mt-1 text-xl font-bold text-slate-950">
@@ -108,7 +108,7 @@ export default function LeaveLedgerPanel({
       {canAdjust && balances.length > 0 && (
         <form
           onSubmit={submitAdjustment}
-          className="mt-5 grid gap-3 rounded-2xl bg-slate-50 p-4 lg:grid-cols-[1.4fr_140px_1.6fr_auto]"
+          className="mt-5 grid gap-3 rounded-lg bg-slate-50 p-4 lg:grid-cols-[1.4fr_140px_1.6fr_auto]"
         >
           <label className="space-y-1">
             <span className="text-xs font-semibold text-slate-600">

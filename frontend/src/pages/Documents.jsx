@@ -211,7 +211,8 @@ export default function Documents() {
   const columns = [
     {
       key: 'title',
-      label: 'Document',
+      label: 'File',
+      sortable: true,
       render: (row) => (
         <div>
           <p className="font-semibold text-slate-900">
@@ -226,6 +227,7 @@ export default function Documents() {
     {
       key: 'document_type',
       label: 'Folder',
+      sortable: true,
       render: (row) => (
         <Badge tone="blue">
           {row.document_type}
@@ -235,6 +237,7 @@ export default function Documents() {
     {
       key: 'signature_status',
       label: 'Signature',
+      sortable: true,
       render: (row) => (
         <Badge
           tone={
@@ -254,6 +257,7 @@ export default function Documents() {
     {
       key: 'status',
       label: 'Status',
+      sortable: true,
       render: (row) => (
         <Badge tone={row.status === 'active' ? 'green' : 'amber'}>
           {row.status}
@@ -263,16 +267,18 @@ export default function Documents() {
     {
       key: 'size_bytes',
       label: 'Size',
+      sortable: true,
       render: (row) => formatSize(row.size_bytes),
     },
     {
       key: 'expiry_date',
       label: 'Expiry',
+      sortable: true,
       render: (row) => row.expiry_date || '—',
     },
     {
       key: 'actions',
-      label: 'Actions',
+      label: '',
       render: (row) => (
         canManageSignatures && row.status === 'active'
           ? (
@@ -293,11 +299,11 @@ export default function Documents() {
   ];
 
   return (
-    <div className="space-y-7">
+    <div className="space-y-6">
       <PageHeader
-        eyebrow="Docs"
-        title="Document library"
-        description="Upload, control, distribute and track contracts, policies and employee documents from one governed workspace."
+        eyebrow="Files"
+        title="Files"
+        description="Store, find, distribute, and track contracts, policies, and employee files from one governed workspace."
         actions={(
           <>
             {hasPermission('document:upload') && (
@@ -306,7 +312,7 @@ export default function Documents() {
                 onClick={() => setUploadOpen(true)}
               >
                 <Plus size={17} />
-                Upload document
+                Upload file
               </Button>
             )}
           </>
@@ -350,11 +356,11 @@ export default function Documents() {
       <div className="grid gap-6 xl:grid-cols-[260px_1fr]">
         <Card>
           <div className="flex items-center gap-3">
-            <span className="grid h-10 w-10 place-items-center rounded-2xl bg-cyan-50 text-cyan-700">
+            <span className="grid h-10 w-10 place-items-center rounded-lg bg-blue-50 text-blue-700">
               <Folder size={19} />
             </span>
             <div>
-              <p className="text-xs font-bold uppercase tracking-wider text-cyan-700">
+              <p className="text-xs font-bold uppercase tracking-wider text-blue-700">
                 Folders
               </p>
               <h2 className="font-bold">Library</h2>
@@ -365,9 +371,9 @@ export default function Documents() {
             <button
               type="button"
               onClick={() => setFolder('all')}
-              className={`flex w-full items-center justify-between rounded-2xl px-3 py-2 text-left text-sm font-medium ${
+              className={`flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm font-medium ${
                 folder === 'all'
-                  ? 'bg-slate-950 text-white'
+                  ? 'bg-blue-50 text-blue-800'
                   : 'text-slate-600 hover:bg-slate-50'
               }`}
             >
@@ -380,9 +386,9 @@ export default function Documents() {
                 type="button"
                 key={item}
                 onClick={() => setFolder(item)}
-                className={`flex w-full items-center justify-between rounded-2xl px-3 py-2 text-left text-sm font-medium ${
+                className={`flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm font-medium ${
                   folder === item
-                    ? 'bg-slate-950 text-white'
+                    ? 'bg-blue-50 text-blue-800'
                     : 'text-slate-600 hover:bg-slate-50'
                 }`}
               >
@@ -402,12 +408,12 @@ export default function Documents() {
             ))}
           </div>
 
-          <div className="mt-6 rounded-2xl bg-violet-50 p-4 text-violet-900">
+          <div className="mt-6 rounded-lg bg-blue-50 p-4 text-blue-900">
             <ShieldCheck size={19} />
             <p className="mt-3 text-sm font-semibold">
               Access-aware by design
             </p>
-            <p className="mt-1 text-xs leading-5 text-violet-700">
+            <p className="mt-1 text-xs leading-5 text-blue-700">
               Employee, manager, HR-only and company-admin
               access levels are preserved.
             </p>
@@ -438,13 +444,13 @@ export default function Documents() {
               description="Try another folder, clear the search or upload a document."
             />
           ) : (
-            <Table columns={columns} rows={filtered} />
+            <Table columns={columns} rows={filtered} pageSize={15} caption="File library" />
           )}
         </div>
       </div>
 
       <Modal
-        title="Upload document"
+        title="Upload file"
         open={uploadOpen}
         onClose={() => setUploadOpen(false)}
       >

@@ -1,10 +1,10 @@
 import { Link } from 'react-router-dom';
 
 const COMPANY = {
-  platform: 'Ace',
-  legalEntity: 'ACE Platform',
-  contactEmail: 'privacy@acehr.app',
-  supportEmail: 'support@acehr.app',
+  platform: 'Kinetic',
+  legalEntity: 'Kinetic Platform',
+  contactEmail: 'privacy@kinetichr.app',
+  supportEmail: 'support@kinetichr.app',
   address: 'Nairobi, Kenya',
   effectiveDate: '18 May 2026',
 };
@@ -13,12 +13,12 @@ function LegalLayout({ title, subtitle, children }) {
   return (
     <main className="min-h-screen bg-gradient-to-b from-blue-50 via-slate-50 to-white px-4 py-10 text-slate-900">
       <div className="mx-auto max-w-5xl">
-        <header className="mb-8 rounded-[2rem] border border-slate-200 bg-white p-8 shadow-xl shadow-blue-950/10">
+        <header className="mb-8 rounded-xl border border-slate-200 bg-white p-8 shadow-sm shadow-blue-950/10">
           <Link
             to="/login"
             className="text-4xl font-semibold tracking-tight text-blue-950"
           >
-            ace
+            Kinetic
           </Link>
 
           <p className="mt-4 text-xs font-semibold uppercase tracking-widest text-blue-600">
@@ -40,7 +40,7 @@ function LegalLayout({ title, subtitle, children }) {
           </p>
         </header>
 
-        <article className="rounded-[2rem] border border-slate-200 bg-white p-8 shadow-xl shadow-blue-950/10">
+        <article className="rounded-xl border border-slate-200 bg-white p-8 shadow-sm shadow-blue-950/10">
           <div className="prose prose-slate max-w-none">{children}</div>
         </article>
 
@@ -55,7 +55,7 @@ function LegalLayout({ title, subtitle, children }) {
             </Link>
           </div>
 
-          <p className="font-semibold tracking-tight text-slate-400">ace</p>
+          <p className="font-semibold tracking-tight text-slate-400">Kinetic</p>
         </footer>
       </div>
     </main>
@@ -87,7 +87,7 @@ export function PrivacyPolicy() {
   return (
     <LegalLayout
       title="Privacy Policy"
-      subtitle="This Privacy Policy explains how ACE collects, uses, stores, protects, shares, and retains personal data processed through the ACE platform."
+      subtitle="This Privacy Policy explains how Kinetic collects, uses, stores, protects, shares, and retains personal data processed through the Kinetic platform."
     >
       <Section title="1. Introduction">
         <p>
@@ -97,7 +97,7 @@ export function PrivacyPolicy() {
           compliance records, and related HR administration.
         </p>
         <p>
-          This Privacy Policy applies to users of the Ace platform, including
+          This Privacy Policy applies to users of the Kinetic platform, including
           platform administrators, client administrators, managers, employees,
           consultants, and authorised support users.
         </p>
@@ -105,7 +105,7 @@ export function PrivacyPolicy() {
 
       <Section title="2. Who We Are">
         <p>
-          For purposes of this policy, “Ace”, “we”, “our”, or “us” refers to{' '}
+          For purposes of this policy, “Kinetic”, “we”, “our”, or “us” refers to{' '}
           {COMPANY.legalEntity}. Our contact details are:
         </p>
         <BulletList
@@ -119,13 +119,13 @@ export function PrivacyPolicy() {
 
       <Section title="3. Our Role as Data Processor and Data Controller">
         <p>
-          Ace may act as a data processor when it processes employee and HR data
+          Kinetic may act as a data processor when it processes employee and HR data
           on behalf of a client organisation using the platform. In that case,
           the client organisation is normally the data controller and determines
           the purpose and means of processing.
         </p>
         <p>
-          Ace may act as a data controller for account administration,
+          Kinetic may act as a data controller for account administration,
           billing, security, platform analytics, support communications,
           service improvement, legal compliance, and platform operations.
         </p>
@@ -133,7 +133,7 @@ export function PrivacyPolicy() {
 
       <Section title="4. Personal Data We Collect">
         <p>
-          Depending on your role and how your organisation uses Ace, we may
+          Depending on your role and how your organisation uses Kinetic, we may
           process the following categories of data:
         </p>
         <BulletList
@@ -145,7 +145,7 @@ export function PrivacyPolicy() {
             'Leave and attendance information such as leave balances, leave requests, approvals, rejections, check-in/check-out records, and attendance notes.',
             'Onboarding information such as assigned tasks, completion status, due dates, required reading, and form tracking.',
             'Audit and security data such as login events, IP address, user agent, timestamps, system actions, access logs, and permission changes.',
-            'Support information such as messages, issue reports, screenshots, and correspondence sent to Ace support.',
+            'Support information such as messages, issue reports, screenshots, and correspondence sent to Kinetic support.',
           ]}
         />
       </Section>
@@ -153,7 +153,7 @@ export function PrivacyPolicy() {
       <Section title="5. Sensitive and Confidential HR Data">
         <p>
           HR systems may contain sensitive or confidential employment-related
-          data. Ace applies role-based access control, tenant isolation, audit
+          data. Kinetic applies role-based access control, tenant isolation, audit
           logging, and secure document handling to reduce unauthorised access.
         </p>
         <p>
@@ -191,7 +191,7 @@ export function PrivacyPolicy() {
             'Compliance with legal, tax, employment, audit, or regulatory obligations.',
             'Legitimate interests such as platform security, service improvement, fraud prevention, business administration, and access control.',
             'Consent, where legally required or where no other lawful basis applies.',
-            'The client organisation’s lawful basis for processing employee data where Ace acts as processor.',
+            'The client organisation’s lawful basis for processing employee data where Kinetic acts as processor.',
           ]}
         />
       </Section>
@@ -216,7 +216,7 @@ export function PrivacyPolicy() {
 
       <Section title="9. International Transfers">
         <p>
-          Ace may use cloud hosting and service providers that process data in
+          Kinetic may use cloud hosting and service providers that process data in
           countries outside the user’s country of residence. Where personal data
           is transferred internationally, we use appropriate safeguards such as
           contractual protections, access controls, data minimisation, and vendor
@@ -288,7 +288,7 @@ export function PrivacyPolicy() {
       </Section>
 
       <Section title="13. Client Organisation Responsibilities">
-        <p>Client organisations using Ace are responsible for:</p>
+        <p>Client organisations using Kinetic are responsible for:</p>
         <BulletList
           items={[
             'Ensuring they have a lawful basis to process employee data.',
@@ -304,7 +304,7 @@ export function PrivacyPolicy() {
 
       <Section title="14. Cookies and Similar Technologies">
         <p>
-          Ace may use cookies, local storage, and similar technologies to keep
+          Kinetic may use cookies, local storage, and similar technologies to keep
           users signed in, remember workspace preferences, improve security, and
           support platform functionality. Some of these technologies are
           necessary for authentication and cannot be disabled without affecting
@@ -314,7 +314,7 @@ export function PrivacyPolicy() {
 
       <Section title="15. Children’s Data">
         <p>
-          Ace is designed for workplace HR administration and is not intended
+          Kinetic is designed for workplace HR administration and is not intended
           for use by children. Client organisations should not create accounts
           for users who are not legally eligible to use the platform unless a
           lawful employment or training basis exists and all applicable legal
@@ -335,7 +335,7 @@ export function PrivacyPolicy() {
         <p>
           We may update this Privacy Policy from time to time. Material changes
           may be communicated through the platform, email, or other appropriate
-          channels. Continued use of Ace after changes become effective means
+          channels. Continued use of Kinetic after changes become effective means
           the updated policy applies.
         </p>
       </Section>
@@ -360,28 +360,28 @@ export function TermsOfService() {
   return (
     <LegalLayout
       title="Terms of Service"
-      subtitle="These Terms of Service govern access to and use of the ACE platform by client organisations, administrators, managers, employees, consultants, and authorised users."
+      subtitle="These Terms of Service govern access to and use of the Kinetic platform by client organisations, administrators, managers, employees, consultants, and authorised users."
     >
       <Section title="1. Agreement to Terms">
         <p>
           These Terms of Service form a legal agreement between you, your
           organisation where applicable, and {COMPANY.legalEntity}. By accessing
-          or using Ace, you agree to comply with these Terms.
+          or using Kinetic, you agree to comply with these Terms.
         </p>
         <p>
-          If you are using Ace on behalf of an organisation, you represent that
+          If you are using Kinetic on behalf of an organisation, you represent that
           you are authorised to bind that organisation to these Terms.
         </p>
       </Section>
 
-      <Section title="2. About Ace">
+      <Section title="2. About Kinetic">
         <p>
-          ACE is a consulting-led people operations platform that helps organisations manage
+          Kinetic is a consulting-led people operations platform that helps organisations manage
           employee records, documents, leave, attendance, onboarding, HR
           workflows, compliance alerts, and role-based HR administration.
         </p>
         <p>
-          Ace is a software platform and operational tool. It does not replace
+          Kinetic is a software platform and operational tool. It does not replace
           legal, tax, employment, payroll, immigration, or professional HR advice
           unless such advice is separately provided under a signed consulting
           agreement.
@@ -389,7 +389,7 @@ export function TermsOfService() {
       </Section>
 
       <Section title="3. User Roles and Access Hierarchy">
-        <p>Ace uses a role-based hierarchy:</p>
+        <p>Kinetic uses a role-based hierarchy:</p>
         <BulletList
           items={[
             'Super Admins manage the platform, onboard organisations, and create Client Admin accounts.',
@@ -417,7 +417,7 @@ export function TermsOfService() {
           ]}
         />
         <p>
-          Ace may suspend or disable accounts where we reasonably suspect
+          Kinetic may suspend or disable accounts where we reasonably suspect
           unauthorised access, misuse, breach of these Terms, or security risk.
         </p>
       </Section>
@@ -441,27 +441,27 @@ export function TermsOfService() {
         <p>You must not:</p>
         <BulletList
           items={[
-            'Use Ace for unlawful, fraudulent, misleading, or harmful purposes.',
+            'Use Kinetic for unlawful, fraudulent, misleading, or harmful purposes.',
             'Access, copy, modify, or disclose data without authorisation.',
             'Bypass or attempt to bypass authentication, RBAC controls, tenant isolation, or security features.',
             'Upload malware, malicious scripts, or harmful files.',
             'Interfere with platform availability, performance, monitoring, or security.',
             'Reverse engineer, scrape, overload, or misuse the platform except where expressly permitted by law.',
-            'Use Ace to store data that your organisation has no lawful right to process.',
+            'Use Kinetic to store data that your organisation has no lawful right to process.',
           ]}
         />
       </Section>
 
       <Section title="7. Customer Data">
         <p>
-          “Customer Data” means data submitted to Ace by or on behalf of a
+          “Customer Data” means data submitted to Kinetic by or on behalf of a
           client organisation, including employee records, documents, workflow
           data, attendance records, leave records, onboarding data, and audit
           logs.
         </p>
         <p>
-          As between Ace and the client organisation, the client organisation
-          retains ownership of Customer Data. Ace receives a limited right to
+          As between Kinetic and the client organisation, the client organisation
+          retains ownership of Customer Data. Kinetic receives a limited right to
           process Customer Data to provide, secure, maintain, support, and
           improve the platform and to comply with legal obligations.
         </p>
@@ -470,7 +470,7 @@ export function TermsOfService() {
       <Section title="8. Confidentiality">
         <p>
           Users and organisations may access confidential HR, employment, and
-          business information through Ace. Such information must be protected
+          business information through Kinetic. Such information must be protected
           and used only for authorised business purposes.
         </p>
         <p>
@@ -482,13 +482,13 @@ export function TermsOfService() {
 
       <Section title="9. Documents and File Uploads">
         <p>
-          Ace may allow authorised users to upload employment contracts,
+          Kinetic may allow authorised users to upload employment contracts,
           policies, tax forms, compliance records, certifications, and other HR
           documents. Users must ensure uploaded files are accurate, lawful,
           virus-free, and relevant to HR administration.
         </p>
         <p>
-          Ace may restrict file types, file sizes, access rights, download
+          Kinetic may restrict file types, file sizes, access rights, download
           rights, and retention periods for security and compliance reasons.
         </p>
       </Section>
@@ -508,7 +508,7 @@ export function TermsOfService() {
 
       <Section title="11. Service Availability and Changes">
         <p>
-          Ace aims to provide reliable service but does not guarantee
+          Kinetic aims to provide reliable service but does not guarantee
           uninterrupted availability. The platform may be unavailable due to
           maintenance, upgrades, hosting provider incidents, security events, or
           circumstances beyond our reasonable control.
@@ -522,7 +522,7 @@ export function TermsOfService() {
 
       <Section title="12. Third-Party Services">
         <p>
-          Ace may integrate with or rely on third-party services for hosting,
+          Kinetic may integrate with or rely on third-party services for hosting,
           storage, email, analytics, authentication, monitoring, payroll
           integrations, or support. Third-party services may be subject to their
           own terms and privacy policies.
@@ -531,19 +531,19 @@ export function TermsOfService() {
 
       <Section title="13. Intellectual Property">
         <p>
-          Ace, including its software, design, workflows, documentation, source
+          Kinetic, including its software, design, workflows, documentation, source
           code, branding, platform architecture, templates, and related
-          intellectual property, belongs to Ace or its licensors.
+          intellectual property, belongs to Kinetic or its licensors.
         </p>
         <p>
-          These Terms do not transfer ownership of Ace intellectual property to
+          These Terms do not transfer ownership of Kinetic intellectual property to
           users or client organisations.
         </p>
       </Section>
 
       <Section title="14. Feedback">
         <p>
-          If users provide suggestions, improvement ideas, or feedback, Ace may
+          If users provide suggestions, improvement ideas, or feedback, Kinetic may
           use that feedback without restriction or obligation, provided we do
           not disclose confidential Customer Data.
         </p>
@@ -564,7 +564,7 @@ export function TermsOfService() {
 
       <Section title="16. Disclaimers">
         <p>
-          Ace is provided on an “as is” and “as available” basis to the maximum
+          Kinetic is provided on an “as is” and “as available” basis to the maximum
           extent permitted by law. We do not warrant that the platform will be
           error-free, uninterrupted, or suitable for every legal, HR, payroll, or
           compliance purpose.
@@ -578,7 +578,7 @@ export function TermsOfService() {
 
       <Section title="17. Limitation of Liability">
         <p>
-          To the maximum extent permitted by law, Ace will not be liable for
+          To the maximum extent permitted by law, Kinetic will not be liable for
           indirect, incidental, special, consequential, exemplary, or punitive
           damages, or for lost profits, lost revenue, lost goodwill, or loss of
           data arising from use of the platform.
@@ -592,7 +592,7 @@ export function TermsOfService() {
 
       <Section title="18. Indemnity">
         <p>
-          Client organisations agree to indemnify Ace against claims, losses,
+          Client organisations agree to indemnify Kinetic against claims, losses,
           liabilities, damages, costs, and expenses arising from unlawful or
           unauthorised Customer Data, misuse of the platform, breach of these
           Terms, violation of applicable law, or user actions within their
@@ -613,7 +613,7 @@ export function TermsOfService() {
         <p>
           We may update these Terms from time to time. Material changes may be
           communicated through the platform, email, or other appropriate
-          channels. Continued use of Ace after changes become effective means
+          channels. Continued use of Kinetic after changes become effective means
           the updated Terms apply.
         </p>
       </Section>

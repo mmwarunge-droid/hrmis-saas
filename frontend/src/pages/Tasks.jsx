@@ -192,7 +192,7 @@ export default function Tasks() {
   };
 
   return (
-    <div className="space-y-7">
+    <div className="space-y-6">
       <PageHeader
         eyebrow="Action center"
         title="My tasks"
@@ -227,7 +227,7 @@ export default function Tasks() {
       </div>
 
       <Alert type="info">
-        ACE is currently recording the internal signing workflow,
+        Kinetic is currently recording the internal signing workflow,
         recipient consent, timestamps and audit events. Embedded
         document fields and drawn or certificate-backed electronic
         signatures will be enabled through the signing-provider
@@ -236,11 +236,11 @@ export default function Tasks() {
 
       <Card>
         <div className="flex items-center gap-3">
-          <span className="grid h-10 w-10 place-items-center rounded-2xl bg-cyan-50 text-cyan-700">
+          <span className="grid h-10 w-10 place-items-center rounded-lg bg-blue-50 text-blue-700">
             <FileSignature size={18} />
           </span>
           <div>
-            <p className="text-xs font-bold uppercase tracking-wider text-cyan-700">
+            <p className="text-xs font-bold uppercase tracking-wider text-blue-700">
               Documents
             </p>
             <h2 className="font-bold">
@@ -271,7 +271,7 @@ export default function Tasks() {
       </Card>
 
       <div className="grid gap-6 xl:grid-cols-[0.7fr_1.3fr]">
-        <Card className="grid place-items-center bg-gradient-to-br from-cyan-50 to-violet-50 text-center">
+        <Card className="grid place-items-center bg-gradient-to-br from-blue-50 to-blue-50 text-center">
           <div>
             <ProgressRing
               value={onboardingCompletion}
@@ -288,11 +288,11 @@ export default function Tasks() {
 
         <Card>
           <div className="flex items-center gap-3">
-            <span className="grid h-10 w-10 place-items-center rounded-2xl bg-violet-50 text-violet-700">
+            <span className="grid h-10 w-10 place-items-center rounded-lg bg-blue-50 text-blue-700">
               <Sparkles size={18} />
             </span>
             <div>
-              <p className="text-xs font-bold uppercase tracking-wider text-violet-700">
+              <p className="text-xs font-bold uppercase tracking-wider text-blue-700">
                 Onboarding
               </p>
               <h2 className="font-bold">
@@ -315,10 +315,10 @@ export default function Tasks() {
                 return (
                   <div
                     key={task.id}
-                    className="flex flex-col gap-4 rounded-2xl border border-slate-100 p-4 sm:flex-row sm:items-center"
+                    className="flex flex-col gap-4 rounded-lg border border-slate-100 p-4 sm:flex-row sm:items-center"
                   >
                     <span
-                      className={`grid h-11 w-11 shrink-0 place-items-center rounded-2xl ${
+                      className={`grid h-11 w-11 shrink-0 place-items-center rounded-lg ${
                         done
                           ? 'bg-emerald-50 text-emerald-700'
                           : 'bg-slate-100 text-slate-500'

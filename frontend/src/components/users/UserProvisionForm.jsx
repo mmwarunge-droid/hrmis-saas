@@ -63,9 +63,9 @@ export default function UserProvisionForm({ onSubmit, loading = false, isSuperAd
         </Select>
       </div>
 
-      <section className="rounded-3xl border border-slate-100 bg-slate-50/70 p-5">
+      <section className="rounded-xl border border-slate-100 bg-slate-50/70 p-5">
         <div className="mb-4 flex items-center gap-3">
-          <span className="grid h-9 w-9 place-items-center rounded-xl bg-cyan-100 text-cyan-800"><UserRoundPlus size={18} /></span>
+          <span className="grid h-9 w-9 place-items-center rounded-xl bg-blue-100 text-blue-800"><UserRoundPlus size={18} /></span>
           <div><h3 className="font-bold text-slate-950">User identity</h3><p className="text-xs text-slate-500">Secure sign-in and role assignment.</p></div>
         </div>
         <div className="grid gap-4 md:grid-cols-2">
@@ -77,9 +77,9 @@ export default function UserProvisionForm({ onSubmit, loading = false, isSuperAd
       </section>
 
       {isEmployeeAccount && (
-        <section className="rounded-3xl border border-slate-100 bg-white p-5 shadow-sm">
+        <section className="rounded-xl border border-slate-100 bg-white p-5 shadow-sm">
           <div className="mb-4 flex items-center gap-3">
-            <span className="grid h-9 w-9 place-items-center rounded-xl bg-violet-100 text-violet-800"><BriefcaseBusiness size={18} /></span>
+            <span className="grid h-9 w-9 place-items-center rounded-xl bg-blue-100 text-blue-800"><BriefcaseBusiness size={18} /></span>
             <div><h3 className="font-bold text-slate-950">Employee profile</h3><p className="text-xs text-slate-500">Creates a new employee record in the same transaction. For an existing employee, use Provision access from their employee page.</p></div>
           </div>
           <div className="grid gap-4 md:grid-cols-2">

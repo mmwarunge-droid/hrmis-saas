@@ -142,7 +142,7 @@ export default function Departments() {
   };
 
   return (
-    <div className="space-y-7">
+    <div className="space-y-6">
       <PageHeader
         eyebrow="Organization design"
         title="Departments"
@@ -162,7 +162,7 @@ export default function Departments() {
       </div>
 
       {loading ? (
-        <div className="h-64 animate-pulse rounded-3xl bg-slate-100" />
+        <div className="h-64 animate-pulse rounded-xl bg-slate-100" />
       ) : activeDepartments.length === 0 ? (
         <EmptyState
           title="No departments configured"
@@ -173,7 +173,7 @@ export default function Departments() {
           {activeDepartments.map((department) => (
             <Card key={department.id} className="flex h-full flex-col">
               <div className="flex items-start justify-between gap-3">
-                <span className="grid h-12 w-12 place-items-center rounded-2xl bg-violet-50 text-violet-700">
+                <span className="grid h-12 w-12 place-items-center rounded-lg bg-blue-50 text-blue-700">
                   <Building2 size={21} />
                 </span>
                 <Badge tone="green">Active</Badge>
@@ -182,18 +182,18 @@ export default function Departments() {
               <p className="mt-1 text-sm text-slate-500">{department.code || 'No department code'}</p>
 
               <div className="mt-5 grid grid-cols-2 gap-3 text-xs">
-                <div className="rounded-2xl bg-slate-50 p-3">
+                <div className="rounded-lg bg-slate-50 p-3">
                   <p className="text-slate-400">People</p>
                   <p className="mt-1 font-semibold text-slate-800">{department.employee_count || 0}</p>
                 </div>
-                <div className="rounded-2xl bg-slate-50 p-3">
+                <div className="rounded-lg bg-slate-50 p-3">
                   <p className="text-slate-400">Parent</p>
                   <p className="mt-1 truncate font-semibold text-slate-800">{department.parent_department_name || 'Top level'}</p>
                 </div>
               </div>
-              <div className="mt-3 rounded-2xl bg-cyan-50 p-3 text-xs">
-                <p className="text-cyan-600">Department head</p>
-                <p className="mt-1 font-semibold text-cyan-900">{department.head_name || 'Not assigned'}</p>
+              <div className="mt-3 rounded-lg bg-blue-50 p-3 text-xs">
+                <p className="text-blue-600">Department head</p>
+                <p className="mt-1 font-semibold text-blue-900">{department.head_name || 'Not assigned'}</p>
               </div>
 
               {hasPermission('employee:update') && (

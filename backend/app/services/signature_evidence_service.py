@@ -438,7 +438,7 @@ def _schedule_retry(signature_request, error):
             f'QES evidence ingestion failed: '
             f'{signature_request.subject}',
             (
-                'ACE could not retrieve and verify the final '
+                'Kinetic could not retrieve and verify the final '
                 'Dropbox Sign evidence package. An administrator '
                 'can retry the evidence job after reviewing the '
                 'provider status.'
@@ -483,7 +483,7 @@ def _mark_permanent_failure(signature_request, error):
         f'QES evidence verification failed: '
         f'{signature_request.subject}',
         (
-            'ACE retrieved the provider package but could not '
+            'Kinetic retrieved the provider package but could not '
             'verify its request, signer, or artifact consistency. '
             'The request remains incomplete pending review.'
         ),
@@ -599,7 +599,7 @@ def process_signature_evidence(request_id):
             f'QES evidence verified: '
             f'{signature_request.subject}',
             (
-                'ACE retrieved the final signed PDF and provider '
+                'Kinetic retrieved the final signed PDF and provider '
                 'audit trail, verified their integrity and request '
                 'mapping, and completed the workflow.'
             ),

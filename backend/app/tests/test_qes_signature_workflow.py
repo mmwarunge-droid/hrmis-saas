@@ -270,7 +270,7 @@ def test_qes_request_uses_provider_and_blocks_internal_signing(
         '/api/signature-requests/recipients/'
         f'{recipient_id}/decline',
         headers=employee_headers,
-        json={'reason': 'Not through ACE'},
+        json={'reason': 'Not through Kinetic'},
     )
 
     assert viewed.status_code == 400

@@ -1,81 +1,14 @@
-import {
-  BarChart3,
-  Briefcase,
-  Building2,
-  CalendarDays,
-  CheckSquare2,
-  FileSignature,
-  FileText,
-  Home,
-  Network,
-  Settings,
-  Sparkles,
-  UserPlus,
-  UserRound,
-  Users,
-  X,
-} from 'lucide-react';
+import { ChevronLeft, ChevronRight, X } from 'lucide-react';
 import { NavLink } from 'react-router-dom';
+import { navigationGroups, visibleNavigation } from '../../config/navigation.js';
 import useAuth from '../../hooks/useAuth.js';
 import usePermissions from '../../hooks/usePermissions.js';
 import useTenant from '../../hooks/useTenant.js';
 import Avatar from '../ui/Avatar.jsx';
 import Button from '../ui/Button.jsx';
+import KineticLogo from '../ui/KineticLogo.jsx';
 
-const groups = [
-  {
-    label: 'Workspace',
-    links: [
-      { to: '/dashboard', label: 'Home', icon: Home, permission: 'dashboard:read' },
-      {
-        to: '/profile',
-        label: 'My profile',
-        icon: UserRound,
-        roles: ['EMPLOYEE', 'MANAGER'],
-      },
-      { to: '/tasks', label: 'My tasks', icon: CheckSquare2, permission: 'onboarding:assign' },
-    ],
-  },
-  {
-    label: 'People',
-    links: [
-      { to: '/employees', label: 'People directory', icon: Users, permission: 'employee:read' },
-      { to: '/org-chart', label: 'Org chart', icon: Network, permission: 'employee:read' },
-      { to: '/leave', label: 'Time off', icon: CalendarDays, permission: 'leave:create' },
-      { to: '/attendance', label: 'Attendance', icon: BarChart3, permissionAny: ['attendance:read', 'attendance:write'] },
-    ],
-  },
-  {
-    label: 'Operations',
-    links: [
-      { to: '/documents', label: 'Docs', icon: FileText, permission: 'document:read' },
-      {
-        to: '/signature-requests',
-        label: 'Signature requests',
-        icon: FileSignature,
-        permission: 'document:approve',
-      },
-      { to: '/onboarding', label: 'Onboarding', icon: UserPlus, permission: 'onboarding:create' },
-    ],
-  },
-  {
-    label: 'Administration',
-    links: [
-      { to: '/organizations', label: 'Organizations', icon: Building2, role: 'SUPER_ADMIN' },
-      { to: '/departments', label: 'Departments', icon: Briefcase, permission: 'employee:update' },
-      { to: '/users', label: 'Access & users', icon: Users, permission: 'user:read' },
-      {
-        to: '/settings/employee-experience',
-        label: 'Employee experience',
-        icon: Sparkles,
-        roles: ['SUPER_ADMIN', 'ORGANIZATION_OWNER', 'CLIENT_ADMIN'],
-      },
-      { to: '/settings', label: 'Settings', icon: Settings },
-    ],
-  },
-];
-
-export default function Sidebar({ open = false, onClose }) {
+function SidebarContent({ collapsed, mobile, onClose, onToggleCollapsed }) {
   const { user } = useAuth();
   const { hasPermission, hasRole } = usePermissions();
   const {
@@ -86,93 +19,107 @@ export default function Sidebar({ open = false, onClose }) {
     isSuperAdmin,
     setTenantId,
   } = useTenant();
+  const groups = visibleNavigation(navigationGroups, { hasPermission, hasRole });
+  const compact = collapsed && !mobile;
 
-  const content = (
-    <div className="flex h-full flex-col">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <span className="grid h-11 w-11 place-items-center rounded-2xl bg-gradient-to-br from-cyan-400 to-blue-600 text-white shadow-lg shadow-cyan-950/20"><Sparkles size={20} /></span>
-          <div><p className="text-[10px] font-bold uppercase tracking-[0.24em] text-cyan-300">People OS</p><h1 className="text-lg font-bold text-white">ACE</h1></div>
-        </div>
-        <Button variant="ghost" size="sm" className="text-slate-300 hover:bg-white/10 hover:text-white lg:hidden" onClick={onClose}><X size={18} /></Button>
+  return (
+    <div className="flex h-full flex-col bg-white">
+      <div className={`flex h-16 items-center border-b border-slate-200 ${compact ? 'justify-center px-2' : 'justify-between px-4'}`}>
+        <KineticLogo compact={compact} />
+        {mobile && (
+          <Button variant="ghost" size="sm" className="px-2" onClick={onClose} aria-label="Close navigation">
+            <X size={18} />
+          </Button>
+        )}
       </div>
 
-      {isSuperAdmin && (
-        <div className="mt-6 rounded-3xl border border-white/10 bg-white/5 p-3">
-          <label
-            htmlFor="active-organization"
-            className="text-[10px] font-bold uppercase tracking-[0.2em] text-cyan-300"
-          >
+      {isSuperAdmin && !compact && (
+        <div className="border-b border-slate-200 p-3">
+          <label htmlFor={mobile ? 'active-organization-mobile' : 'active-organization'} className="block text-[10px] font-bold uppercase tracking-[0.13em] text-slate-400">
             Active organization
           </label>
           <select
-            id="active-organization"
+            id={mobile ? 'active-organization-mobile' : 'active-organization'}
             value={tenantId || ''}
             disabled={tenantLoading}
             onChange={(event) => setTenantId(event.target.value)}
-            className="mt-2 w-full rounded-2xl border border-white/10 bg-slate-900 px-3 py-2.5 text-sm text-white outline-none transition focus:border-cyan-400 focus:ring-2 focus:ring-cyan-400/20"
+            className="mt-1.5 min-h-9 w-full rounded-lg border border-slate-300 bg-white px-2.5 text-xs font-medium text-slate-800 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
           >
-            <option value="">
-              {tenantLoading
-                ? 'Loading organizations...'
-                : 'Select organization'}
-            </option>
-            {tenants.map((tenant) => (
-              <option key={tenant.id} value={tenant.id}>
-                {tenant.name}
-              </option>
-            ))}
+            <option value="">{tenantLoading ? 'Loading organizations…' : 'Select organization'}</option>
+            {tenants.map((tenant) => <option key={tenant.id} value={tenant.id}>{tenant.name}</option>)}
           </select>
-          {tenantError && (
-            <p className="mt-2 text-xs leading-5 text-rose-300">
-              {tenantError}
-            </p>
-          )}
+          {tenantError && <p className="mt-1.5 text-[11px] leading-4 text-red-600">{tenantError}</p>}
         </div>
       )}
 
-      <nav className="mt-8 flex-1 space-y-6 overflow-y-auto pr-1">
-        {groups.map((group) => {
-          const visible = group.links.filter((link) => (
-            (!link.permission || hasPermission(link.permission))
-            && (!link.permissionAny || link.permissionAny.some(hasPermission))
-            && (!link.role || hasRole(link.role))
-            && (!link.roles || link.roles.some(hasRole))
-          ));
-          if (!visible.length) return null;
-          return (
+      <nav className={`flex-1 overflow-y-auto py-4 ${compact ? 'px-2' : 'px-3'}`} aria-label="Primary navigation">
+        <div className="space-y-5">
+          {groups.map((group) => (
             <div key={group.label}>
-              <p className="mb-2 px-3 text-[10px] font-bold uppercase tracking-[0.22em] text-slate-500">{group.label}</p>
-              <div className="space-y-1">
-                {visible.map(({ to, label, icon: Icon }) => (
+              {!compact && <p className="mb-1.5 px-2 text-[10px] font-bold uppercase tracking-[0.14em] text-slate-400">{group.label}</p>}
+              <div className="space-y-0.5">
+                {group.links.map(({ to, label, icon: Icon }) => (
                   <NavLink
                     key={to}
                     to={to}
                     onClick={onClose}
-                    className={({ isActive }) => `group flex items-center gap-3 rounded-2xl px-3 py-2.5 text-sm font-medium transition ${isActive ? 'bg-white text-slate-950 shadow-lg' : 'text-slate-300 hover:bg-white/10 hover:text-white'}`}
+                    title={compact ? label : undefined}
+                    className={({ isActive }) => `relative flex min-h-10 items-center rounded-lg text-sm font-semibold transition ${
+                      compact ? 'justify-center px-2' : 'gap-3 px-2.5'
+                    } ${
+                      isActive
+                        ? 'bg-blue-50 text-blue-800 before:absolute before:bottom-2 before:left-0 before:top-2 before:w-0.5 before:rounded-full before:bg-blue-700'
+                        : 'text-slate-600 hover:bg-slate-100 hover:text-slate-950'
+                    }`}
                   >
-                    <Icon size={18} /> <span>{label}</span>
+                    <Icon size={18} strokeWidth={1.9} className="shrink-0" />
+                    {!compact && <span className="truncate">{label}</span>}
                   </NavLink>
                 ))}
               </div>
             </div>
-          );
-        })}
+          ))}
+        </div>
       </nav>
 
-      <div className="mt-5 rounded-3xl border border-white/10 bg-white/5 p-3">
-        <div className="flex items-center gap-3">
+      <div className="border-t border-slate-200 p-3">
+        <div className={`flex items-center ${compact ? 'justify-center' : 'gap-3 rounded-lg px-1 py-1'}`} title={compact ? user?.full_name : undefined}>
           <Avatar name={user?.full_name} size="sm" />
-          <div className="min-w-0"><p className="truncate text-sm font-semibold text-white">{user?.full_name}</p><p className="truncate text-[11px] text-slate-400">{user?.roles?.[0]?.replaceAll('_', ' ')}</p></div>
+          {!compact && (
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-xs font-bold text-slate-900">{user?.full_name}</p>
+              <p className="truncate text-[10px] capitalize text-slate-500">{user?.roles?.[0]?.replaceAll('_', ' ').toLowerCase()}</p>
+            </div>
+          )}
         </div>
+        {!mobile && (
+          <button
+            type="button"
+            onClick={onToggleCollapsed}
+            className={`mt-2 flex h-8 w-full items-center rounded-lg text-xs font-semibold text-slate-500 hover:bg-slate-100 hover:text-slate-900 ${compact ? 'justify-center' : 'gap-2 px-2'}`}
+            aria-label={compact ? 'Expand navigation' : 'Collapse navigation'}
+          >
+            {compact ? <ChevronRight size={16} /> : <><ChevronLeft size={16} /><span>Collapse</span></>}
+          </button>
+        )}
       </div>
     </div>
   );
+}
 
+export default function Sidebar({ open = false, onClose, collapsed = false, onToggleCollapsed }) {
   return (
     <>
-      <aside className="fixed inset-y-0 left-0 z-40 hidden w-72 bg-slate-950 p-5 lg:block">{content}</aside>
-      {open && <div className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-sm lg:hidden" onClick={onClose}><aside className="h-full w-72 bg-slate-950 p-5" onClick={(event) => event.stopPropagation()}>{content}</aside></div>}
+      <aside className={`fixed inset-y-0 left-0 z-40 hidden border-r border-slate-200 bg-white transition-[width] duration-200 lg:block ${collapsed ? 'w-[76px]' : 'w-[236px]'}`}>
+        <SidebarContent collapsed={collapsed} onToggleCollapsed={onToggleCollapsed} />
+      </aside>
+      {open && (
+        <div className="fixed inset-0 z-50 bg-slate-950/40 backdrop-blur-[2px] lg:hidden" onMouseDown={onClose}>
+          <aside className="kinetic-drawer-enter h-full w-[286px] max-w-[88vw] border-r border-slate-200 bg-white shadow-2xl" onMouseDown={(event) => event.stopPropagation()}>
+            <SidebarContent mobile onClose={onClose} />
+          </aside>
+        </div>
+      )}
     </>
   );
 }

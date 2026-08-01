@@ -269,7 +269,7 @@ export default function LeaveRequests() {
   };
 
   return (
-    <div className="space-y-7">
+    <div className="space-y-6">
       <PageHeader
         eyebrow="Time"
         title="Time off"
@@ -374,7 +374,7 @@ export default function LeaveRequests() {
         <Card>
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
-              <p className="text-xs font-bold uppercase tracking-wider text-cyan-700">
+              <p className="text-xs font-bold uppercase tracking-wider text-blue-700">
                 People’s time off
               </p>
               <h2 className="mt-1 text-xl font-bold">
@@ -418,7 +418,7 @@ export default function LeaveRequests() {
             </div>
           </div>
 
-          <div className="mt-6 grid grid-cols-7 gap-px overflow-hidden rounded-2xl bg-slate-200">
+          <div className="mt-6 grid grid-cols-7 gap-px overflow-hidden rounded-lg bg-slate-200">
             {[
               'Sun',
               'Mon',
@@ -460,7 +460,7 @@ export default function LeaveRequests() {
                       <div
                         key={item.id}
                         title={item.employee_name}
-                        className="truncate rounded-lg bg-gradient-to-r from-cyan-500 to-blue-600 px-2 py-1 text-[10px] font-semibold text-white"
+                        className="truncate rounded-lg bg-gradient-to-r from-blue-500 to-blue-600 px-2 py-1 text-[10px] font-semibold text-white"
                       >
                         {item.employee_name}
                       </div>
@@ -477,7 +477,7 @@ export default function LeaveRequests() {
           </div>
         </Card>
 
-        <Card className="bg-gradient-to-br from-cyan-50 to-violet-50">
+        <Card className="bg-gradient-to-br from-blue-50 to-blue-50">
           <div className="text-center">
             <ProgressRing
               value={utilization}
@@ -499,7 +499,7 @@ export default function LeaveRequests() {
               return (
                 <div
                   key={type.id}
-                  className="flex items-center justify-between rounded-2xl bg-white/80 px-4 py-3"
+                  className="flex items-center justify-between rounded-lg bg-white/80 px-4 py-3"
                 >
                   <div>
                     <p className="text-sm font-semibold text-slate-800">
@@ -548,7 +548,7 @@ export default function LeaveRequests() {
           ) : requests.slice(0, 16).map((item) => (
             <div
               key={item.id}
-              className="flex flex-col gap-4 rounded-2xl border border-slate-100 p-4 lg:flex-row lg:items-center"
+              className="flex flex-col gap-4 rounded-lg border border-slate-100 p-4 lg:flex-row lg:items-center"
             >
               <Avatar
                 name={

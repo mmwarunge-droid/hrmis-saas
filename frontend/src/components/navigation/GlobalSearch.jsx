@@ -1,0 +1,104 @@
+import { ArrowRight, Search, X } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { navigationGroups, visibleNavigation } from '../../config/navigation.js';
+import usePermissions from '../../hooks/usePermissions.js';
+
+export default function GlobalSearch({ open, onClose }) {
+  const [query, setQuery] = useState('');
+  const inputRef = useRef(null);
+  const navigate = useNavigate();
+  const { hasPermission, hasRole } = usePermissions();
+
+  const closeSearch = useCallback(() => {
+    setQuery('');
+    onClose();
+  }, [onClose]);
+
+  const items = useMemo(
+    () => visibleNavigation(navigationGroups, { hasPermission, hasRole })
+      .flatMap((group) => group.links.map((item) => ({ ...item, group: group.label }))),
+    [hasPermission, hasRole],
+  );
+
+  const results = useMemo(() => {
+    const needle = query.trim().toLowerCase();
+    if (!needle) return items.slice(0, 8);
+    return items.filter((item) => `${item.label} ${item.group} ${item.keywords || ''}`.toLowerCase().includes(needle));
+  }, [items, query]);
+
+  useEffect(() => {
+    if (!open) return undefined;
+
+    const timer = window.setTimeout(() => inputRef.current?.focus(), 0);
+    const onKeyDown = (event) => {
+      if (event.key === 'Escape') closeSearch();
+      if (event.key === 'Enter' && results[0]) {
+        navigate(results[0].to);
+        closeSearch();
+      }
+    };
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      window.clearTimeout(timer);
+      document.removeEventListener('keydown', onKeyDown);
+    };
+  }, [closeSearch, navigate, open, results]);
+
+  if (!open) return null;
+
+  return (
+    <div className="fixed inset-0 z-[70] bg-slate-950/35 p-3 pt-[9vh] backdrop-blur-[2px]" onMouseDown={(event) => event.target === event.currentTarget && closeSearch()}>
+      <div role="dialog" aria-modal="true" aria-label="Search Kinetic" className="mx-auto max-w-2xl overflow-hidden rounded-xl border border-slate-200 bg-white shadow-2xl motion-safe:animate-[kinetic-dialog-in_150ms_ease-out]">
+        <div className="flex items-center gap-3 border-b border-slate-200 px-4">
+          <Search className="shrink-0 text-slate-400" size={20} />
+          <input
+            ref={inputRef}
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            aria-label="Search Kinetic"
+            placeholder="Search people tools, files, time off, settings…"
+            className="h-14 min-w-0 flex-1 bg-transparent text-base text-slate-900 outline-none placeholder:text-slate-400"
+          />
+          <button type="button" onClick={closeSearch} className="grid h-8 w-8 place-items-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700" aria-label="Close search">
+            <X size={17} />
+          </button>
+        </div>
+        <div className="max-h-[56vh] overflow-y-auto p-2">
+          <p className="px-3 pb-2 pt-1 text-[10px] font-bold uppercase tracking-[0.14em] text-slate-400">
+            {query ? 'Search results' : 'Quick navigation'}
+          </p>
+          {results.length === 0 ? (
+            <div className="px-4 py-10 text-center">
+              <p className="text-sm font-semibold text-slate-800">No matching destination</p>
+              <p className="mt-1 text-sm text-slate-500">Try a page name such as People, Time off, Files, or Settings.</p>
+            </div>
+          ) : results.map(({ to, label, group, icon: Icon }) => (
+            <button
+              key={to}
+              type="button"
+              onClick={() => {
+                navigate(to);
+                closeSearch();
+              }}
+              className="group flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left hover:bg-blue-50 focus:bg-blue-50 focus:outline-none"
+            >
+              <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg border border-slate-200 bg-white text-slate-600 group-hover:border-blue-200 group-hover:text-blue-700">
+                <Icon size={17} />
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-sm font-semibold text-slate-900">{label}</span>
+                <span className="block text-xs text-slate-500">{group}</span>
+              </span>
+              <ArrowRight size={15} className="text-slate-300 group-hover:text-blue-600" />
+            </button>
+          ))}
+        </div>
+        <div className="flex items-center justify-between border-t border-slate-200 bg-slate-50 px-4 py-2 text-[11px] text-slate-500">
+          <span>Press Enter to open the first result</span>
+          <span className="rounded border border-slate-300 bg-white px-1.5 py-0.5 font-semibold">Esc</span>
+        </div>
+      </div>
+    </div>
+  );
+}

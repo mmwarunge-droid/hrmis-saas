@@ -165,11 +165,11 @@ export default function LeaveRequestForm({
         </p>
       </div>
 
-      <div className="rounded-xl bg-cyan-50 px-4 py-3">
-        <p className="text-xs font-bold uppercase tracking-wider text-cyan-700">
+      <div className="rounded-xl bg-blue-50 px-4 py-3">
+        <p className="text-xs font-bold uppercase tracking-wider text-blue-700">
           Available balance
         </p>
-        <p className="mt-1 text-xl font-bold text-cyan-950">
+        <p className="mt-1 text-xl font-bold text-blue-950">
           {balanceLabel}
         </p>
       </div>

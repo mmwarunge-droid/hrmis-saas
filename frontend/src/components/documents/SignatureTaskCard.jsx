@@ -47,9 +47,9 @@ export default function SignatureTaskCard({
   };
 
   return (
-    <article className="rounded-2xl border border-cyan-100 bg-cyan-50/40 p-4">
+    <article className="rounded-lg border border-blue-100 bg-blue-50/40 p-4">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start">
-        <span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-cyan-100 text-cyan-800">
+        <span className="grid h-11 w-11 shrink-0 place-items-center rounded-lg bg-blue-100 text-blue-800">
           <FileSignature size={20} />
         </span>
 
@@ -83,7 +83,7 @@ export default function SignatureTaskCard({
           </p>
 
           {externalQes && (
-            <div className="mt-3 flex gap-3 rounded-2xl border border-violet-200 bg-violet-50 p-3 text-violet-950">
+            <div className="mt-3 flex gap-3 rounded-lg border border-blue-200 bg-blue-50 p-3 text-blue-950">
               <ShieldCheck
                 className="mt-0.5 shrink-0"
                 size={18}
@@ -92,14 +92,14 @@ export default function SignatureTaskCard({
                 <p className="text-xs font-semibold">
                   Complete signing through Dropbox Sign
                 </p>
-                <p className="mt-1 text-xs leading-5 text-violet-800">
+                <p className="mt-1 text-xs leading-5 text-blue-800">
                   Use the provider-hosted invitation sent to your
                   email. Dropbox Sign controls identity verification,
                   consent, and signature evidence for this request.
-                  ACE cannot confirm or decline it directly.
+                  Kinetic cannot confirm or decline it directly.
                 </p>
                 {task.provider_status && (
-                  <p className="mt-1 text-xs font-medium text-violet-900">
+                  <p className="mt-1 text-xs font-medium text-blue-900">
                     Provider status:{' '}
                     {task.provider_status.replaceAll('_', ' ')}
                   </p>
@@ -156,7 +156,7 @@ export default function SignatureTaskCard({
       </div>
 
       {showDecline && !externalQes && (
-        <div className="mt-4 border-t border-cyan-100 pt-4">
+        <div className="mt-4 border-t border-blue-100 pt-4">
           <label className="block space-y-1">
             <span className="text-sm font-medium text-slate-700">
               Reason for declining
@@ -168,7 +168,7 @@ export default function SignatureTaskCard({
               onChange={(event) => setReason(
                 event.target.value,
               )}
-              className="w-full rounded-2xl border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none transition focus:border-cyan-400 focus:ring-4 focus:ring-cyan-100"
+              className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-100"
             />
           </label>
 

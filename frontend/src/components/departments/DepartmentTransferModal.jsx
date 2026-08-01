@@ -27,7 +27,7 @@ export default function DepartmentTransferModal({
 
   return (
     <form onSubmit={submit} className="space-y-5">
-      <div className="rounded-2xl bg-slate-50 p-4">
+      <div className="rounded-lg bg-slate-50 p-4">
         <p className="text-sm font-semibold text-slate-900">
           Moving {employees.length} employee{employees.length === 1 ? '' : 's'}
         </p>
@@ -57,7 +57,7 @@ export default function DepartmentTransferModal({
       <label className="block space-y-1">
         <span className="text-sm font-medium text-slate-700">Reason for change</span>
         <textarea
-          className="min-h-24 w-full rounded-2xl border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none transition focus:border-cyan-400 focus:ring-4 focus:ring-cyan-100"
+          className="min-h-24 w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-100"
           value={reason}
           onChange={(event) => setReason(event.target.value)}
           placeholder="e.g. Operating model restructure"

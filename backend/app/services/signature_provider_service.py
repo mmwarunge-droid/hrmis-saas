@@ -327,7 +327,7 @@ def _apply_callback(signature_request, callback):
             f'{signature_request.subject}',
             (
                 'Dropbox Sign reported that the signer completed '
-                'the eID signing ceremony. ACE is waiting for the '
+                'the eID signing ceremony. Kinetic is waiting for the '
                 'final signed files and audit evidence.'
             ),
         )
@@ -360,7 +360,7 @@ def _apply_callback(signature_request, callback):
             f'QES evidence ready: {signature_request.subject}',
             (
                 'Dropbox Sign reported that the final signed files '
-                'are downloadable. ACE must ingest and verify the '
+                'are downloadable. Kinetic must ingest and verify the '
                 'signed PDF and audit evidence before completion.'
             ),
         )

@@ -49,19 +49,19 @@ export default function OrganizationProvisionForm({ onSubmit, loading = false })
 
   return (
     <form onSubmit={submit} className="space-y-7">
-      <div className="rounded-3xl bg-gradient-to-br from-slate-950 via-blue-950 to-cyan-900 p-6 text-white">
+      <div className="rounded-xl bg-gradient-to-br from-slate-950 via-blue-950 to-blue-900 p-6 text-white">
         <div className="flex items-start gap-4">
-          <span className="grid h-12 w-12 place-items-center rounded-2xl bg-white/10"><Building2 size={22} /></span>
+          <span className="grid h-12 w-12 place-items-center rounded-lg bg-white/10"><Building2 size={22} /></span>
           <div>
             <h3 className="text-lg font-bold">Provision a complete organization workspace</h3>
-            <p className="mt-1 text-sm leading-6 text-cyan-100">The organization and its first administrator are created together, keeping tenant access isolated from day one.</p>
+            <p className="mt-1 text-sm leading-6 text-blue-100">The organization and its first administrator are created together, keeping tenant access isolated from day one.</p>
           </div>
         </div>
       </div>
 
       <section>
         <div className="mb-4 flex items-center gap-3">
-          <span className="grid h-9 w-9 place-items-center rounded-xl bg-cyan-50 text-cyan-700"><Building2 size={18} /></span>
+          <span className="grid h-9 w-9 place-items-center rounded-xl bg-blue-50 text-blue-700"><Building2 size={18} /></span>
           <div><h3 className="font-bold text-slate-950">Organization profile</h3><p className="text-xs text-slate-500">Core legal, operating and compliance context.</p></div>
         </div>
         <div className="grid gap-4 md:grid-cols-2">
@@ -76,7 +76,7 @@ export default function OrganizationProvisionForm({ onSubmit, loading = false })
 
       <section className="border-t border-slate-100 pt-6">
         <div className="mb-4 flex items-center gap-3">
-          <span className="grid h-9 w-9 place-items-center rounded-xl bg-violet-50 text-violet-700"><UserCog size={18} /></span>
+          <span className="grid h-9 w-9 place-items-center rounded-xl bg-blue-50 text-blue-700"><UserCog size={18} /></span>
           <div><h3 className="font-bold text-slate-950">Organization administrator</h3><p className="text-xs text-slate-500">This user receives the CLIENT_ADMIN role and can create employee accounts.</p></div>
         </div>
         <div className="grid gap-4 md:grid-cols-2">
@@ -87,7 +87,7 @@ export default function OrganizationProvisionForm({ onSubmit, loading = false })
         </div>
       </section>
 
-      <div className="flex items-center justify-between gap-4 rounded-2xl bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+      <div className="flex items-center justify-between gap-4 rounded-lg bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
         <span className="flex items-center gap-2"><ShieldCheck size={18} /> Tenant isolation and least-privilege roles are applied automatically.</span>
         <Button variant="accent" disabled={loading}>{loading ? 'Provisioning...' : 'Create workspace'}</Button>
       </div>

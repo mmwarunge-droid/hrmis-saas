@@ -17,7 +17,7 @@ jobs:
         working-directory: frontend
     env:
       VITE_API_BASE_URL: https://api.example.test/api
-      VITE_APP_NAME: HRMIS CI
+      VITE_APP_NAME: Kinetic CI
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4

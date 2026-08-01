@@ -135,9 +135,9 @@ export default function LeaveSetupPanel({
 
       <Card>
         <div className="flex items-start gap-3">
-          <ShieldCheck className="mt-1 text-violet-600" size={22} />
+          <ShieldCheck className="mt-1 text-blue-600" size={22} />
           <div>
-            <p className="text-xs font-bold uppercase tracking-wider text-violet-700">
+            <p className="text-xs font-bold uppercase tracking-wider text-blue-700">
               Approval governance
             </p>
             <h3 className="mt-1 text-lg font-bold text-slate-950">
@@ -215,9 +215,9 @@ export default function LeaveSetupPanel({
       <Card>
         <div className="flex items-start justify-between gap-4">
           <div className="flex items-start gap-3">
-            <Sparkles className="mt-1 text-cyan-600" size={22} />
+            <Sparkles className="mt-1 text-blue-600" size={22} />
             <div>
-              <p className="text-xs font-bold uppercase tracking-wider text-cyan-700">
+              <p className="text-xs font-bold uppercase tracking-wider text-blue-700">
                 Standard policy pack
               </p>
               <h3 className="mt-1 text-lg font-bold text-slate-950">

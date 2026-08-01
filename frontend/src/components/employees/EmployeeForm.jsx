@@ -130,7 +130,7 @@ export default function EmployeeForm({
           <label className="block space-y-1 md:col-span-2">
             <span className="text-sm font-medium text-slate-700">Reason for employment change</span>
             <textarea
-              className="min-h-24 w-full rounded-2xl border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none transition focus:border-cyan-400 focus:ring-4 focus:ring-cyan-100"
+              className="min-h-24 w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-100"
               name="change_reason"
               value={form.change_reason}
               onChange={update}

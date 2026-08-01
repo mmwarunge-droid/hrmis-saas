@@ -1,9 +1,9 @@
-# Consulting-Led HRMIS SaaS Platform
+# Kinetic HR Platform
 
 
-## People experience upgrade
+## Kinetic people experience
 
-The current interface includes a people-first home workspace, people directory, org chart, department administration, bulk workforce transfers, calendar-led time off, document library, task center and a super-admin organization provisioning flow. See [`PRODUCT_UI_UPGRADE.md`](PRODUCT_UI_UPGRADE.md) and [`DEPARTMENT_MANAGEMENT.md`](DEPARTMENT_MANAGEMENT.md) for the delivered scope and operating workflows.
+The Kinetic interface includes a BambooHR-inspired, people-first home workspace, people directory, org chart, department administration, bulk workforce transfers, calendar-led time off, document library, task center and a super-admin organization provisioning flow. See [`docs/KINETIC_REDESIGN.md`](docs/KINETIC_REDESIGN.md), [`PRODUCT_UI_UPGRADE.md`](PRODUCT_UI_UPGRADE.md), and [`DEPARTMENT_MANAGEMENT.md`](DEPARTMENT_MANAGEMENT.md) for the delivered scope and operating workflows.
 
 A multi-tenant HRMIS SaaS platform designed as the digital operating layer for high-touch HR consulting services. The MVP covers employee system of record, secure documents, leave and attendance, onboarding, RBAC, audit logs, and tenant isolation.
 
