@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import {
   CheckCircle2,
   CircleAlert,
@@ -7,6 +8,7 @@ import {
   Sparkles,
 } from 'lucide-react';
 
+import Alert from '../ui/Alert.jsx';
 import Badge from '../ui/Badge.jsx';
 import Button from '../ui/Button.jsx';
 import Card from '../ui/Card.jsx';
@@ -97,22 +99,27 @@ export default function LeaveSetupPanel({
         {[
           {
             code: 'employee_profile',
-            label: 'Employee profile',
+            label: 'Your employee profile',
           },
           {
             code: 'leave_policies',
             label: 'Policy pack',
           },
           {
-            code: 'organization_owner',
-            label: 'Business owner',
+            code: 'approval_governance',
+            label: 'Approval governance',
           },
           {
             code: 'opening_balances',
             label: 'Opening balances',
           },
         ].map((step) => {
-          const incomplete = missingCodes.has(step.code);
+          const incomplete = step.code === 'approval_governance'
+            ? (
+              missingCodes.has('organization_owner')
+              || missingCodes.has('alternate_approver')
+            )
+            : missingCodes.has(step.code);
           return (
             <Card key={step.code} className="p-4">
               <div className="flex items-center gap-3">
@@ -132,6 +139,26 @@ export default function LeaveSetupPanel({
           );
         })}
       </div>
+
+      {missingCodes.has('employee_profile') && (
+        <Alert
+          type="warning"
+          title="Your login is not linked to an employee record"
+        >
+          <p>
+            Organization policy and approval configuration can still be
+            completed. This requirement only blocks this account from
+            requesting its own time off. Create or locate your employee record
+            and link it to the existing user account.
+          </p>
+          <Link
+            to="/employees"
+            className="mt-2 inline-flex font-bold text-amber-950 underline underline-offset-2"
+          >
+            Open People directory
+          </Link>
+        </Alert>
+      )}
 
       <Card>
         <div className="flex items-start gap-3">

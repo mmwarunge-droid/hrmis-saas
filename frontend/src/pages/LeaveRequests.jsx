@@ -183,6 +183,7 @@ export default function LeaveRequests() {
       await action();
       setMessage(successMessage);
       await load();
+      window.dispatchEvent(new Event('kinetic:leave-queue-changed'));
       return true;
     } catch (err) {
       setError(
