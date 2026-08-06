@@ -9,6 +9,8 @@ import AskKinetic from './pages/AskKinetic.jsx';
 import EmployeeExperienceSettings from './pages/EmployeeExperienceSettings.jsx';
 import EmployeeHome from './pages/EmployeeHome.jsx';
 import HomeRouter from './pages/HomeRouter.jsx';
+import HelpCenter from './pages/HelpCenter.jsx';
+import LeaveSetup from './pages/LeaveSetup.jsx';
 import MyProfile from './pages/MyProfile.jsx';
 import Departments from './pages/Departments.jsx';
 import Documents from './pages/Documents.jsx';
@@ -63,15 +65,17 @@ export default function App() {
             />
           </Route>
           <Route path="/leave" element={<LeaveRequests />} />
+          <Route element={<PermissionRoute permission="leave:approve" />}>
+            <Route path="/leave/setup" element={<LeaveSetup />} />
+          </Route>
           <Route path="/attendance" element={<Attendance />} />
           <Route path="/tasks" element={<Tasks />} />
-          <Route element={<PermissionRoute permission="onboarding:create" />}>
-            <Route path="/onboarding" element={<Onboarding />} />
-          </Route>
+          <Route path="/onboarding" element={<Onboarding />} />
           <Route element={<PermissionRoute permission="user:read" />}>
             <Route path="/users" element={<Users />} />
           </Route>
           <Route path="/settings" element={<Settings />} />
+          <Route path="/help" element={<HelpCenter />} />
           <Route
             element={
               <RoleRoute

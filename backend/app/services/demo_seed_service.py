@@ -1335,6 +1335,14 @@ def _seed_notifications_and_audit(tenant, employees, users, reference: date):
             title=title,
             body=body,
             notification_type=notification_type,
+            priority='high' if notification_type in {'leave', 'signature'} else 'normal',
+            action_url={
+                'leave': '/leave',
+                'signature': '/documents',
+                'onboarding': '/onboarding',
+                'compliance': '/documents',
+            }.get(notification_type),
+            metadata_json={'source': 'demo_seed'},
             read_at=(
                 _at(reference - timedelta(days=1), 16)
                 if index == 3

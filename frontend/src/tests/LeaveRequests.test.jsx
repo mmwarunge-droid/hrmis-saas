@@ -1,4 +1,5 @@
 import { render, screen, waitFor } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
 import userEvent from '@testing-library/user-event';
 
 import { employeeApi } from '../api/employeeApi';
@@ -117,7 +118,11 @@ test(
     configureResponses(false);
 
     const user = userEvent.setup();
-    render(<LeaveRequests />);
+    render(
+      <MemoryRouter>
+        <LeaveRequests />
+      </MemoryRouter>,
+    );
 
     const requestButton = screen.getByRole(
       'button',
@@ -167,7 +172,11 @@ test(
   async () => {
     configureResponses(true);
 
-    render(<LeaveRequests />);
+    render(
+      <MemoryRouter>
+        <LeaveRequests />
+      </MemoryRouter>,
+    );
 
     expect(
       await screen.findByText(

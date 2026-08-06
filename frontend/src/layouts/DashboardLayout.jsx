@@ -23,6 +23,7 @@ const TENANT_SCOPED_ROUTES = [
   '/attendance',
   '/tasks',
   '/onboarding',
+  '/goals',
 ];
 
 function isTenantScopedRoute(pathname) {

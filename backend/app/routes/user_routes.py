@@ -5,10 +5,11 @@ from sqlalchemy import or_
 from sqlalchemy.exc import IntegrityError
 
 from app.extensions import db
-from app.models import Role, Tenant, User, UserRole
+from app.models import Employee, Role, Tenant, User, UserRole
 from app.schemas.user_schema import (
     MfaAdminResetSchema,
     UserCreateSchema,
+    UserEmployeeLinkSchema,
     UserRoleUpdateSchema,
     UserUpdateSchema,
 )
@@ -209,6 +210,17 @@ def create_user():
     return success(data, 'User created', 201)
 
 
+@user_bp.get('/options')
+@jwt_required()
+@permission_required('user:read')
+def user_options():
+    query = _user_scope_query().filter(User.is_active.is_(True)).order_by(
+        User.first_name.asc(),
+        User.last_name.asc(),
+    )
+    return success({'items': [user.to_dict() for user in query.all()]})
+
+
 @user_bp.get('/<user_id>')
 @jwt_required()
 @permission_required('user:read')
@@ -381,3 +393,73 @@ def reset_user_mfa(user_id):
     )
     db.session.commit()
     return success(result, 'User MFA enrollment reset')
+
+
+@user_bp.patch('/<user_id>/employee-link')
+@jwt_required()
+@permission_required('user:update')
+def link_user_employee(user_id):
+    user = _user_scope_query().filter_by(id=user_id).first_or_404()
+    if not _can_manage_user(user) and not current_user.has_role('SUPER_ADMIN'):
+        return fail(
+            'PRIVILEGED_USER_PROTECTED',
+            'Only a platform administrator can update this account',
+            403,
+        )
+
+    try:
+        payload = UserEmployeeLinkSchema().load(request.get_json() or {})
+    except ValidationError as err:
+        return fail('VALIDATION_ERROR', err.messages, 422)
+
+    employee_id = payload.get('employee_id')
+    previous = user.employee_profile
+    if employee_id is None:
+        if previous:
+            previous.user_id = None
+            log_event(
+                'employee.access_unlinked',
+                'Employee',
+                previous.id,
+                tenant_id=previous.tenant_id,
+                metadata={'user_id': str(user.id)},
+            )
+        db.session.commit()
+        return success(user.to_dict(), 'Employee link removed')
+
+    if not user.tenant_id:
+        return fail(
+            'TENANT_REQUIRED',
+            'Platform accounts cannot be linked to employee records',
+            422,
+        )
+
+    employee = tenant_query(Employee).filter(
+        Employee.id == employee_id,
+        Employee.deleted_at.is_(None),
+    ).first()
+    if not employee or str(employee.tenant_id) != str(user.tenant_id):
+        return fail(
+            'EMPLOYEE_NOT_FOUND',
+            'Employee was not found in this organization',
+            404,
+        )
+    if employee.user_id and str(employee.user_id) != str(user.id):
+        return fail(
+            'EMPLOYEE_ALREADY_LINKED',
+            'This employee is already linked to another account',
+            409,
+        )
+
+    if previous and str(previous.id) != str(employee.id):
+        previous.user_id = None
+    employee.user_id = user.id
+    log_event(
+        'employee.access_linked',
+        'Employee',
+        employee.id,
+        tenant_id=employee.tenant_id,
+        metadata={'user_id': str(user.id)},
+    )
+    db.session.commit()
+    return success(user.to_dict(), 'Employee account linked')

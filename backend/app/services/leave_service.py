@@ -14,6 +14,7 @@ from app.services.leave_accrual_service import (
     reserve_request_balance,
     restore_request_balance,
 )
+from app.services.notification_service import create_notification
 from app.services.leave_policy_service import (
     SUBMIT_FOR_OTHERS_ROLES,
     can_configure_leave,
@@ -246,6 +247,20 @@ def create_leave_request(payload, tenant_id, actor):
             'balance_reserved': status == 'pending',
         },
     )
+    if approver:
+        create_notification(
+            tenant_id=tenant_id,
+            user_id=approver.id,
+            title=f'{employee.full_name} requested time off',
+            body=(
+                f'{leave_type.name}: {start_date.isoformat()} to '
+                f'{end_date.isoformat()} ({float(total_days):g} days).'
+            ),
+            notification_type='leave_approval',
+            priority='high',
+            action_url='/leave',
+            metadata={'leave_request_id': str(request_obj.id)},
+        )
     db.session.commit()
     return request_obj
 
@@ -311,6 +326,25 @@ def decide_leave_request(
             ),
         },
     )
+    recipient_id = (
+        leave_request.employee.user_id
+        or leave_request.requested_by_user_id
+    )
+    if recipient_id and str(recipient_id) != str(actor.id):
+        create_notification(
+            tenant_id=leave_request.tenant_id,
+            user_id=recipient_id,
+            title=f'Time-off request {status}',
+            body=(
+                f'{leave_request.leave_type.name}: '
+                f'{leave_request.start_date.isoformat()} to '
+                f'{leave_request.end_date.isoformat()}.'
+            ),
+            notification_type='leave_decision',
+            priority='normal',
+            action_url='/leave',
+            metadata={'leave_request_id': str(leave_request.id)},
+        )
     db.session.commit()
     return leave_request
 

@@ -22,3 +22,24 @@ class OnboardingAssignSchema(Schema):
 
 class OnboardingTaskCompleteSchema(Schema):
     completion_notes = fields.Str(required=False, allow_none=True)
+
+
+class OnboardingTemplateUpdateSchema(Schema):
+    name = fields.Str(required=False)
+    description = fields.Str(required=False, allow_none=True)
+    is_active = fields.Bool(required=False)
+    tasks = fields.List(
+        fields.Nested(OnboardingTaskCreateSchema),
+        required=False,
+    )
+
+
+class OnboardingAssignmentUpdateSchema(Schema):
+    status = fields.Str(
+        required=False,
+        validate=validate.OneOf(
+            ['pending', 'in_progress', 'completed', 'waived', 'overdue']
+        ),
+    )
+    assigned_to_user_id = fields.UUID(required=False, allow_none=True)
+    completion_notes = fields.Str(required=False, allow_none=True)

@@ -22,7 +22,9 @@ import { attendanceApi } from '../api/attendanceApi.js';
 import { documentApi } from '../api/documentApi.js';
 import { employeeApi } from '../api/employeeApi';
 import { leaveApi } from '../api/leaveApi.js';
+import { userApi } from '../api/userApi.js';
 import EmployeeAccessForm from '../components/employees/EmployeeAccessForm.jsx';
+import EmployeeAccountLinkForm from '../components/employees/EmployeeAccountLinkForm.jsx';
 import EmployeeForm from '../components/employees/EmployeeForm.jsx';
 import Alert from '../components/ui/Alert.jsx';
 import Avatar from '../components/ui/Avatar.jsx';
@@ -78,8 +80,11 @@ export default function EmployeeDetails() {
   const [attendance, setAttendance] = useState([]);
   const [open, setOpen] = useState(false);
   const [accessOpen, setAccessOpen] = useState(false);
+  const [linkOpen, setLinkOpen] = useState(false);
+  const [userOptions, setUserOptions] = useState([]);
   const [saving, setSaving] = useState(false);
   const [accessSaving, setAccessSaving] = useState(false);
+  const [linkSaving, setLinkSaving] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
@@ -181,6 +186,32 @@ export default function EmployeeDetails() {
     }
   };
 
+  const openLink = async () => {
+    setError('');
+    try {
+      const response = await userApi.options();
+      setUserOptions(response.data.items || []);
+      setLinkOpen(true);
+    } catch (err) {
+      setError(err.error?.message || 'Unable to load user accounts.');
+    }
+  };
+
+  const linkAccount = async (userId) => {
+    setLinkSaving(true);
+    setError('');
+    try {
+      await userApi.linkEmployee(userId, employee.id);
+      setLinkOpen(false);
+      setSuccess('Existing user account linked to this employee.');
+      await load();
+    } catch (err) {
+      setError(err.error?.message || 'Account linking failed.');
+    } finally {
+      setLinkSaving(false);
+    }
+  };
+
   const provisionAccess = async (payload) => {
     setAccessSaving(true);
     setError('');
@@ -274,7 +305,10 @@ export default function EmployeeDetails() {
             </div>
             <div className="flex flex-wrap gap-2">
               {!employee.user_id && canProvisionAccess && employee.employment_status !== 'terminated' && (
-                <Button variant="secondary" onClick={() => setAccessOpen(true)}><KeyRound size={15} /> Provision access</Button>
+                <>
+                  <Button variant="secondary" onClick={() => setAccessOpen(true)}><KeyRound size={15} /> Provision access</Button>
+                  <Button variant="ghost" onClick={openLink}><UserRoundCheck size={15} /> Link existing</Button>
+                </>
               )}
               {hasPermission('employee:update') && (
                 <Button onClick={() => setOpen(true)}><Pencil size={15} /> Edit employee</Button>
@@ -462,6 +496,9 @@ export default function EmployeeDetails() {
       </Modal>
       <Modal title={`Provision access for ${employee.full_name}`} description="Create a linked Kinetic account for this employee record." open={accessOpen} onClose={() => setAccessOpen(false)} size="lg">
         <EmployeeAccessForm employee={employee} onSubmit={provisionAccess} loading={accessSaving} />
+      </Modal>
+      <Modal title={`Link existing account to ${employee.full_name}`} description="Connect a tenant user to this employee record without creating another identity." open={linkOpen} onClose={() => setLinkOpen(false)} size="lg">
+        <EmployeeAccountLinkForm employee={employee} users={userOptions} onSubmit={linkAccount} loading={linkSaving} />
       </Modal>
     </div>
   );

@@ -7,6 +7,7 @@ import {
   CheckSquare2,
   FileSignature,
   FileText,
+  LifeBuoy,
   Home,
   Network,
   Settings,
@@ -39,6 +40,7 @@ export const navigationGroups = [
     links: [
       { to: '/leave', label: 'Time off', icon: CalendarDays, permission: 'leave:create', keywords: 'leave vacation absence requests' },
       { to: '/attendance', label: 'Attendance', icon: BarChart3, permissionAny: ['attendance:read', 'attendance:write'], keywords: 'clock hours timesheet' },
+      { to: '/leave/setup', label: 'Time-off setup', icon: Settings, permission: 'leave:approve', keywords: 'leave policy governance balances accruals' },
     ],
   },
   {
@@ -46,7 +48,7 @@ export const navigationGroups = [
     links: [
       { to: '/documents', label: 'Files', icon: FileText, permission: 'document:read', keywords: 'documents contracts policies' },
       { to: '/signature-requests', label: 'Signatures', icon: FileSignature, permission: 'document:approve', keywords: 'electronic signing requests' },
-      { to: '/onboarding', label: 'Onboarding', icon: UserPlus, permission: 'onboarding:create', keywords: 'new hires checklist' },
+      { to: '/onboarding', label: 'Onboarding', icon: UserPlus, permissionAny: ['onboarding:create', 'onboarding:assign'], keywords: 'new hires checklist templates assignments' },
     ],
   },
   {
@@ -56,6 +58,7 @@ export const navigationGroups = [
       { to: '/users', label: 'Access & users', icon: Users, permission: 'user:read', keywords: 'accounts roles permissions' },
       { to: '/settings/employee-experience', label: 'Employee experience', icon: Sparkles, roles: ['SUPER_ADMIN', 'ORGANIZATION_OWNER', 'CLIENT_ADMIN'], keywords: 'homepage branding events' },
       { to: '/settings', label: 'Settings', icon: Settings, keywords: 'security account preferences' },
+      { to: '/help', label: 'Help center', icon: LifeBuoy, keywords: 'support guide help demo' },
     ],
   },
 ];
@@ -92,6 +95,8 @@ export const pageTitles = {
   '/signature-requests': 'Signatures',
   '/tasks': 'Tasks',
   '/onboarding': 'Onboarding',
+  '/leave/setup': 'Time-off setup',
+  '/help': 'Help center',
   '/users': 'Access & users',
   '/organizations': 'Organizations',
   '/settings': 'Settings',
