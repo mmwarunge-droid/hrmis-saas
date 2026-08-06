@@ -29,6 +29,7 @@ vi.mock('../api/signatureApi.js', () => ({
 
 vi.mock('../api/tenantApi.js', () => ({
   tenantApi: {
+    options: vi.fn(),
     list: vi.fn(),
   },
 }));
@@ -61,7 +62,7 @@ beforeEach(() => {
   employeeApi.options.mockResolvedValue({
     data: { items: [] },
   });
-  tenantApi.list.mockResolvedValue({
+  tenantApi.options.mockResolvedValue({
     data: { items: [] },
   });
   documentApi.summary.mockResolvedValue({

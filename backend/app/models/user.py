@@ -167,6 +167,21 @@ class User(db.Model, TimestampMixin, SoftDeleteMixin, ReprMixin):
                 if self.mfa_reset_at
                 else None
             ),
+            'last_login_at': (
+                self.last_login_at.isoformat()
+                if self.last_login_at
+                else None
+            ),
+            'created_at': (
+                self.created_at.isoformat()
+                if self.created_at
+                else None
+            ),
+            'updated_at': (
+                self.updated_at.isoformat()
+                if self.updated_at
+                else None
+            ),
             'roles': self.role_names,
             'permissions': self.permission_codes,
         }

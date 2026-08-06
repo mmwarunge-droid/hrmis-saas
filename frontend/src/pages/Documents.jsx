@@ -87,7 +87,7 @@ export default function Documents() {
           ? employeeApi.options()
           : Promise.resolve({ data: { items: [] } }),
         isSuperAdmin
-          ? tenantApi.list({ per_page: 100 })
+          ? tenantApi.options()
           : Promise.resolve({ data: { items: [] } }),
       ]);
 

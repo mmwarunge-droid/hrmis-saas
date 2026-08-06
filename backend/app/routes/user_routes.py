@@ -1,10 +1,11 @@
 from flask import Blueprint, request
 from flask_jwt_extended import current_user, jwt_required
 from marshmallow import ValidationError
+from sqlalchemy import or_
 from sqlalchemy.exc import IntegrityError
 
 from app.extensions import db
-from app.models import User
+from app.models import Role, Tenant, User, UserRole
 from app.schemas.user_schema import (
     MfaAdminResetSchema,
     UserCreateSchema,
@@ -23,20 +24,143 @@ from app.services.mfa_service import (
     verify_current_totp,
 )
 from app.services.rbac_service import set_user_roles, validate_role_assignment
+from app.services.session_service import revoke_all_user_sessions
 from app.utils.decorators import permission_required, tenant_query
 from app.utils.pagination import get_pagination, paginated_response
 from app.utils.response import fail, success
 
 user_bp = Blueprint('users', __name__, url_prefix='/users')
 
+PRIVILEGED_ROLES = {
+    'SUPER_ADMIN',
+    'CLIENT_ADMIN',
+    'ORGANIZATION_OWNER',
+    'HR_CONSULTANT',
+}
+
+
+def _user_scope_query():
+    return tenant_query(User).filter(User.deleted_at.is_(None))
+
+
+def _has_role(role_names):
+    return User.role_links.any(
+        UserRole.role.has(Role.name.in_(role_names))
+    )
+
+
+def _can_manage_user(user):
+    if current_user.has_role('SUPER_ADMIN'):
+        return True
+    return not user.has_any_role(PRIVILEGED_ROLES)
+
+
+def _apply_user_filters(query):
+    search = request.args.get('q', '').strip().lower()
+    if search:
+        like = f'%{search}%'
+        query = query.filter(
+            or_(
+                db.func.lower(User.first_name).like(like),
+                db.func.lower(User.last_name).like(like),
+                db.func.lower(User.email).like(like),
+                db.func.lower(
+                    User.first_name + ' ' + User.last_name
+                ).like(like),
+                db.func.lower(Tenant.name).like(like),
+                User.role_links.any(
+                    UserRole.role.has(
+                        db.func.lower(Role.name).like(like)
+                    )
+                ),
+            )
+        )
+
+    status = request.args.get('status', '').strip().lower()
+    if status == 'active':
+        query = query.filter(User.is_active.is_(True))
+    elif status == 'inactive':
+        query = query.filter(User.is_active.is_(False))
+
+    role = request.args.get('role', '').strip().upper()
+    if role:
+        query = query.filter(_has_role({role}))
+
+    verified = request.args.get('verified', '').strip().lower()
+    if verified == 'true':
+        query = query.filter(User.email_verified_at.is_not(None))
+    elif verified == 'false':
+        query = query.filter(User.email_verified_at.is_(None))
+
+    mfa = request.args.get('mfa', '').strip().lower()
+    if mfa == 'enabled':
+        query = query.filter(User.mfa_enabled_at.is_not(None))
+    elif mfa == 'disabled':
+        query = query.filter(User.mfa_enabled_at.is_(None))
+
+    return query
+
+
+def _apply_user_sort(query):
+    sort = request.args.get('sort', 'full_name').strip().lower()
+    direction = request.args.get('direction', 'asc').strip().lower()
+    descending = direction == 'desc'
+
+    sort_columns = {
+        'full_name': [User.first_name, User.last_name],
+        'email': [User.email],
+        'organization': [Tenant.name, User.first_name, User.last_name],
+        'status': [User.is_active, User.first_name, User.last_name],
+        'verified': [User.email_verified_at, User.first_name, User.last_name],
+        'mfa': [User.mfa_enabled_at, User.first_name, User.last_name],
+        'last_login': [User.last_login_at, User.first_name, User.last_name],
+        'created_at': [User.created_at],
+    }
+    columns = sort_columns.get(sort, sort_columns['full_name'])
+    order = [
+        column.desc() if descending else column.asc()
+        for column in columns
+    ]
+    return query.order_by(*order, User.id.asc())
+
 
 @user_bp.get('')
 @jwt_required()
 @permission_required('user:read')
 def list_users():
-    page, per_page = get_pagination()
-    query = tenant_query(User).filter(User.deleted_at.is_(None)).order_by(User.created_at.desc())
-    return success(paginated_response(query.paginate(page=page, per_page=per_page, error_out=False)))
+    page, per_page = get_pagination(default_per_page=15)
+    query = _user_scope_query().outerjoin(
+        Tenant,
+        User.tenant_id == Tenant.id,
+    )
+    query = _apply_user_filters(query)
+    query = _apply_user_sort(query)
+    pagination = query.paginate(
+        page=page,
+        per_page=per_page,
+        error_out=False,
+    )
+    return success(paginated_response(pagination))
+
+
+@user_bp.get('/summary')
+@jwt_required()
+@permission_required('user:read')
+def user_summary():
+    query = _user_scope_query()
+    return success({
+        'total': query.count(),
+        'active': query.filter(User.is_active.is_(True)).count(),
+        'verified': query.filter(
+            User.email_verified_at.is_not(None)
+        ).count(),
+        'mfa_enabled': query.filter(
+            User.mfa_enabled_at.is_not(None)
+        ).count(),
+        'privileged': query.filter(
+            _has_role(PRIVILEGED_ROLES)
+        ).count(),
+    })
 
 
 @user_bp.post('')
@@ -89,40 +213,110 @@ def create_user():
 @jwt_required()
 @permission_required('user:read')
 def get_user(user_id):
-    return success(tenant_query(User).filter_by(id=user_id, deleted_at=None).first_or_404().to_dict())
+    user = _user_scope_query().filter_by(id=user_id).first_or_404()
+    return success(user.to_dict())
 
 
 @user_bp.patch('/<user_id>')
 @jwt_required()
 @permission_required('user:update')
 def update_user(user_id):
-    user = tenant_query(User).filter_by(id=user_id, deleted_at=None).first_or_404()
+    user = _user_scope_query().filter_by(id=user_id).first_or_404()
     try:
         payload = UserUpdateSchema().load(request.get_json() or {})
     except ValidationError as err:
         return fail('VALIDATION_ERROR', err.messages, 422)
+
+    if (
+        str(user.id) == str(current_user.id)
+        and payload.get('is_active') is False
+    ):
+        return fail(
+            'SELF_DEACTIVATION_NOT_ALLOWED',
+            'You cannot deactivate your own account',
+            409,
+        )
+    if not _can_manage_user(user):
+        return fail(
+            'PRIVILEGED_USER_PROTECTED',
+            'Only a platform administrator can update this account',
+            403,
+        )
+
+    previous_active = user.is_active
     for key, value in payload.items():
         setattr(user, key, value)
-    log_event('user.update', 'User', user.id, tenant_id=user.tenant_id)
+
+    revoked_sessions = 0
+    if previous_active and not user.is_active:
+        revoked_sessions = revoke_all_user_sessions(
+            user,
+            'account_deactivated_by_administrator',
+            commit=False,
+        )
+
+    log_event(
+        'user.update',
+        'User',
+        user.id,
+        tenant_id=user.tenant_id,
+        metadata={
+            'is_active': user.is_active,
+            'revoked_sessions': revoked_sessions,
+        },
+    )
     db.session.commit()
-    return success(user.to_dict(), 'User updated')
+    data = user.to_dict()
+    data['revoked_sessions'] = revoked_sessions
+    return success(data, 'User updated')
 
 
 @user_bp.patch('/<user_id>/roles')
 @jwt_required()
 @permission_required('user:update')
 def update_roles(user_id):
-    user = tenant_query(User).filter_by(id=user_id, deleted_at=None).first_or_404()
+    user = _user_scope_query().filter_by(id=user_id).first_or_404()
+    if not _can_manage_user(user):
+        return fail(
+            'PRIVILEGED_USER_PROTECTED',
+            'Only a platform administrator can update this account',
+            403,
+        )
     try:
         payload = UserRoleUpdateSchema().load(request.get_json() or {})
-        validate_role_assignment(current_user, payload['roles'], user.tenant_id)
-        set_user_roles(user, payload['roles'], assigned_by_id=current_user.id, commit=False)
-        log_event('user.roles_update', 'User', user.id, tenant_id=user.tenant_id, metadata={'roles': payload['roles']})
+        requested_roles = payload['roles']
+        if (
+            str(user.id) == str(current_user.id)
+            and user.has_role('SUPER_ADMIN')
+            and 'SUPER_ADMIN' not in requested_roles
+        ):
+            raise ValueError(
+                'You cannot remove your own platform administrator role'
+            )
+        validate_role_assignment(
+            current_user,
+            requested_roles,
+            user.tenant_id,
+        )
+        set_user_roles(
+            user,
+            requested_roles,
+            assigned_by_id=current_user.id,
+            commit=False,
+        )
+        log_event(
+            'user.roles_update',
+            'User',
+            user.id,
+            tenant_id=user.tenant_id,
+            metadata={'roles': requested_roles},
+        )
         db.session.commit()
     except (ValidationError, ValueError) as err:
         db.session.rollback()
         return fail('ROLE_UPDATE_FAILED', getattr(err, 'messages', str(err)), 400)
     return success(user.to_dict(), 'User roles updated')
+
 
 @user_bp.post('/<user_id>/mfa/reset')
 @jwt_required()

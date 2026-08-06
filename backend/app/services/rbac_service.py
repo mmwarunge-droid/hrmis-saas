@@ -124,7 +124,18 @@ def validate_role_assignment(actor, roles, tenant_id):
             + ', '.join(sorted(unknown))
         )
 
-    if actor is None or actor.has_role('SUPER_ADMIN'):
+    if actor is None:
+        return
+
+    if actor.has_role('SUPER_ADMIN'):
+        if tenant_id and 'SUPER_ADMIN' in requested:
+            raise ValueError(
+                'SUPER_ADMIN is reserved for platform accounts'
+            )
+        if not tenant_id and requested != {'SUPER_ADMIN'}:
+            raise ValueError(
+                'Platform accounts must use the SUPER_ADMIN role'
+            )
         return
 
     if not tenant_id or str(actor.tenant_id) != str(tenant_id):
