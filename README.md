@@ -23,7 +23,7 @@ source .venv/bin/activate  # Windows: .venv\\Scripts\\activate
 pip install -r requirements.txt
 cp .env.example .env
 flask --app run.py db upgrade
-python seed.py
+flask --app run.py demo-seed
 flask --app run.py run
 ```
 
@@ -39,9 +39,19 @@ npm run dev
 
 For a person already present in the People directory, open the employee record and choose **Provision access**. The workflow creates a tenant-scoped `EMPLOYEE` or `MANAGER` account, links it to the existing employee profile, and rolls back the entire operation if the email or employee link conflicts.
 
-## Administrator provisioning
+## Deterministic demo environment
 
-`python seed.py` creates local demo data only and is intentionally blocked in production.
+`flask --app run.py demo-seed` creates the presentation-ready fictional dataset and is intentionally blocked in production. Reset only the managed demo tenants and accounts after a walkthrough:
+
+```bash
+cd backend
+flask --app run.py demo-reset --yes --as-of 2026-08-06
+flask --app run.py demo-status --as-of 2026-08-06
+```
+
+The convenience command `python seed.py` loads the same rich seed. See [`docs/DEMO_ENVIRONMENT.md`](docs/DEMO_ENVIRONMENT.md) for the account matrix, TOTP helper, baseline counts and screenshot checklist.
+
+## Administrator provisioning
 
 Provision the first production platform administrator through the one-time CLI workflow:
 

@@ -75,6 +75,7 @@ def register_commands(app: Flask) -> None:
             raise click.ClickException(str(exc)) from exc
 
         click.echo(json.dumps(result, sort_keys=True))
+
     @app.cli.command('leave-repair-event-balances')
     @click.option(
         '--tenant-id',
@@ -95,3 +96,110 @@ def register_commands(app: Flask) -> None:
             commit=apply_changes,
         )
         click.echo(json.dumps(result, sort_keys=True))
+
+    @app.cli.command('demo-seed')
+    @click.option(
+        '--as-of',
+        'as_of_value',
+        default=None,
+        help='Anchor relative demo dates to YYYY-MM-DD.',
+    )
+    @click.option(
+        '--password',
+        default=None,
+        envvar='DEMO_PASSWORD',
+        help='Shared local demo password. Prefer the DEMO_PASSWORD environment variable.',
+    )
+    def demo_seed(as_of_value, password) -> None:
+        """Create or refresh deterministic, presentation-ready demo records."""
+        from app.services.demo_seed_service import (
+            DemoSeedError,
+            seed_demo_data,
+        )
+
+        try:
+            result = seed_demo_data(
+                reference=as_of_value,
+                password=password,
+            )
+        except (DemoSeedError, ValueError) as exc:
+            raise click.ClickException(str(exc)) from exc
+        click.echo(json.dumps(result, indent=2, sort_keys=True))
+
+    @app.cli.command('demo-reset')
+    @click.option(
+        '--yes',
+        'confirmed',
+        is_flag=True,
+        help='Confirm replacement of only the managed demo tenants and accounts.',
+    )
+    @click.option(
+        '--as-of',
+        'as_of_value',
+        default=None,
+        help='Anchor relative demo dates to YYYY-MM-DD.',
+    )
+    @click.option(
+        '--password',
+        default=None,
+        envvar='DEMO_PASSWORD',
+        help='Shared local demo password. Prefer the DEMO_PASSWORD environment variable.',
+    )
+    def demo_reset(confirmed, as_of_value, password) -> None:
+        """Delete and recreate only Kinetic-managed demo data."""
+        from app.services.demo_seed_service import (
+            DemoSeedError,
+            reset_demo_data,
+        )
+
+        if not confirmed:
+            raise click.ClickException(
+                'Reset not confirmed. Re-run with --yes after reviewing the target demo slugs.'
+            )
+        try:
+            result = reset_demo_data(
+                reference=as_of_value,
+                password=password,
+            )
+        except (DemoSeedError, ValueError) as exc:
+            raise click.ClickException(str(exc)) from exc
+        click.echo(json.dumps(result, indent=2, sort_keys=True))
+
+    @app.cli.command('demo-status')
+    @click.option(
+        '--as-of',
+        'as_of_value',
+        default=None,
+        help='Report the reference date alongside current demo counts.',
+    )
+    def demo_status(as_of_value) -> None:
+        """Show demo record counts and the non-secret role matrix."""
+        from app.services.demo_seed_service import demo_manifest
+
+        click.echo(
+            json.dumps(
+                demo_manifest(as_of_value),
+                indent=2,
+                sort_keys=True,
+            )
+        )
+
+    @app.cli.command('demo-mfa-code')
+    @click.option(
+        '--email',
+        default='platform@kinetic.demo',
+        show_default=True,
+        help='Privileged demo account that uses the shared demo TOTP secret.',
+    )
+    def demo_totp(email) -> None:
+        """Print the current local-only TOTP code for a demo account."""
+        from app.services.demo_seed_service import (
+            DemoSeedError,
+            demo_mfa_code,
+        )
+
+        try:
+            code = demo_mfa_code(email)
+        except DemoSeedError as exc:
+            raise click.ClickException(str(exc)) from exc
+        click.echo(code)
