@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, timedelta
 from pathlib import Path
 from uuid import uuid4
 
@@ -71,6 +71,10 @@ def _create_document(
     *,
     employee_id=None,
     access_level='employee',
+    document_type='contract',
+    signature_status='not_required',
+    status='active',
+    expiry_date=None,
 ):
     with app.app_context():
         upload_directory = Path(app.config['UPLOAD_FOLDER']) / str(tenant_id)
@@ -84,13 +88,16 @@ def _create_document(
             employee_id=employee_id,
             uploaded_by_id=uploaded_by_id,
             title=title,
-            document_type='contract',
+            document_type=document_type,
             original_filename=f'{title}.txt',
             stored_filename=stored_filename,
             file_path=str(file_path),
             mime_type='text/plain',
             size_bytes=file_path.stat().st_size,
             access_level=access_level,
+            signature_status=signature_status,
+            status=status,
+            expiry_date=expiry_date,
         )
         db.session.add(document)
         db.session.commit()
@@ -310,3 +317,110 @@ def test_document_access_does_not_cross_tenant_boundaries(
         f'/api/documents/{other_document_id}',
         headers=headers,
     ).status_code == 404
+
+
+def test_document_summary_filters_and_sorting_use_all_accessible_records(
+    app,
+    tenant,
+    admin_user,
+    tmp_path,
+):
+    app.config['UPLOAD_FOLDER'] = str(tmp_path / 'uploads')
+    admin_user_id = sa_inspect(admin_user).identity[0]
+    _manager_user_id, manager_employee_id = _create_employee(
+        app,
+        tenant.id,
+        'MGR-004',
+        'manager4@acme.test',
+        roles=['MANAGER'],
+    )
+    _user_id, direct_report_id = _create_employee(
+        app,
+        tenant.id,
+        'EMP-REPORTING',
+        'reporting@acme.test',
+        manager_id=manager_employee_id,
+    )
+    _user_id, unrelated_employee_id = _create_employee(
+        app,
+        tenant.id,
+        'EMP-OUTSIDE',
+        'outside@acme.test',
+    )
+
+    for index in range(25):
+        _create_document(
+            app,
+            tenant.id,
+            admin_user_id,
+            f'Report file {index:02d}',
+            employee_id=direct_report_id,
+            document_type='contract' if index < 20 else 'policy',
+            signature_status=(
+                'signed' if index < 7 else 'pending' if index < 12
+                else 'not_required'
+            ),
+            expiry_date=(
+                date.today() + timedelta(days=index + 1)
+                if index < 3 else None
+            ),
+        )
+
+    _create_document(
+        app,
+        tenant.id,
+        admin_user_id,
+        'Already expired',
+        employee_id=direct_report_id,
+        expiry_date=date.today() - timedelta(days=1),
+    )
+
+    for index in range(10):
+        _create_document(
+            app,
+            tenant.id,
+            admin_user_id,
+            f'Outside file {index:02d}',
+            employee_id=unrelated_employee_id,
+            signature_status='signed',
+        )
+
+    manager_client, headers = _login(app, 'manager4@acme.test')
+    summary_response = manager_client.get(
+        '/api/documents/summary',
+        headers=headers,
+    )
+    assert summary_response.status_code == 200
+    summary = summary_response.get_json()['data']
+    assert summary['total'] == 26
+    assert summary['signed'] == 7
+    assert summary['awaiting_signature'] == 5
+    assert summary['expiring_soon'] == 3
+    assert {
+        item['document_type']: item['count']
+        for item in summary['folders']
+    } == {'contract': 21, 'policy': 5}
+
+    filtered_response = manager_client.get(
+        '/api/documents',
+        query_string={
+            'page': 1,
+            'per_page': 5,
+            'document_type': 'contract',
+            'q': 'Report file',
+            'sort': 'title',
+            'direction': 'desc',
+        },
+        headers=headers,
+    )
+    assert filtered_response.status_code == 200
+    filtered = filtered_response.get_json()['data']
+    assert filtered['meta']['total'] == 20
+    assert filtered['meta']['pages'] == 4
+    assert [item['title'] for item in filtered['items']] == [
+        'Report file 19',
+        'Report file 18',
+        'Report file 17',
+        'Report file 16',
+        'Report file 15',
+    ]

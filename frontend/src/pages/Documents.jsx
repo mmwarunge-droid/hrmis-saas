@@ -1,7 +1,6 @@
 import {
   useCallback,
   useEffect,
-  useMemo,
   useState,
 } from 'react';
 import {
@@ -26,13 +25,27 @@ import Alert from '../components/ui/Alert.jsx';
 import Badge from '../components/ui/Badge.jsx';
 import Button from '../components/ui/Button.jsx';
 import Card from '../components/ui/Card.jsx';
-import EmptyState from '../components/ui/EmptyState.jsx';
 import Input from '../components/ui/Input.jsx';
 import Modal from '../components/ui/Modal.jsx';
 import PageHeader from '../components/ui/PageHeader.jsx';
 import StatCard from '../components/ui/StatCard.jsx';
 import Table from '../components/ui/Table.jsx';
 import usePermissions from '../hooks/usePermissions';
+
+const PAGE_SIZE = 15;
+const EMPTY_META = {
+  page: 1,
+  per_page: PAGE_SIZE,
+  total: 0,
+  pages: 1,
+};
+const EMPTY_SUMMARY = {
+  total: 0,
+  awaiting_signature: 0,
+  signed: 0,
+  expiring_soon: 0,
+  folders: [],
+};
 
 function formatSize(bytes) {
   if (!bytes) return '—';
@@ -48,6 +61,9 @@ export default function Documents() {
   const [documents, setDocuments] = useState([]);
   const [employees, setEmployees] = useState([]);
   const [tenants, setTenants] = useState([]);
+  const [meta, setMeta] = useState(EMPTY_META);
+  const [summary, setSummary] = useState(EMPTY_SUMMARY);
+  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [signatureSaving, setSignatureSaving] = useState(false);
   const [uploadOpen, setUploadOpen] = useState(false);
@@ -57,90 +73,86 @@ export default function Documents() {
   const [success, setSuccess] = useState('');
   const [query, setQuery] = useState('');
   const [folder, setFolder] = useState('all');
+  const [page, setPage] = useState(1);
+  const [sort, setSort] = useState(null);
 
   const { hasPermission, hasRole } = usePermissions();
   const isSuperAdmin = hasRole('SUPER_ADMIN');
-  const canManageSignatures = hasPermission(
-    'document:approve',
-  );
+  const canManageSignatures = hasPermission('document:approve');
 
-  const load = useCallback(async () => {
+  const loadReferenceData = useCallback(async () => {
     try {
-      const [
-        documentsResponse,
-        employeesResponse,
-        tenantsResponse,
-      ] = await Promise.all([
-        documentApi.list(),
+      const [employeesResponse, tenantsResponse] = await Promise.all([
         canManageSignatures
-          ? employeeApi.list({ per_page: 100 })
+          ? employeeApi.options()
           : Promise.resolve({ data: { items: [] } }),
         isSuperAdmin
-          ? tenantApi.list()
+          ? tenantApi.list({ per_page: 100 })
           : Promise.resolve({ data: { items: [] } }),
       ]);
 
-      setDocuments(documentsResponse.data.items || []);
       setEmployees(employeesResponse.data.items || []);
       setTenants(tenantsResponse.data.items || []);
     } catch (err) {
       setError(
         err.error?.message
-        || 'Unable to load document library',
+        || 'Unable to load document reference data',
       );
     }
   }, [canManageSignatures, isSuperAdmin]);
 
+  const loadSummary = useCallback(async () => {
+    try {
+      const response = await documentApi.summary();
+      setSummary(response.data || EMPTY_SUMMARY);
+    } catch (err) {
+      setError(
+        err.error?.message
+        || 'Unable to load document totals',
+      );
+    }
+  }, []);
+
+  const loadDocuments = useCallback(async () => {
+    setLoading(true);
+    setError('');
+
+    try {
+      const response = await documentApi.list({
+        page,
+        per_page: PAGE_SIZE,
+        q: query || undefined,
+        document_type: folder === 'all' ? undefined : folder,
+        sort: sort?.key || undefined,
+        direction: sort?.direction || undefined,
+      });
+      setDocuments(response.data.items || []);
+      setMeta(response.data.meta || {
+        ...EMPTY_META,
+        page,
+      });
+    } catch (err) {
+      setError(
+        err.error?.message
+        || 'Unable to load document library',
+      );
+    } finally {
+      setLoading(false);
+    }
+  }, [folder, page, query, sort]);
+
   useEffect(() => {
-    load();
-  }, [load]);
+    loadReferenceData();
+    loadSummary();
+  }, [loadReferenceData, loadSummary]);
 
-  const folders = useMemo(
-    () => [
-      ...new Set(
-        documents
-          .map((document) => document.document_type)
-          .filter(Boolean),
-      ),
-    ],
-    [documents],
-  );
+  useEffect(() => {
+    loadDocuments();
+  }, [loadDocuments]);
 
-  const filtered = useMemo(
-    () => documents.filter((document) => {
-      const matchesFolder = (
-        folder === 'all'
-        || document.document_type === folder
-      );
-      const searchable = [
-        document.title,
-        document.original_filename,
-        document.document_type,
-      ].join(' ').toLowerCase();
-
-      const matchesQuery = (
-        !query
-        || searchable.includes(query.toLowerCase())
-      );
-
-      return matchesFolder && matchesQuery;
-    }),
-    [documents, folder, query],
-  );
-
-  const signed = documents.filter(
-    (document) => document.signature_status === 'signed',
-  ).length;
-
-  const pending = documents.filter(
-    (document) => document.signature_status === 'pending',
-  ).length;
-
-  const expiring = documents.filter((document) => (
-    document.expiry_date
-    && new Date(`${document.expiry_date}T00:00:00`)
-      <= new Date(Date.now() + 30 * 86400000)
-  )).length;
+  const refreshLibrary = async () => {
+    await Promise.all([loadDocuments(), loadSummary()]);
+  };
 
   const upload = async (formData) => {
     setSaving(true);
@@ -151,7 +163,8 @@ export default function Documents() {
       await documentApi.upload(formData);
       setUploadOpen(false);
       setSuccess('Document uploaded successfully.');
-      await load();
+      setPage(1);
+      await refreshLibrary();
     } catch (err) {
       setError(err.error?.message || 'Upload failed');
     } finally {
@@ -197,7 +210,7 @@ export default function Documents() {
           ),
       );
 
-      await load();
+      await refreshLibrary();
     } catch (err) {
       setError(
         err.error?.message
@@ -206,6 +219,21 @@ export default function Documents() {
     } finally {
       setSignatureSaving(false);
     }
+  };
+
+  const updateQuery = (value) => {
+    setQuery(value);
+    setPage(1);
+  };
+
+  const updateFolder = (value) => {
+    setFolder(value);
+    setPage(1);
+  };
+
+  const updateSort = (value) => {
+    setSort(value);
+    setPage(1);
   };
 
   const columns = [
@@ -325,28 +353,28 @@ export default function Documents() {
       <div className="grid gap-4 md:grid-cols-4">
         <StatCard
           label="Documents"
-          value={documents.length}
-          detail={`${folders.length} document folders`}
+          value={summary.total}
+          detail={`${summary.folders.length} document folders`}
           icon={FileStack}
           tone="blue"
         />
         <StatCard
           label="Awaiting signature"
-          value={pending}
+          value={summary.awaiting_signature}
           detail="Active signing workflows"
           icon={FileSignature}
           tone="violet"
         />
         <StatCard
           label="Signed"
-          value={signed}
+          value={summary.signed}
           detail="Completed signature workflows"
           icon={FileCheck2}
           tone="emerald"
         />
         <StatCard
           label="Expiring soon"
-          value={expiring}
+          value={summary.expiring_soon}
           detail="Within the next 30 days"
           icon={FileClock}
           tone="amber"
@@ -370,7 +398,9 @@ export default function Documents() {
           <div className="mt-5 space-y-1">
             <button
               type="button"
-              onClick={() => setFolder('all')}
+              aria-label={`Show all documents (${summary.total})`}
+              aria-pressed={folder === 'all'}
+              onClick={() => updateFolder('all')}
               className={`flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm font-medium ${
                 folder === 'all'
                   ? 'bg-blue-50 text-blue-800'
@@ -378,32 +408,26 @@ export default function Documents() {
               }`}
             >
               <span>All documents</span>
-              <span>{documents.length}</span>
+              <span>{summary.total}</span>
             </button>
 
-            {folders.map((item) => (
+            {summary.folders.map((item) => (
               <button
                 type="button"
-                key={item}
-                onClick={() => setFolder(item)}
+                key={item.document_type}
+                aria-label={`Show ${item.document_type.replaceAll('_', ' ')} documents (${item.count})`}
+                aria-pressed={folder === item.document_type}
+                onClick={() => updateFolder(item.document_type)}
                 className={`flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm font-medium ${
-                  folder === item
+                  folder === item.document_type
                     ? 'bg-blue-50 text-blue-800'
                     : 'text-slate-600 hover:bg-slate-50'
                 }`}
               >
                 <span className="truncate">
-                  {item.replaceAll('_', ' ')}
+                  {item.document_type.replaceAll('_', ' ')}
                 </span>
-                <span>
-                  {
-                    documents.filter(
-                      (document) => (
-                        document.document_type === item
-                      ),
-                    ).length
-                  }
-                </span>
+                <span>{item.count}</span>
               </button>
             ))}
           </div>
@@ -428,24 +452,34 @@ export default function Documents() {
                 size={18}
               />
               <Input
+                aria-label="Search documents"
                 className="pl-10"
                 placeholder="Search titles, files or folders"
                 value={query}
-                onChange={(event) => setQuery(
-                  event.target.value,
-                )}
+                onChange={(event) => updateQuery(event.target.value)}
               />
             </div>
+            <p className="mt-3 text-xs text-slate-500">
+              Showing {documents.length} of {meta.total} matching documents
+            </p>
           </Card>
 
-          {filtered.length === 0 ? (
-            <EmptyState
-              title="No documents found"
-              description="Try another folder, clear the search or upload a document."
-            />
-          ) : (
-            <Table columns={columns} rows={filtered} pageSize={15} caption="File library" />
-          )}
+          <Table
+            columns={columns}
+            rows={documents}
+            loading={loading}
+            empty="No documents match the current search and folder."
+            caption="File library"
+            sort={sort}
+            onSortChange={updateSort}
+            pagination={{
+              page: meta.page,
+              pageSize: meta.per_page,
+              total: meta.total,
+              onPageChange: setPage,
+              label: 'documents',
+            }}
+          />
         </div>
       </div>
 
