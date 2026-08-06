@@ -2,6 +2,7 @@ import apiClient from './apiClient';
 
 export const employeeApi = {
   list: (params = {}) => apiClient.get('/employees', { params }),
+  summary: () => apiClient.get('/employees/summary'),
   get: (id) => apiClient.get(`/employees/${id}`),
   history: (id) => apiClient.get(`/employees/${id}/job-history`),
   provisionAccess: (id, payload) => apiClient.post(`/employees/${id}/provision-access`, payload),
