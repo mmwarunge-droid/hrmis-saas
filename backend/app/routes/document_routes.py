@@ -5,7 +5,12 @@ from marshmallow import ValidationError
 from app.extensions import db
 from app.models import Document
 from app.schemas.document_schema import DocumentUpdateSchema, DocumentUploadSchema
-from app.services.document_service import can_access_document, create_document, update_document
+from app.services.document_service import (
+    accessible_document_query,
+    can_access_document,
+    create_document,
+    update_document,
+)
 from app.utils.decorators import (
     permission_required,
     request_tenant_id,
@@ -23,7 +28,10 @@ document_bp = Blueprint('documents', __name__, url_prefix='/documents')
 @permission_required('document:read')
 def list_documents():
     page, per_page = get_pagination()
-    query = tenant_query(Document).filter(Document.deleted_at.is_(None))
+    query = accessible_document_query(
+        current_user,
+        tenant_query(Document),
+    ).filter(Document.deleted_at.is_(None))
     if request.args.get('employee_id'):
         query = query.filter(Document.employee_id == request.args['employee_id'])
     if request.args.get('document_type'):
@@ -32,7 +40,7 @@ def list_documents():
     if q:
         query = query.filter(db.func.lower(Document.title).like(f'%{q.lower()}%'))
     pagination = query.order_by(Document.created_at.desc()).paginate(page=page, per_page=per_page, error_out=False)
-    items = [doc.to_dict() for doc in pagination.items if can_access_document(current_user, doc)]
+    items = [doc.to_dict() for doc in pagination.items]
     return success({'items': items, 'meta': {'page': pagination.page, 'per_page': pagination.per_page, 'total': pagination.total, 'pages': pagination.pages}})
 
 
