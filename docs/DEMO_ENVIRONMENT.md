@@ -65,6 +65,7 @@ The primary `Kinetic Demo Group` workspace contains:
 - 4 leave policies and reconciled annual/sick balances;
 - 2 signature workflows;
 - 2 onboarding templates and 15 employee task assignments;
+- 9 organization, department, and employee goals with 15 progress check-ins;
 - employee-home events, essentials, recent hires, birthdays and people statistics;
 - notifications and audit events for presentation context.
 
@@ -99,12 +100,13 @@ The code is intentionally available only in non-production environments and only
 ## Connected demo story
 
 1. Sign in as `consultant@kinetic.demo` and open the organization dashboard.
-2. Review complete employee totals, recent hires, upcoming leave and expiring documents.
-3. Find Neema Hassan in People and review her manager, profile and job history.
-4. Sign in as `employee@kinetic.demo`, submit or review leave, check out the open attendance session, and acknowledge the security policy.
-5. Sign in as `manager@kinetic.demo` and review direct-report leave and document scope.
-6. Sign in as `newhire@kinetic.demo` and complete an onboarding task.
-7. Sign in as `platform@kinetic.demo` with the generated TOTP code to demonstrate active, suspended and archived workspaces.
+2. Review complete employee totals, recent hires, upcoming leave, goal health and expiring documents.
+3. Open Goals & KPIs, review at-risk outcomes, and record a progress check-in.
+4. Find Neema Hassan in People and review her manager, profile, job history and individual goals.
+5. Sign in as `employee@kinetic.demo`, submit or review leave, check out the open attendance session, and acknowledge the security policy.
+6. Sign in as `manager@kinetic.demo` and review direct-report leave and document scope.
+7. Sign in as `newhire@kinetic.demo` and complete an onboarding task.
+8. Sign in as `platform@kinetic.demo` with the generated TOTP code to demonstrate active, suspended and archived workspaces.
 
 ## Screenshot and presentation checks
 

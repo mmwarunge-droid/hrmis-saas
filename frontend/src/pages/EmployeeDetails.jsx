@@ -3,7 +3,6 @@ import {
   Briefcase,
   CalendarClock,
   CalendarDays,
-  CheckCircle2,
   Clock,
   Download,
   FileText,
@@ -14,6 +13,7 @@ import {
   Pencil,
   Phone,
   ShieldCheck,
+  Target,
   UserRoundCheck,
   WalletCards,
 } from 'lucide-react';
@@ -22,6 +22,7 @@ import { attendanceApi } from '../api/attendanceApi.js';
 import { documentApi } from '../api/documentApi.js';
 import { employeeApi } from '../api/employeeApi';
 import { leaveApi } from '../api/leaveApi.js';
+import { goalApi } from '../api/goalApi.js';
 import { userApi } from '../api/userApi.js';
 import EmployeeAccessForm from '../components/employees/EmployeeAccessForm.jsx';
 import EmployeeAccountLinkForm from '../components/employees/EmployeeAccountLinkForm.jsx';
@@ -78,6 +79,7 @@ export default function EmployeeDetails() {
   const [documents, setDocuments] = useState([]);
   const [leaveRequests, setLeaveRequests] = useState([]);
   const [attendance, setAttendance] = useState([]);
+  const [goals, setGoals] = useState([]);
   const [open, setOpen] = useState(false);
   const [accessOpen, setAccessOpen] = useState(false);
   const [linkOpen, setLinkOpen] = useState(false);
@@ -92,6 +94,7 @@ export default function EmployeeDetails() {
   const canReadDocuments = hasPermission('document:read');
   const canReadLeave = hasPermission('leave:create');
   const canReadAttendance = hasPermission('attendance:read');
+  const canReadGoals = hasPermission('goal:read');
   const activeTab = searchParams.get('tab') || 'personal';
 
   const load = useCallback(async () => {
@@ -108,21 +111,23 @@ export default function EmployeeDetails() {
       setDepartments(departmentResponse.data.items || []);
       setHistory(historyResponse.data.items || []);
 
-      const [documentsResult, leaveResult, attendanceResult] = await Promise.allSettled([
+      const [documentsResult, leaveResult, attendanceResult, goalsResult] = await Promise.allSettled([
         canReadDocuments ? documentApi.list({ employee_id: id, per_page: 100 }) : Promise.resolve({ data: { items: [] } }),
         canReadLeave ? leaveApi.requests({ employee_id: id, per_page: 100 }) : Promise.resolve({ data: { items: [] } }),
         canReadAttendance ? attendanceApi.list({ employee_id: id, per_page: 100 }) : Promise.resolve({ data: { items: [] } }),
+        canReadGoals ? goalApi.list({ employee_id: id, per_page: 100 }) : Promise.resolve({ data: { items: [] } }),
       ]);
 
       setDocuments(documentsResult.status === 'fulfilled' ? documentsResult.value.data.items || [] : []);
       setLeaveRequests(leaveResult.status === 'fulfilled' ? leaveResult.value.data.items || [] : []);
       setAttendance(attendanceResult.status === 'fulfilled' ? attendanceResult.value.data.items || [] : []);
+      setGoals(goalsResult.status === 'fulfilled' ? goalsResult.value.data.items || [] : []);
     } catch (err) {
       setError(err.error?.message || 'Employee not found');
     } finally {
       setLoading(false);
     }
-  }, [canReadAttendance, canReadDocuments, canReadLeave, id]);
+  }, [canReadAttendance, canReadDocuments, canReadGoals, canReadLeave, id]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -160,6 +165,14 @@ export default function EmployeeDetails() {
       detail: item.document_type?.replaceAll('_', ' ') || item.original_filename || 'Employee file',
       status: item.signature_status,
     })),
+    ...goals.map((item) => ({
+      id: `goal-${item.id}`,
+      type: 'goal',
+      date: item.last_check_in_at || item.updated_at || item.created_at,
+      title: `Goal progress: ${item.title}`,
+      detail: `${Math.round(item.progress_percent)}% complete · ${String(item.health).replaceAll('_', ' ')}`,
+      status: item.health,
+    })),
     ...attendance.map((item) => ({
       id: `attendance-${item.id}`,
       type: 'attendance',
@@ -168,7 +181,7 @@ export default function EmployeeDetails() {
       detail: `${formatTime(item.check_in_at)} – ${formatTime(item.check_out_at)}`,
       status: item.check_out_at ? 'complete' : item.check_in_at ? 'in progress' : null,
     })),
-  ].filter((item) => item.date).sort((left, right) => new Date(right.date) - new Date(left.date)), [attendance, documents, history, leaveRequests]);
+  ].filter((item) => item.date).sort((left, right) => new Date(right.date) - new Date(left.date)), [attendance, documents, goals, history, leaveRequests]);
 
   const update = async (payload) => {
     setSaving(true);
@@ -247,7 +260,7 @@ export default function EmployeeDetails() {
     { value: 'attendance', label: 'Attendance', count: attendance.length },
     { value: 'files', label: 'Files', count: documents.length },
     { value: 'payroll', label: 'Payroll' },
-    { value: 'performance', label: 'Performance' },
+    { value: 'performance', label: 'Performance', count: goals.length },
     { value: 'notes', label: 'Notes' },
     { value: 'activity', label: 'Activity', count: activityItems.length },
   ];
@@ -273,6 +286,14 @@ export default function EmployeeDetails() {
     { key: 'expiry_date', label: 'Expiry', sortable: true, render: (row) => formatDate(row.expiry_date, '—') },
     { key: 'download', label: '', render: (row) => <a href={documentApi.downloadUrl(row.id)} className="inline-flex items-center gap-1 text-xs font-semibold text-blue-700 hover:text-blue-900"><Download size={14} /> Download</a> },
   ];
+
+  const goalColumns = [
+    { key: 'title', label: 'Goal', sortable: true, render: (row) => <div><p className="font-semibold text-slate-900">{row.title}</p><p className="text-xs capitalize text-slate-500">{row.owner_type} goal</p></div> },
+    { key: 'progress_percent', label: 'Progress', sortable: true, render: (row) => <div className="min-w-36"><div className="flex justify-between text-xs"><span className="font-semibold text-slate-700">{Math.round(row.progress_percent)}%</span><span className="text-slate-500">{row.current_value}/{row.target_value} {row.unit}</span></div><div className="mt-2 h-2 overflow-hidden rounded-full bg-slate-100"><div className="h-full rounded-full bg-blue-600" style={{ width: `${Math.min(100, Math.max(0, row.progress_percent))}%` }} /></div></div> },
+    { key: 'health', label: 'Health', sortable: true, render: (row) => <Badge tone={row.health === 'on_track' || row.health === 'completed' ? 'green' : row.health === 'at_risk' ? 'amber' : 'red'}>{row.health.replaceAll('_', ' ')}</Badge> },
+    { key: 'due_date', label: 'Due', sortable: true, render: (row) => formatDate(row.due_date) },
+  ];
+
 
   return (
     <div className="space-y-5 pb-8">
@@ -435,7 +456,13 @@ export default function EmployeeDetails() {
           )}
 
           {activeTab === 'performance' && (
-            <Card><EmptyState title="Performance is not configured" description="No performance-review API exists in the current application. This tab reserves the expected employee workflow without fabricating records." icon={CheckCircle2} /></Card>
+            <Card>
+              <div className="flex flex-wrap items-start justify-between gap-4">
+                <div><p className="text-[11px] font-bold uppercase tracking-[0.13em] text-blue-700">Performance</p><h2 className="mt-1 text-lg font-bold text-slate-950">Goals & KPI progress</h2><p className="mt-1 text-sm text-slate-500">Measurable outcomes assigned directly to this employee.</p></div>
+                <Link to="/goals"><Button variant="secondary" size="sm"><Target size={15} /> Open goals</Button></Link>
+              </div>
+              <div className="mt-5">{canReadGoals ? <Table columns={goalColumns} rows={goals} pageSize={10} empty="No goals are assigned to this employee." /> : <EmptyState title="Performance access is restricted" description="Your current role cannot view this employee’s goals." icon={Target} />}</div>
+            </Card>
           )}
 
           {activeTab === 'notes' && (
@@ -466,7 +493,9 @@ export default function EmployeeDetails() {
                       ? FileText
                       : item.type === 'attendance'
                         ? Clock
-                        : Briefcase;
+                        : item.type === 'goal'
+                          ? Target
+                          : Briefcase;
                   return (
                     <div key={item.id} className="relative pb-6 last:pb-0">
                       <span className="absolute -left-[39px] top-0 grid h-7 w-7 place-items-center rounded-full border border-blue-100 bg-blue-50 text-blue-700 ring-4 ring-white">

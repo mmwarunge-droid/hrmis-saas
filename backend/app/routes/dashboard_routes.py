@@ -5,6 +5,7 @@ from flask_jwt_extended import current_user, jwt_required
 
 from app.extensions import db
 from app.models import Document, Employee, LeaveRequest
+from app.services.goal_service import goal_summary
 from app.services.leave_service import request_scope_query
 from app.utils.decorators import permission_required, tenant_query
 from app.utils.response import success
@@ -79,6 +80,7 @@ def summary():
         'documents': documents,
         'pending_leave_requests': pending_leave,
         'recent_hires': [employee.to_dict() for employee in recent_hires],
+        'goals': goal_summary(current_user),
         'upcoming_leave': [
             _upcoming_leave_payload(item)
             for item in upcoming_leave

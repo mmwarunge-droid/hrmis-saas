@@ -10,6 +10,7 @@ import EmployeeExperienceSettings from './pages/EmployeeExperienceSettings.jsx';
 import EmployeeHome from './pages/EmployeeHome.jsx';
 import HomeRouter from './pages/HomeRouter.jsx';
 import HelpCenter from './pages/HelpCenter.jsx';
+import Goals from './pages/Goals.jsx';
 import LeaveSetup from './pages/LeaveSetup.jsx';
 import MyProfile from './pages/MyProfile.jsx';
 import Departments from './pages/Departments.jsx';
@@ -69,6 +70,9 @@ export default function App() {
             <Route path="/leave/setup" element={<LeaveSetup />} />
           </Route>
           <Route path="/attendance" element={<Attendance />} />
+          <Route element={<PermissionRoute permission="goal:read" />}>
+            <Route path="/goals" element={<Goals />} />
+          </Route>
           <Route path="/tasks" element={<Tasks />} />
           <Route path="/onboarding" element={<Onboarding />} />
           <Route element={<PermissionRoute permission="user:read" />}>

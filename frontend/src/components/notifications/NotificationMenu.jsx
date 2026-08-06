@@ -4,6 +4,7 @@ import {
   CircleAlert,
   FileText,
   UserPlus,
+  Target,
 } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -16,6 +17,7 @@ const iconByType = {
   onboarding: UserPlus,
   signature: FileText,
   compliance: FileText,
+  goal: Target,
 };
 
 function relativeTime(value) {

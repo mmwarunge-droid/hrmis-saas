@@ -62,4 +62,4 @@ flask --app run.py demo-status --as-of 2026-08-06
 pytest -q app/tests/test_demo_seed.py
 ```
 
-Confirm the manifest reports 42 employees, 40 documents, 320 attendance records, 10 leave requests and 15 onboarding assignments. Confirm an unrelated tenant survives reset and production mode rejects every mutating demo command. See `docs/DEMO_ENVIRONMENT.md` for the role matrix and presentation checklist.
+Confirm the manifest reports 42 employees, 40 documents, 320 attendance records, 10 leave requests, 15 onboarding assignments and 9 goals. Confirm an unrelated tenant survives reset and production mode rejects every mutating demo command. See `docs/DEMO_ENVIRONMENT.md` for the role matrix and presentation checklist.

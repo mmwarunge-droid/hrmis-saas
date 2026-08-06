@@ -8,6 +8,7 @@ import {
   FileWarning,
   Network,
   Sparkles,
+  Target,
   UserPlus,
   UsersRound,
 } from 'lucide-react';
@@ -87,12 +88,15 @@ export default function Dashboard() {
   const approvedUpcoming = summary?.upcoming_leave || [];
   const recentHires = summary?.recent_hires || [];
   const complianceCount = (alerts.expiring_documents?.length || 0) + (alerts.employees_missing_contracts?.length || 0);
+  const goalSummary = summary?.goals || { average_progress: 0, at_risk: 0, off_track: 0, overdue: 0 };
+  const goalAttention = (goalSummary.at_risk || 0) + (goalSummary.off_track || 0);
 
   const quickActions = [
     hasPermission('leave:create') && { to: '/leave', label: 'Request time off', detail: 'Submit a new request', icon: CalendarDays },
     hasPermission('employee:create') && { to: '/employees', label: 'Add a person', detail: 'Create an employee record', icon: UserPlus },
     hasPermission('document:upload') && { to: '/documents', label: 'Upload a file', detail: 'Add a policy or document', icon: FileText },
     hasPermission('onboarding:assign') && { to: '/tasks', label: 'Review tasks', detail: 'Open assigned work', icon: CheckCircle2 },
+    hasPermission('goal:read') && { to: '/goals', label: 'Review goals', detail: 'Check performance progress', icon: Target },
   ].filter(Boolean);
 
   const PrimaryActionIcon = quickActions[0]?.icon;
@@ -120,11 +124,12 @@ export default function Dashboard() {
 
       {error && <Alert type="warning">{error}</Alert>}
 
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
         <StatCard label="Total people" value={employeeTotal} detail={`${activeEmployees} currently active`} icon={UsersRound} tone="blue" />
         <StatCard label="Open tasks" value={pendingTasks} detail={`${tasks.length - pendingTasks} completed or waived`} icon={CheckCircle2} tone="violet" />
         <StatCard label="Pending time off" value={pendingLeave} detail={`${leaveSummary.approved || 0} approved requests`} icon={CalendarDays} tone="amber" />
         <StatCard label="Workforce active" value={`${peopleHealth}%`} detail={`${summary?.inactive_employees || 0} not active`} icon={Network} tone="emerald" />
+        <StatCard label="Goal progress" value={`${goalSummary.average_progress || 0}%`} detail={`${goalAttention} need attention`} icon={Target} tone="blue" />
       </div>
 
       <div className="grid gap-5 xl:grid-cols-[minmax(0,1.55fr)_minmax(320px,0.75fr)]">
@@ -202,6 +207,7 @@ export default function Dashboard() {
                 { to: '/leave', label: 'Time-off approvals', value: pendingLeave, icon: CalendarDays },
                 { to: '/tasks', label: 'Open onboarding tasks', value: pendingTasks, icon: CheckCircle2 },
                 { to: '/documents', label: 'Compliance items', value: complianceCount, icon: FileWarning },
+                { to: '/goals', label: 'Goals needing attention', value: goalAttention, icon: Target },
               ].map(({ to, label, value, icon: Icon }) => (
                 <Link key={label} to={to} className="flex items-center gap-3 px-3.5 py-3 hover:bg-slate-50">
                   <Icon size={17} className="text-slate-500" />

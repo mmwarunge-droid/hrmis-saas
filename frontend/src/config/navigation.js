@@ -12,6 +12,7 @@ import {
   Network,
   Settings,
   Sparkles,
+  Target,
   UserPlus,
   UserRound,
   Users,
@@ -41,6 +42,12 @@ export const navigationGroups = [
       { to: '/leave', label: 'Time off', icon: CalendarDays, permission: 'leave:create', keywords: 'leave vacation absence requests' },
       { to: '/attendance', label: 'Attendance', icon: BarChart3, permissionAny: ['attendance:read', 'attendance:write'], keywords: 'clock hours timesheet' },
       { to: '/leave/setup', label: 'Time-off setup', icon: Settings, permission: 'leave:approve', keywords: 'leave policy governance balances accruals' },
+    ],
+  },
+  {
+    label: 'Performance',
+    links: [
+      { to: '/goals', label: 'Goals & KPIs', icon: Target, permission: 'goal:read', keywords: 'performance objectives targets kpi check ins' },
     ],
   },
   {
@@ -91,6 +98,7 @@ export const pageTitles = {
   '/departments': 'Departments',
   '/leave': 'Time off',
   '/attendance': 'Attendance',
+  '/goals': 'Goals & KPIs',
   '/documents': 'Files',
   '/signature-requests': 'Signatures',
   '/tasks': 'Tasks',

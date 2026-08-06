@@ -25,6 +25,9 @@ PERMISSIONS = {
     'onboarding:create': 'Create onboarding templates',
     'onboarding:assign': 'Assign and complete onboarding work',
     'dashboard:read': 'Read dashboard information',
+    'goal:read': 'Read goals and KPI progress',
+    'goal:manage': 'Create and manage goals',
+    'goal:checkin': 'Record goal progress check-ins',
     'security:mfa_policy': (
         'Configure organization MFA policy and review compliance'
     ),
@@ -47,6 +50,9 @@ ROLE_PERMISSIONS = {
         'leave:adjust',
         'attendance:read',
         'dashboard:read',
+        'goal:read',
+        'goal:manage',
+        'goal:checkin',
         'security:mfa_policy',
         'security:mfa_reset',
     ],
@@ -70,6 +76,9 @@ ROLE_PERMISSIONS = {
         'onboarding:create',
         'onboarding:assign',
         'dashboard:read',
+        'goal:read',
+        'goal:manage',
+        'goal:checkin',
     ],
     'CLIENT_ADMIN': [
         'user:create',
@@ -90,6 +99,9 @@ ROLE_PERMISSIONS = {
         'onboarding:create',
         'onboarding:assign',
         'dashboard:read',
+        'goal:read',
+        'goal:manage',
+        'goal:checkin',
         'security:mfa_policy',
         'security:mfa_reset',
     ],
@@ -102,6 +114,9 @@ ROLE_PERMISSIONS = {
         'attendance:read',
         'onboarding:assign',
         'dashboard:read',
+        'goal:read',
+        'goal:manage',
+        'goal:checkin',
     ],
     'EMPLOYEE': [
         'employee:read',
@@ -111,6 +126,8 @@ ROLE_PERMISSIONS = {
         'attendance:write',
         'onboarding:assign',
         'dashboard:read',
+        'goal:read',
+        'goal:checkin',
     ],
 }
 

@@ -9,6 +9,7 @@ from app.models import (
     Document,
     Employee,
     EmployeeOnboardingTask,
+    Goal,
     LeaveRequest,
     Tenant,
     User,
@@ -54,6 +55,7 @@ def test_demo_seed_is_idempotent_and_presentation_ready(app, tmp_path):
             'leave_requests': 10,
             'onboarding_assignments': 15,
             'signature_requests': 2,
+            'goals': 9,
             'tenants': 3,
             'users': 10,
         }
@@ -79,6 +81,7 @@ def test_demo_seed_is_idempotent_and_presentation_ready(app, tmp_path):
         assert AttendanceRecord.query.filter_by(tenant_id=tenant.id).count() == 320
         assert LeaveRequest.query.filter_by(tenant_id=tenant.id).count() == 10
         assert EmployeeOnboardingTask.query.filter_by(tenant_id=tenant.id).count() == 15
+        assert Goal.query.filter_by(tenant_id=tenant.id).count() == 9
 
         files = Document.query.filter_by(tenant_id=tenant.id).all()
         assert len(files) == 40
