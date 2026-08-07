@@ -36,6 +36,8 @@ export default function EmployeeForm({
   excludeEmployeeId = null,
   submitLabel = 'Save employee',
   showChangeContext = false,
+  onCancel = null,
+  stickyActions = false,
 }) {
   const [form, setForm] = useState(() => initialForm(initialValues));
 
@@ -141,8 +143,19 @@ export default function EmployeeForm({
         </>
       )}
 
-      <div className="md:col-span-2">
-        <Button disabled={loading}>{loading ? 'Saving...' : submitLabel}</Button>
+      <div
+        className={`md:col-span-2 ${
+          stickyActions
+            ? 'sticky bottom-0 z-10 -mx-5 -mb-5 mt-2 flex items-center justify-between gap-3 border-t border-slate-200 bg-white/95 px-5 py-4 shadow-[0_-12px_24px_rgba(15,23,42,0.06)] backdrop-blur md:-mx-6 md:-mb-6 md:px-6'
+            : ''
+        }`}
+      >
+        {stickyActions && onCancel ? (
+          <Button type="button" variant="secondary" onClick={onCancel} disabled={loading}>Cancel</Button>
+        ) : null}
+        <Button className={stickyActions ? 'ml-auto min-w-36' : ''} disabled={loading}>
+          {loading ? 'Saving...' : submitLabel}
+        </Button>
       </div>
     </form>
   );

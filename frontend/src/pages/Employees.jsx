@@ -422,8 +422,21 @@ export default function Employees() {
         <div className="flex justify-end"><Link to="/departments" className="inline-flex items-center gap-1.5 text-sm font-semibold text-blue-700 hover:text-blue-900"><Building2 size={15} /> Manage departments</Link></div>
       )}
 
-      <Modal title="Create employee" description="Add the employee’s core employment and reporting information." open={open} onClose={() => setOpen(false)}>
-        <EmployeeForm onSubmit={create} loading={saving} employees={employeeOptions} departments={departments} />
+      <Modal
+        title="Create employee"
+        description="Add the employee’s core employment and reporting information."
+        open={open}
+        onClose={() => setOpen(false)}
+        size="xl"
+      >
+        <EmployeeForm
+          onSubmit={create}
+          loading={saving}
+          employees={employeeOptions}
+          departments={departments}
+          onCancel={() => setOpen(false)}
+          stickyActions
+        />
       </Modal>
       <Modal title="Change department" description="This change is applied to every selected employee." open={transferOpen} onClose={() => setTransferOpen(false)}>
         <DepartmentTransferModal employees={selectedEmployees} departments={departments} loading={saving} onSubmit={transfer} />
