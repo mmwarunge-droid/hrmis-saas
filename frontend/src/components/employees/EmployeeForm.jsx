@@ -38,6 +38,8 @@ export default function EmployeeForm({
   showChangeContext = false,
   onCancel = null,
   stickyActions = false,
+  formId = undefined,
+  showActions = true,
 }) {
   const [form, setForm] = useState(() => initialForm(initialValues));
 
@@ -78,7 +80,7 @@ export default function EmployeeForm({
   const activeDepartments = departments.filter((department) => !department.archived);
 
   return (
-    <form onSubmit={submit} className="grid gap-4 md:grid-cols-2">
+    <form id={formId} onSubmit={submit} className="grid gap-4 md:grid-cols-2">
       <Input label="Employee number" name="employee_number" value={form.employee_number} onChange={update} required />
       <Input label="Email" type="email" name="email" value={form.email} onChange={update} required />
       <Input label="First name" name="first_name" value={form.first_name} onChange={update} required />
@@ -143,6 +145,7 @@ export default function EmployeeForm({
         </>
       )}
 
+      {showActions ? (
       <div
         className={`md:col-span-2 ${
           stickyActions
@@ -157,6 +160,7 @@ export default function EmployeeForm({
           {loading ? 'Saving...' : submitLabel}
         </Button>
       </div>
+      ) : null}
     </form>
   );
 }
