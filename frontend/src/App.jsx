@@ -21,6 +21,7 @@ import ForgotPassword from './pages/ForgotPassword.jsx';
 import LeaveRequests from './pages/LeaveRequests.jsx';
 import Login from './pages/Login.jsx';
 import MfaChallenge from './pages/MfaChallenge.jsx';
+import NotFound from './pages/NotFound.jsx';
 import Onboarding from './pages/Onboarding.jsx';
 import Organizations from './pages/Organizations.jsx';
 import OrganizationEventDetails from './pages/OrganizationEventDetails.jsx';
@@ -102,7 +103,7 @@ export default function App() {
         </Route>
       </Route>
       <Route path="/unauthorized" element={<Unauthorized />} />
-      <Route path="*" element={<Navigate to="/dashboard" replace />} />
+      <Route path="*" element={<NotFound />} />
     </Routes>
   );
 }

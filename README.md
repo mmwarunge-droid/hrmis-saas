@@ -88,4 +88,4 @@ npm test
 VITE_API_BASE_URL=https://api.example.test/api npm run build
 ```
 
-See `PRODUCTION_READINESS.md` for the staged hardening program.
+See `PRODUCTION_READINESS.md` for the hardening record and `docs/PRODUCTION_DEMO_RUNBOOK.md` for release, smoke-test, rollback, and incident procedures.

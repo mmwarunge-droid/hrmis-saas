@@ -336,7 +336,7 @@ export default function EmployeeDetails() {
               )}
             </div>
           </div>
-          <Tabs items={tabs} value={activeTab} onChange={setTab} ariaLabel="Employee profile sections" />
+          <Tabs items={tabs} value={activeTab} onChange={setTab} ariaLabel="Employee profile sections" idPrefix="employee-sections" />
         </div>
       </Card>
 
@@ -360,7 +360,7 @@ export default function EmployeeDetails() {
           </Card>
         </aside>
 
-        <div className="min-w-0">
+        <div id={`employee-sections-panel-${activeTab}`} role="tabpanel" aria-labelledby={`employee-sections-tab-${activeTab}`} tabIndex={0} className="min-w-0">
           {activeTab === 'personal' && (
             <div className="space-y-5">
               <Card>

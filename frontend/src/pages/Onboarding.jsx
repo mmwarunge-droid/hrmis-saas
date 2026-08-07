@@ -66,6 +66,7 @@ export default function Onboarding() {
       {canAdminister && (
         <Tabs
           ariaLabel="Onboarding views"
+          idPrefix="onboarding-views"
           value={view}
           onChange={setView}
           items={[
@@ -75,24 +76,31 @@ export default function Onboarding() {
         />
       )}
 
-      {view === 'administration' && canAdminister ? (
-        <OnboardingAdminPanel />
-      ) : (
-        <>
-          {error && <Alert type="error">{error}</Alert>}
-          <div className="grid gap-4 md:grid-cols-3">
+      <section
+        id={canAdminister ? `onboarding-views-panel-${view}` : undefined}
+        role={canAdminister ? 'tabpanel' : undefined}
+        aria-labelledby={canAdminister ? `onboarding-views-tab-${view}` : undefined}
+        tabIndex={canAdminister ? 0 : undefined}
+      >
+        {view === 'administration' && canAdminister ? (
+          <OnboardingAdminPanel />
+        ) : (
+          <>
+            {error && <Alert type="error">{error}</Alert>}
+            <div className="grid gap-4 md:grid-cols-3">
             <StatCard label="Assigned" value={tasks.length} detail="Tasks in your checklist" icon={ClipboardCheck} tone="blue" loading={loading} />
             <StatCard label="Open" value={metrics.open} detail="Still requiring action" icon={CircleDashed} tone="amber" loading={loading} />
             <StatCard label="Completed" value={metrics.completed} detail={metrics.overdue ? `${metrics.overdue} overdue` : 'No overdue tasks'} icon={metrics.overdue ? Clock3 : CheckCircle2} tone={metrics.overdue ? 'rose' : 'emerald'} loading={loading} />
-          </div>
-          <OnboardingChecklist
-            tasks={tasks}
-            loading={loading}
-            completingId={completingId}
-            onComplete={complete}
-          />
-        </>
-      )}
+            </div>
+            <OnboardingChecklist
+              tasks={tasks}
+              loading={loading}
+              completingId={completingId}
+              onComplete={complete}
+            />
+          </>
+        )}
+      </section>
     </div>
   );
 }

@@ -1,7 +1,7 @@
 from datetime import date, timedelta
 from decimal import Decimal
 
-from sqlalchemy import false, or_
+from sqlalchemy import or_
 
 from app.extensions import db
 from app.models import Department, Employee, Goal, GoalCheckIn

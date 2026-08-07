@@ -1,8 +1,12 @@
+import json
 import logging
 import os
+import time
+from datetime import datetime, timezone
 from pathlib import Path
+from uuid import uuid4
 
-from flask import Flask, request
+from flask import Flask, g, has_request_context, request
 from sqlalchemy import text
 from werkzeug.exceptions import HTTPException
 
@@ -10,6 +14,25 @@ from app.config import config_by_name
 from app.extensions import bcrypt, cors, db, jwt, limiter, migrate, redis_store
 from app.routes import register_blueprints
 from app.utils.response import fail, success
+
+
+class JsonLogFormatter(logging.Formatter):
+    def format(self, record):
+        payload = {
+            'timestamp': datetime.now(timezone.utc).isoformat(),
+            'level': record.levelname,
+            'logger': record.name,
+            'message': record.getMessage(),
+        }
+        if has_request_context():
+            payload.update({
+                'request_id': getattr(g, 'request_id', None),
+                'method': request.method,
+                'path': request.path,
+            })
+        if record.exc_info:
+            payload['exception'] = self.formatException(record.exc_info)
+        return json.dumps(payload, ensure_ascii=False)
 
 
 def create_app(config_name: str | None = None) -> Flask:
@@ -27,6 +50,9 @@ def create_app(config_name: str | None = None) -> Flask:
     app.config.from_object(config_class)
 
     _configure_logging(app)
+    # Register request metadata before extensions that may short-circuit
+    # requests, such as rate limiting.
+    _register_request_context(app)
     _initialize_extensions(app)
     _register_jwt_callbacks()
     _register_error_handlers(app)
@@ -62,6 +88,42 @@ def _initialize_extensions(app: Flask) -> None:
             }
         },
     )
+
+
+def _register_request_context(app: Flask) -> None:
+    @app.before_request
+    def establish_request_context():
+        supplied = request.headers.get('X-Request-ID', '').strip()
+        g.request_id = supplied[:128] if supplied else str(uuid4())
+        g.request_started_at = time.perf_counter()
+
+    @app.after_request
+    def log_completed_request(response):
+        started_at = getattr(g, 'request_started_at', None)
+        elapsed_ms = (
+            round((time.perf_counter() - started_at) * 1000, 2)
+            if started_at is not None
+            else None
+        )
+
+        request_id = getattr(g, 'request_id', None)
+        if not request_id:
+            supplied = request.headers.get('X-Request-ID', '').strip()
+            request_id = supplied[:128] if supplied else str(uuid4())
+            g.request_id = request_id
+
+        response.headers['X-Request-ID'] = request_id
+        if elapsed_ms is not None:
+            response.headers['Server-Timing'] = f'app;dur={elapsed_ms}'
+
+        if request.path not in {'/health', '/ready'}:
+            app.logger.info(
+                'request.complete status=%s duration_ms=%s',
+                response.status_code,
+                elapsed_ms if elapsed_ms is not None else 'unavailable',
+            )
+
+        return response
 
 
 def _register_jwt_callbacks() -> None:
@@ -115,12 +177,27 @@ def _register_error_handlers(app: Flask) -> None:
         return fail('INTERNAL_SERVER_ERROR', 'An unexpected error occurred', 500)
 
     @app.after_request
-    def add_response_headers(response):
-        request_id = request.headers.get('X-Request-ID')
-        if request_id:
-            response.headers['X-Request-ID'] = request_id[:128]
+    def add_security_headers(response):
         response.headers.setdefault('X-Content-Type-Options', 'nosniff')
-        response.headers.setdefault('Referrer-Policy', 'no-referrer')
+        response.headers.setdefault('X-Frame-Options', 'DENY')
+        response.headers.setdefault('Referrer-Policy', 'strict-origin-when-cross-origin')
+        response.headers.setdefault(
+            'Permissions-Policy',
+            'camera=(), microphone=(), geolocation=(), payment=(), usb=()',
+        )
+        response.headers.setdefault('Cross-Origin-Opener-Policy', 'same-origin')
+        response.headers.setdefault('Cross-Origin-Resource-Policy', 'same-site')
+        response.headers.setdefault(
+            'Content-Security-Policy',
+            "default-src 'none'; frame-ancestors 'none'; base-uri 'none'",
+        )
+        if request.path.startswith(app.config['API_PREFIX']):
+            response.headers.setdefault('Cache-Control', 'no-store')
+        if app.config['ENVIRONMENT'] == 'production':
+            response.headers.setdefault(
+                'Strict-Transport-Security',
+                'max-age=31536000; includeSubDomains',
+            )
         return response
 
 
@@ -128,19 +205,30 @@ def _register_health_endpoints(app: Flask) -> None:
     @app.get('/health')
     @limiter.exempt
     def health():
-        return success({'status': 'ok', 'environment': app.config['ENVIRONMENT']})
+        return success({
+            'status': 'ok',
+            'environment': app.config['ENVIRONMENT'],
+            'release': app.config['RELEASE_SHA'],
+        })
 
     @app.get('/ready')
     @limiter.exempt
     def readiness():
+        checks = {'database': 'unknown', 'redis': 'unknown'}
         try:
             db.session.execute(text('SELECT 1'))
+            checks['database'] = 'ready'
             redis_store.client.ping()
+            checks['redis'] = 'ready'
         except Exception:
             db.session.rollback()
-            app.logger.exception('Readiness database check failed')
-            return fail('NOT_READY', 'Database or Redis connectivity check failed', 503)
-        return success({'status': 'ready'})
+            app.logger.exception('Readiness dependency check failed')
+            return fail(
+                'NOT_READY',
+                'Database or Redis connectivity check failed',
+                503,
+            )
+        return success({'status': 'ready', 'checks': checks})
 
 
 def _register_cli(app: Flask) -> None:
@@ -150,5 +238,11 @@ def _register_cli(app: Flask) -> None:
 
 
 def _configure_logging(app: Flask) -> None:
-    if not app.debug and not app.testing:
-        app.logger.setLevel(logging.INFO)
+    level = logging.DEBUG if app.debug else logging.INFO
+    app.logger.setLevel(level)
+    if app.config.get('JSON_LOGS'):
+        handler = logging.StreamHandler()
+        handler.setFormatter(JsonLogFormatter())
+        app.logger.handlers.clear()
+        app.logger.addHandler(handler)
+        app.logger.propagate = False

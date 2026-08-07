@@ -118,7 +118,7 @@ export default function Dashboard() {
         title={`${dayPart(today)}, ${user?.first_name || 'there'}`}
         description={`${formatLongDate(today)}. Here is what is happening across your organization.`}
         actions={quickActions[0] && (
-          <Link to={quickActions[0].to}><Button>{PrimaryActionIcon && <PrimaryActionIcon size={16} />}{quickActions[0].label}</Button></Link>
+          <Button as={Link} to={quickActions[0].to}>{PrimaryActionIcon && <PrimaryActionIcon size={16} />}{quickActions[0].label}</Button>
         )}
       />
 
