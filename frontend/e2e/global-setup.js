@@ -74,7 +74,7 @@ export default async function globalSetup() {
     try {
       await page.goto('/login');
       await page.getByLabel('Work email').fill(email);
-      await page.getByLabel('Password').fill(password);
+      await page.getByLabel(/^Password\s*\*?$/i).fill(password);
 
       const loginResponsePromise = page.waitForResponse(
         (response) =>

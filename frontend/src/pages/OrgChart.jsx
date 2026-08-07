@@ -1,5 +1,15 @@
-import { useEffect, useMemo, useState } from 'react';
-import { ChevronDown, ChevronRight, Network, Search, UsersRound } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import {
+  ChevronDown,
+  ChevronRight,
+  Maximize2,
+  Minus,
+  Network,
+  Plus,
+  RotateCcw,
+  Search,
+  UsersRound,
+} from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { employeeApi } from '../api/employeeApi';
 import Alert from '../components/ui/Alert.jsx';
@@ -10,6 +20,14 @@ import Card from '../components/ui/Card.jsx';
 import EmptyState from '../components/ui/EmptyState.jsx';
 import Input from '../components/ui/Input.jsx';
 import PageHeader from '../components/ui/PageHeader.jsx';
+
+const MIN_ZOOM = 0.5;
+const MAX_ZOOM = 1.5;
+const ZOOM_STEP = 0.1;
+
+function clampZoom(value) {
+  return Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, Number(value.toFixed(2))));
+}
 
 function PersonCard({ employee, collapsed, onToggle }) {
   const hasReports = employee.children.length > 0;
@@ -108,7 +126,10 @@ export default function OrgChart() {
   const [meta, setMeta] = useState({ total: 0, root_count: 0, manager_count: 0, max_depth: 0 });
   const [query, setQuery] = useState('');
   const [collapsedIds, setCollapsedIds] = useState(() => new Set());
+  const [zoom, setZoom] = useState(1);
   const [error, setError] = useState('');
+  const viewportRef = useRef(null);
+  const treeRef = useRef(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -142,6 +163,41 @@ export default function OrgChart() {
     });
   };
 
+  const adjustZoom = (delta) => {
+    setZoom((current) => clampZoom(current + delta));
+  };
+
+  const resetZoom = () => {
+    setZoom(1);
+    const viewport = viewportRef.current;
+    if (!viewport) return;
+
+    if (typeof viewport.scrollTo === 'function') {
+      viewport.scrollTo({ left: 0, top: 0, behavior: 'smooth' });
+      return;
+    }
+
+    viewport.scrollLeft = 0;
+    viewport.scrollTop = 0;
+  };
+
+  const fitChart = () => {
+    const viewport = viewportRef.current;
+    const tree = treeRef.current;
+    if (!viewport || !tree) return;
+
+    const availableWidth = Math.max(1, viewport.clientWidth - 48);
+    const naturalWidth = Math.max(1, tree.scrollWidth);
+    setZoom(clampZoom(Math.min(1, availableWidth / naturalWidth)));
+
+    if (typeof viewport.scrollTo === 'function') {
+      viewport.scrollTo({ left: 0, top: 0, behavior: 'smooth' });
+    } else {
+      viewport.scrollLeft = 0;
+      viewport.scrollTop = 0;
+    }
+  };
+
   return (
     <div className="space-y-6">
       <PageHeader
@@ -155,7 +211,7 @@ export default function OrgChart() {
       <Card>
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div className="relative w-full max-w-xl">
-            <Search className="pointer-events-none absolute left-3 top-3 text-slate-400" size={18} />
+            <Search className="pointer-events-none absolute left-3 top-3 text-slate-500" size={18} />
             <Input
               className="pl-10"
               placeholder="Search people, roles or departments"
@@ -164,7 +220,7 @@ export default function OrgChart() {
             />
           </div>
 
-          <div className="flex flex-wrap items-center gap-3 text-xs text-slate-500">
+          <div className="flex flex-wrap items-center gap-3 text-xs text-slate-600">
             <span className="flex items-center gap-1"><UsersRound size={15} /> {meta.total} people</span>
             <span>{meta.manager_count} managers</span>
             <span>{meta.max_depth} levels</span>
@@ -180,26 +236,92 @@ export default function OrgChart() {
             : 'Assign a manager on each employee profile to build the hierarchy.'}
         />
       ) : (
-        <Card className="overflow-x-auto bg-gradient-to-b from-slate-50 to-white">
-          <div className="org-tree py-6">
-            <ul>
-              {visibleRoots.map((root) => (
-                <TreeNode
-                  key={root.id}
-                  employee={root}
-                  collapsedIds={collapsedIds}
-                  forceExpanded={forceExpanded}
-                  toggle={toggle}
-                />
-              ))}
-            </ul>
+        <Card className="relative overflow-hidden bg-gradient-to-b from-slate-50 to-white p-0">
+          <div
+            ref={viewportRef}
+            className="max-h-[72vh] min-h-[520px] overflow-auto px-5 py-6 md:px-6"
+            aria-label="Organization chart canvas"
+          >
+            <div
+              ref={treeRef}
+              className="org-tree origin-top transition-transform duration-200 ease-out motion-reduce:transition-none"
+              style={{ transform: `scale(${zoom})`, transformOrigin: 'top center' }}
+            >
+              <ul>
+                {visibleRoots.map((root) => (
+                  <TreeNode
+                    key={root.id}
+                    employee={root}
+                    collapsedIds={collapsedIds}
+                    forceExpanded={forceExpanded}
+                    toggle={toggle}
+                  />
+                ))}
+              </ul>
+            </div>
+          </div>
+
+          <div className="absolute bottom-4 right-4 z-20 rounded-xl border border-slate-200 bg-white/95 p-1.5 shadow-xl backdrop-blur">
+            <div className="flex items-center gap-1" role="group" aria-label="Organization chart zoom controls">
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="h-9 w-9 px-0"
+                onClick={() => adjustZoom(-ZOOM_STEP)}
+                disabled={zoom <= MIN_ZOOM}
+                aria-label="Zoom out organization chart"
+              >
+                <Minus size={17} />
+              </Button>
+              <span className="min-w-14 text-center text-sm font-bold tabular-nums text-slate-700" aria-live="polite">
+                {Math.round(zoom * 100)}%
+              </span>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="h-9 w-9 px-0"
+                onClick={() => adjustZoom(ZOOM_STEP)}
+                disabled={zoom >= MAX_ZOOM}
+                aria-label="Zoom in organization chart"
+              >
+                <Plus size={17} />
+              </Button>
+              <span className="mx-1 h-6 w-px bg-slate-200" aria-hidden="true" />
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="h-9 w-9 px-0"
+                onClick={fitChart}
+                aria-label="Fit organization chart to view"
+                title="Fit to view"
+              >
+                <Maximize2 size={17} />
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="h-9 w-9 px-0"
+                onClick={resetZoom}
+                aria-label="Reset organization chart zoom"
+                title="Reset zoom"
+              >
+                <RotateCcw size={17} />
+              </Button>
+            </div>
           </div>
         </Card>
       )}
 
-      <div className="flex items-center gap-2 text-xs text-slate-500">
-        <Network size={15} />
-        Reporting lines are generated from each employee’s “Reports to” assignment.
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-slate-600">
+        <span className="flex items-center gap-2">
+          <Network size={15} />
+          Reporting lines are generated from each employee’s “Reports to” assignment.
+        </span>
+        <span>Zoom controls affect only the chart canvas, not the rest of Kinetic.</span>
       </div>
     </div>
   );

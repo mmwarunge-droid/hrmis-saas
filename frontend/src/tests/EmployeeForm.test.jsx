@@ -95,3 +95,46 @@ test('submits change context while editing employment details', () => {
     change_reason: 'Promotion to team lead',
   }));
 });
+
+test('keeps create-employee actions available in a sticky action bar', () => {
+  const onCancel = vi.fn();
+  render(
+    <EmployeeForm
+      onSubmit={vi.fn()}
+      onCancel={onCancel}
+      stickyActions
+    />,
+  );
+
+  expect(screen.getByRole('button', { name: /save employee/i })).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: /cancel/i }));
+  expect(onCancel).toHaveBeenCalledOnce();
+});
+
+test('keeps create-employee actions sticky and exposes cancel', () => {
+  const onCancel = vi.fn();
+
+  render(
+    <EmployeeForm
+      onSubmit={vi.fn()}
+      onCancel={onCancel}
+      stickyActions
+    />,
+  );
+
+  const saveButton = screen.getByRole('button', {
+    name: /save employee/i,
+  });
+  const actionBar = saveButton.parentElement;
+
+  expect(actionBar).toHaveClass('sticky');
+  expect(actionBar).toHaveClass('bottom-0');
+
+  fireEvent.click(
+    screen.getByRole('button', {
+      name: /cancel/i,
+    }),
+  );
+
+  expect(onCancel).toHaveBeenCalledTimes(1);
+});

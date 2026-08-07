@@ -249,3 +249,72 @@ textarea {
 .org-tree > ul > li::after {
   display: none;
 }
+
+/* Login hero motion: subtle, premium movement with a reduced-motion fallback. */
+.kinetic-auth-hero {
+  opacity: 0;
+  transform: scale(1.035);
+  will-change: opacity, transform;
+}
+
+.kinetic-auth-hero-primary {
+  animation:
+    kinetic-auth-fade-primary 18s ease-in-out infinite,
+    kinetic-auth-drift 16s ease-in-out infinite alternate;
+}
+
+.kinetic-auth-hero-secondary {
+  animation:
+    kinetic-auth-fade-secondary 18s ease-in-out infinite,
+    kinetic-auth-drift-secondary 19s ease-in-out infinite alternate-reverse;
+}
+
+.kinetic-auth-orb {
+  animation: kinetic-auth-orb-float 9s ease-in-out infinite alternate;
+}
+
+.kinetic-auth-orb-delayed {
+  animation-delay: -4s;
+}
+
+@keyframes kinetic-auth-fade-primary {
+  0%, 42%, 100% { opacity: 0.92; }
+  50%, 92% { opacity: 0; }
+}
+
+@keyframes kinetic-auth-fade-secondary {
+  0%, 42%, 100% { opacity: 0; }
+  50%, 92% { opacity: 0.9; }
+}
+
+@keyframes kinetic-auth-drift {
+  from { transform: scale(1.035) translate3d(0, 0, 0); }
+  to { transform: scale(1.09) translate3d(-1.5%, -1%, 0); }
+}
+
+
+@keyframes kinetic-auth-drift-secondary {
+  from { transform: scale(1.28) translate3d(-8%, 0, 0); }
+  to { transform: scale(1.36) translate3d(-11%, -1%, 0); }
+}
+
+@keyframes kinetic-auth-orb-float {
+  from { transform: translate3d(0, 0, 0) scale(1); }
+  to { transform: translate3d(-18px, 12px, 0) scale(1.08); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .kinetic-auth-hero-primary {
+    animation: none;
+    opacity: 0.9;
+    transform: none;
+  }
+
+  .kinetic-auth-hero-secondary {
+    display: none;
+  }
+
+  .kinetic-auth-orb {
+    animation: none;
+  }
+}
