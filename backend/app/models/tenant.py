@@ -137,4 +137,14 @@ class Tenant(db.Model, TimestampMixin, SoftDeleteMixin, ReprMixin):
                 if self.mfa_policy_updated_by_id
                 else None
             ),
+            'created_at': (
+                self.created_at.isoformat()
+                if self.created_at
+                else None
+            ),
+            'updated_at': (
+                self.updated_at.isoformat()
+                if self.updated_at
+                else None
+            ),
         }

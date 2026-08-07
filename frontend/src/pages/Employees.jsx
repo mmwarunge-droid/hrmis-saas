@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ArrowRightLeft,
   Building2,
@@ -25,6 +25,7 @@ import EmptyState from '../components/ui/EmptyState.jsx';
 import Input from '../components/ui/Input.jsx';
 import Modal from '../components/ui/Modal.jsx';
 import PageHeader from '../components/ui/PageHeader.jsx';
+import Pagination from '../components/ui/Pagination.jsx';
 import Select from '../components/ui/Select.jsx';
 import StatCard from '../components/ui/StatCard.jsx';
 import Table from '../components/ui/Table.jsx';
@@ -34,6 +35,18 @@ export default function Employees() {
   const [employees, setEmployees] = useState([]);
   const [departments, setDepartments] = useState([]);
   const [employeeOptions, setEmployeeOptions] = useState([]);
+  const [summary, setSummary] = useState({
+    total: 0,
+    active: 0,
+    departments: 0,
+    work_locations: 0,
+  });
+  const [meta, setMeta] = useState({
+    page: 1,
+    per_page: 15,
+    total: 0,
+    pages: 1,
+  });
   const [selectedIds, setSelectedIds] = useState(new Set());
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -44,46 +57,102 @@ export default function Employees() {
   const [query, setQuery] = useState('');
   const [status, setStatus] = useState('');
   const [department, setDepartment] = useState('');
+  const [page, setPage] = useState(1);
+  const [sort, setSort] = useState({
+    key: 'full_name',
+    direction: 'asc',
+  });
   const [view, setView] = useState('list');
   const { hasPermission } = usePermissions();
 
-  const load = async () => {
+  const loadReferenceData = useCallback(async () => {
     try {
-      const [employeeResponse, departmentResponse, optionResponse] = await Promise.all([
-        employeeApi.list(),
+      const [departmentResponse, optionResponse] = await Promise.all([
         departmentApi.list(),
         employeeApi.options(),
       ]);
-      setEmployees(employeeResponse.data.items || []);
       setDepartments(departmentResponse.data.items || []);
       setEmployeeOptions(optionResponse.data.items || []);
     } catch (err) {
-      setError(err.error?.message || 'Unable to load people directory');
+      setError(
+        err.error?.message
+        || 'Unable to load employee reference data',
+      );
+    }
+  }, []);
+
+  const loadSummary = useCallback(async () => {
+    try {
+      const response = await employeeApi.summary();
+      setSummary(response.data);
+    } catch (err) {
+      setError(
+        err.error?.message
+        || 'Unable to load workforce totals',
+      );
+    }
+  }, []);
+
+  const loadEmployees = useCallback(async () => {
+    setLoading(true);
+    try {
+      const response = await employeeApi.list({
+        page,
+        per_page: 15,
+        q: query || undefined,
+        status: status || undefined,
+        department_id: department || undefined,
+        sort: sort?.key || undefined,
+        direction: sort?.direction || undefined,
+      });
+      setEmployees(response.data.items || []);
+      setMeta(response.data.meta || {
+        page,
+        per_page: 15,
+        total: 0,
+        pages: 1,
+      });
+    } catch (err) {
+      setError(
+        err.error?.message
+        || 'Unable to load people directory',
+      );
     } finally {
       setLoading(false);
     }
-  };
+  }, [department, page, query, sort, status]);
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    loadReferenceData();
+    loadSummary();
+  }, [loadReferenceData, loadSummary]);
+
+  useEffect(() => {
+    loadEmployees();
+  }, [loadEmployees]);
 
   const departmentNames = useMemo(
-    () => Object.fromEntries(departments.map((item) => [item.id, item.name])),
+    () => Object.fromEntries(
+      departments.map((item) => [item.id, item.name]),
+    ),
     [departments],
   );
-  const filtered = useMemo(() => employees.filter((employee) => {
-    const haystack = `${employee.full_name} ${employee.email} ${employee.job_title || ''} ${employee.work_location || ''}`.toLowerCase();
-    return (!query || haystack.includes(query.toLowerCase()))
-      && (!status || employee.employment_status === status)
-      && (!department || employee.department_id === department);
-  }), [employees, query, status, department]);
   const selectedEmployees = useMemo(
-    () => employees.filter((employee) => selectedIds.has(employee.id)),
-    [employees, selectedIds],
+    () => employeeOptions.filter(
+      (employee) => selectedIds.has(employee.id),
+    ),
+    [employeeOptions, selectedIds],
   );
 
-  const locations = new Set(employees.map((employee) => employee.work_location).filter(Boolean)).size;
-  const activeCount = employees.filter((item) => item.employment_status === 'active').length;
   const hasFilters = Boolean(query || status || department);
+
+  const refreshDirectory = async () => {
+    await Promise.all([
+      loadEmployees(),
+      loadSummary(),
+      loadReferenceData(),
+    ]);
+  };
 
   const create = async (payload) => {
     setSaving(true);
@@ -92,7 +161,7 @@ export default function Employees() {
       await employeeApi.create(payload);
       setOpen(false);
       setMessage('Employee created.');
-      await load();
+      await refreshDirectory();
     } catch (err) {
       setError(err.error?.message || 'Employee creation failed');
     } finally {
@@ -106,10 +175,13 @@ export default function Employees() {
     setMessage('');
     try {
       const response = await departmentApi.bulkTransfer(payload);
-      setMessage(response.message || `${selectedEmployees.length} employee(s) transferred.`);
+      setMessage(
+        response.message
+        || `${selectedEmployees.length} employee(s) transferred.`,
+      );
       setSelectedIds(new Set());
       setTransferOpen(false);
-      await load();
+      await refreshDirectory();
     } catch (err) {
       setError(err.error?.message || 'Department transfer failed');
     } finally {
@@ -126,12 +198,16 @@ export default function Employees() {
     });
   };
 
-  const allVisibleSelected = filtered.length > 0 && filtered.every((employee) => selectedIds.has(employee.id));
+  const allVisibleSelected = employees.length > 0
+    && employees.every((employee) => selectedIds.has(employee.id));
   const toggleVisible = () => {
     setSelectedIds((current) => {
       const next = new Set(current);
-      if (allVisibleSelected) filtered.forEach((employee) => next.delete(employee.id));
-      else filtered.forEach((employee) => next.add(employee.id));
+      if (allVisibleSelected) {
+        employees.forEach((employee) => next.delete(employee.id));
+      } else {
+        employees.forEach((employee) => next.add(employee.id));
+      }
       return next;
     });
   };
@@ -140,6 +216,27 @@ export default function Employees() {
     setQuery('');
     setStatus('');
     setDepartment('');
+    setPage(1);
+  };
+
+  const updateQuery = (value) => {
+    setQuery(value);
+    setPage(1);
+  };
+
+  const updateStatus = (value) => {
+    setStatus(value);
+    setPage(1);
+  };
+
+  const updateDepartment = (value) => {
+    setDepartment(value);
+    setPage(1);
+  };
+
+  const updateSort = (value) => {
+    setSort(value);
+    setPage(1);
   };
 
   const columns = [
@@ -204,26 +301,26 @@ export default function Employees() {
       {message && <Alert type="success">{message}</Alert>}
 
       <div className="grid gap-4 md:grid-cols-3">
-        <StatCard label="Headcount" value={employees.length} detail={`${activeCount} active employees`} icon={UsersRound} tone="blue" />
-        <StatCard label="Departments" value={departments.length} detail="Organizational teams" icon={Building2} tone="violet" />
-        <StatCard label="Work locations" value={locations} detail="Workforce footprint" icon={Network} tone="emerald" />
+        <StatCard label="Headcount" value={summary.total} detail={`${summary.active} active employees`} icon={UsersRound} tone="blue" />
+        <StatCard label="Departments" value={summary.departments} detail="Organizational teams" icon={Building2} tone="violet" />
+        <StatCard label="Work locations" value={summary.work_locations} detail="Workforce footprint" icon={Network} tone="emerald" />
       </div>
 
       <Card padded={false}>
         <div className="flex flex-col gap-3 border-b border-slate-200 p-4 lg:flex-row lg:items-center">
           <div className="relative min-w-0 flex-1">
             <Search className="pointer-events-none absolute left-3 top-3 text-slate-400" size={17} />
-            <Input aria-label="Search people" className="pl-9" placeholder="Search people, job titles, or locations" value={query} onChange={(event) => setQuery(event.target.value)} />
+            <Input aria-label="Search people" className="pl-9" placeholder="Search people, job titles, or locations" value={query} onChange={(event) => updateQuery(event.target.value)} />
           </div>
           <div className="grid gap-2 sm:grid-cols-2 lg:flex">
-            <Select aria-label="Employment status" className="lg:w-44" value={status} onChange={(event) => setStatus(event.target.value)}>
+            <Select aria-label="Employment status" className="lg:w-44" value={status} onChange={(event) => updateStatus(event.target.value)}>
               <option value="">All statuses</option>
               <option value="active">Active</option>
               <option value="probation">Probation</option>
               <option value="suspended">Suspended</option>
               <option value="terminated">Terminated</option>
             </Select>
-            <Select aria-label="Department" className="lg:w-52" value={department} onChange={(event) => setDepartment(event.target.value)}>
+            <Select aria-label="Department" className="lg:w-52" value={department} onChange={(event) => updateDepartment(event.target.value)}>
               <option value="">All departments</option>
               {departments.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
             </Select>
@@ -235,8 +332,8 @@ export default function Employees() {
           </div>
         </div>
         <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-2.5 text-xs text-slate-500">
-          <span className="inline-flex items-center gap-1.5"><SlidersHorizontal size={14} /> Showing {filtered.length} of {employees.length} people</span>
-          {hasPermission('employee:update') && filtered.length > 0 && (
+          <span className="inline-flex items-center gap-1.5"><SlidersHorizontal size={14} /> Showing {employees.length} of {meta.total} matching people</span>
+          {hasPermission('employee:update') && employees.length > 0 && (
             <button type="button" className="font-semibold text-blue-700 hover:text-blue-900" onClick={toggleVisible}>
               {allVisibleSelected ? 'Clear visible selection' : 'Select visible employees'}
             </button>
@@ -258,14 +355,30 @@ export default function Employees() {
       )}
 
       {view === 'list' ? (
-        <Table columns={columns} rows={filtered} loading={loading} pageSize={15} empty={hasFilters ? 'No people match these filters.' : 'No employee records yet.'} caption="People directory" />
+        <Table
+          columns={columns}
+          rows={employees}
+          loading={loading}
+          empty={hasFilters ? 'No people match these filters.' : 'No employee records yet.'}
+          caption="People directory"
+          sort={sort}
+          onSortChange={updateSort}
+          pagination={{
+            page: meta.page,
+            pageSize: meta.per_page,
+            total: meta.total,
+            onPageChange: setPage,
+            label: 'people',
+          }}
+        />
       ) : loading ? (
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">{Array.from({ length: 6 }, (_, index) => <div key={index} className="h-52 animate-pulse rounded-xl bg-slate-200" />)}</div>
-      ) : filtered.length === 0 ? (
+      ) : employees.length === 0 ? (
         <EmptyState title="No people match these filters" description="Clear the filters or add a new employee record." icon={UsersRound} />
       ) : (
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {filtered.map((employee) => (
+        <>
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+          {employees.map((employee) => (
             <Card key={employee.id} className="relative transition hover:border-blue-200 hover:shadow-md">
               {hasPermission('employee:update') && (
                 <input
@@ -292,7 +405,17 @@ export default function Employees() {
               </Link>
             </Card>
           ))}
-        </div>
+          </div>
+          {meta.total > 0 && (
+            <Pagination
+              page={meta.page}
+              pageSize={meta.per_page}
+              total={meta.total}
+              onPageChange={setPage}
+              label="people"
+            />
+          )}
+        </>
       )}
 
       {hasPermission('employee:update') && (

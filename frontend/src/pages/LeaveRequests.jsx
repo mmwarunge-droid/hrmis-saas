@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import {
   CalendarDays,
   CheckCircle2,
@@ -15,7 +16,6 @@ import { employeeApi } from '../api/employeeApi';
 import { leaveApi } from '../api/leaveApi';
 import LeaveLedgerPanel from '../components/leave/LeaveLedgerPanel.jsx';
 import LeaveRequestForm from '../components/leave/LeaveRequestForm.jsx';
-import LeaveSetupPanel from '../components/leave/LeaveSetupPanel.jsx';
 import Alert from '../components/ui/Alert.jsx';
 import Avatar from '../components/ui/Avatar.jsx';
 import Badge from '../components/ui/Badge.jsx';
@@ -57,7 +57,6 @@ export default function LeaveRequests() {
   const [ledgerEntries, setLedgerEntries] = useState([]);
   const [setup, setSetup] = useState(null);
   const [requestOpen, setRequestOpen] = useState(false);
-  const [setupOpen, setSetupOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [month, setMonth] = useState(
     () => new Date(
@@ -183,6 +182,7 @@ export default function LeaveRequests() {
       await action();
       setMessage(successMessage);
       await load();
+      window.dispatchEvent(new Event('kinetic:leave-queue-changed'));
       return true;
     } catch (err) {
       setError(
@@ -214,28 +214,6 @@ export default function LeaveRequests() {
     );
   };
 
-  const saveGovernance = async (payload) => {
-    const completed = await runAction(
-      () => leaveApi.saveGovernance(payload),
-      'Approval governance updated.',
-    );
-    if (completed) setSetupOpen(false);
-  };
-
-  const applyPack = async (payload) => {
-    await runAction(
-      () => leaveApi.applyStandardPack(payload),
-      'Standard leave policy pack applied.',
-    );
-  };
-
-  const initializeBalances = async (payload) => {
-    await runAction(
-      () => leaveApi.initializeBalances(payload),
-      'Opening balances initialized.',
-    );
-  };
-
   const runAccruals = async (payload = {}) => runAction(
     () => leaveApi.runAccruals(payload),
     'Scheduled leave allocations processed.',
@@ -256,7 +234,7 @@ export default function LeaveRequests() {
 
     if (!setup?.ready_to_request) {
       if (setup?.can_configure) {
-        setSetupOpen(true);
+        setError('Complete organization time-off setup before requesting leave.');
       } else {
         setError(
           'Time-off requests are not available yet. '
@@ -273,17 +251,16 @@ export default function LeaveRequests() {
       <PageHeader
         eyebrow="Time"
         title="Time off"
-        description="Policy setup, balances, team availability and governed approvals in one workspace."
+        description="Personal balances, team availability and governed requests in one workspace."
         actions={(
           <div className="flex flex-wrap gap-2">
             {setup?.can_configure && (
-              <Button
-                variant="secondary"
-                onClick={() => setSetupOpen(true)}
-              >
-                <Settings2 size={17} />
-                Configure time off
-              </Button>
+              <Link to="/leave/setup">
+                <Button variant="secondary">
+                  <Settings2 size={17} />
+                  Time-off setup
+                </Button>
+              </Link>
             )}
             <Button
               variant="accent"
@@ -327,9 +304,9 @@ export default function LeaveRequests() {
               </div>
             </div>
             {setup.can_configure && (
-              <Button onClick={() => setSetupOpen(true)}>
-                Complete setup
-              </Button>
+              <Link to="/leave/setup">
+                <Button>Complete setup</Button>
+              </Link>
             )}
           </div>
         </Card>
@@ -661,28 +638,6 @@ export default function LeaveRequests() {
         )}
       </Modal>
 
-      <Modal
-        title="Configure time off"
-        open={setupOpen}
-        onClose={() => setSetupOpen(false)}
-        size="xl"
-      >
-        {setup?.can_configure ? (
-          <LeaveSetupPanel
-            setup={setup}
-            onSaveGovernance={saveGovernance}
-            onApplyPack={applyPack}
-            onInitializeBalances={initializeBalances}
-            onRunAccruals={runAccruals}
-            loading={saving}
-          />
-        ) : (
-          <EmptyState
-            title="Administrator action required"
-            description="Ask an organization owner, HR consultant or client administrator to complete time-off setup."
-          />
-        )}
-      </Modal>
     </div>
   );
 }

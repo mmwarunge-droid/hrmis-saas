@@ -137,6 +137,8 @@ class BaseConfig:
         True,
     )
     JSON_SORT_KEYS = False
+    JSON_LOGS = _bool_env('JSON_LOGS', False)
+    RELEASE_SHA = os.getenv('RELEASE_SHA', 'development')
     ERROR_INCLUDE_MESSAGE = False
     REDIS_URL = os.getenv('REDIS_URL', 'redis://127.0.0.1:6379/0')
     REDIS_KEY_PREFIX = os.getenv('REDIS_KEY_PREFIX', 'hrmis:auth')
@@ -196,6 +198,7 @@ class TestingConfig(BaseConfig):
 
 class ProductionConfig(BaseConfig):
     ENVIRONMENT = 'production'
+    JSON_LOGS = _bool_env('JSON_LOGS', True)
     DEBUG = False
     FLASK_ENV = 'production'
     JWT_COOKIE_SECURE = True
@@ -237,6 +240,17 @@ class ProductionConfig(BaseConfig):
             raise RuntimeError('MFA_RECOVERY_CODE_PEPPER must differ from SECRET_KEY and JWT_SECRET_KEY')
         if cls.JWT_COOKIE_SAMESITE.lower() == 'none' and not cls.JWT_COOKIE_SECURE:
             raise RuntimeError('JWT_COOKIE_SECURE must be enabled when JWT_COOKIE_SAMESITE=None')
+        invalid_origins = [
+            origin
+            for origin in cls.CORS_ORIGINS
+            if not origin.startswith('https://') or '*' in origin
+        ]
+        if invalid_origins:
+            raise RuntimeError(
+                'Production CORS_ORIGINS must contain exact HTTPS origins'
+            )
+        if not cls.FRONTEND_URL.startswith('https://'):
+            raise RuntimeError('FRONTEND_URL must use HTTPS in production')
         if cls.SIGNATURE_PROVIDER not in {
             'internal',
             'dropbox_sign',

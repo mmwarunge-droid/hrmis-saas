@@ -54,6 +54,38 @@ def _department_payload(department, employee_counts):
     return data
 
 
+def _apply_employee_sort(query):
+    sort_key = request.args.get('sort', 'created_at')
+    direction = request.args.get('direction', 'desc').lower()
+    descending = direction != 'asc'
+
+    if sort_key == 'full_name':
+        columns = [Employee.last_name, Employee.first_name]
+    elif sort_key == 'department_id':
+        query = query.outerjoin(
+            Department,
+            Employee.department_id == Department.id,
+        )
+        columns = [Department.name, Employee.last_name, Employee.first_name]
+    else:
+        column = {
+            'created_at': Employee.created_at,
+            'employee_number': Employee.employee_number,
+            'job_title': Employee.job_title,
+            'work_location': Employee.work_location,
+            'employment_status': Employee.employment_status,
+            'hire_date': Employee.hire_date,
+        }.get(sort_key, Employee.created_at)
+        columns = [column, Employee.last_name, Employee.first_name]
+
+    for column in columns:
+        query = query.order_by(
+            column.desc() if descending else column.asc(),
+        )
+
+    return query.order_by(Employee.id.asc())
+
+
 @employee_bp.get('')
 @jwt_required()
 @permission_required('employee:read')
@@ -62,13 +94,70 @@ def list_employees():
     query = tenant_query(Employee).filter(Employee.deleted_at.is_(None))
     q = request.args.get('q')
     if q:
-        like = f'%{q.lower()}%'
-        query = query.filter(or_(db.func.lower(Employee.first_name).like(like), db.func.lower(Employee.last_name).like(like), db.func.lower(Employee.email).like(like), db.func.lower(Employee.employee_number).like(like)))
+        like = f'%{q.strip().lower()}%'
+        query = query.filter(or_(
+            db.func.lower(Employee.first_name).like(like),
+            db.func.lower(Employee.last_name).like(like),
+            db.func.lower(Employee.email).like(like),
+            db.func.lower(Employee.employee_number).like(like),
+            db.func.lower(Employee.job_title).like(like),
+            db.func.lower(Employee.work_location).like(like),
+        ))
     if request.args.get('department_id'):
-        query = query.filter(Employee.department_id == request.args['department_id'])
+        query = query.filter(
+            Employee.department_id == request.args['department_id'],
+        )
     if request.args.get('status'):
-        query = query.filter(Employee.employment_status == request.args['status'])
-    return success(paginated_response(query.order_by(Employee.created_at.desc()).paginate(page=page, per_page=per_page, error_out=False)))
+        query = query.filter(
+            Employee.employment_status == request.args['status'],
+        )
+
+    query = _apply_employee_sort(query)
+    pagination = query.paginate(
+        page=page,
+        per_page=per_page,
+        error_out=False,
+    )
+    return success(paginated_response(pagination))
+
+
+@employee_bp.get('/summary')
+@jwt_required()
+@permission_required('employee:read')
+def employee_summary():
+    employee_query = tenant_query(Employee).filter(
+        Employee.deleted_at.is_(None),
+    )
+    status_rows = employee_query.with_entities(
+        Employee.employment_status,
+        func.count(Employee.id),
+    ).group_by(Employee.employment_status).all()
+    status_counts = {
+        status: count
+        for status, count in status_rows
+    }
+    total = sum(status_counts.values())
+    active = status_counts.get('active', 0)
+
+    work_locations = employee_query.with_entities(
+        func.count(func.distinct(Employee.work_location)),
+    ).filter(
+        Employee.work_location.is_not(None),
+        func.trim(Employee.work_location) != '',
+    ).scalar() or 0
+
+    departments = tenant_query(Department).filter(
+        Department.deleted_at.is_(None),
+    ).count()
+
+    return success({
+        'total': total,
+        'active': active,
+        'not_active': total - active,
+        'work_locations': work_locations,
+        'departments': departments,
+        'by_status': status_counts,
+    })
 
 
 @employee_bp.post('')

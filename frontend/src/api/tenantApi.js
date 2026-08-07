@@ -2,6 +2,8 @@ import apiClient from './apiClient';
 
 export const tenantApi = {
   list: (params = {}) => apiClient.get('/tenants', { params }),
+  summary: () => apiClient.get('/tenants/summary'),
+  options: () => apiClient.get('/tenants/options'),
   get: (id) => apiClient.get(`/tenants/${id}`),
   create: (payload) => apiClient.post('/tenants', payload),
   provision: (payload) => apiClient.post('/tenants/provision', payload),

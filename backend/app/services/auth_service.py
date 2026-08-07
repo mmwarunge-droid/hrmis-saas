@@ -93,6 +93,11 @@ def authenticate(email: str, password: str) -> User:
     password_valid = verify_password(password, user.password_hash)
     if not user.is_active:
         raise AuthenticationError('inactive_account', user=user)
+    if (
+        user.tenant_id
+        and (not user.tenant or user.tenant.status != 'active')
+    ):
+        raise AuthenticationError('inactive_organization', user=user)
 
     if not password_valid:
         newly_locked = _record_failed_login(user, now)

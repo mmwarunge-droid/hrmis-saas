@@ -25,6 +25,9 @@ PERMISSIONS = {
     'onboarding:create': 'Create onboarding templates',
     'onboarding:assign': 'Assign and complete onboarding work',
     'dashboard:read': 'Read dashboard information',
+    'goal:read': 'Read goals and KPI progress',
+    'goal:manage': 'Create and manage goals',
+    'goal:checkin': 'Record goal progress check-ins',
     'security:mfa_policy': (
         'Configure organization MFA policy and review compliance'
     ),
@@ -47,6 +50,9 @@ ROLE_PERMISSIONS = {
         'leave:adjust',
         'attendance:read',
         'dashboard:read',
+        'goal:read',
+        'goal:manage',
+        'goal:checkin',
         'security:mfa_policy',
         'security:mfa_reset',
     ],
@@ -70,6 +76,9 @@ ROLE_PERMISSIONS = {
         'onboarding:create',
         'onboarding:assign',
         'dashboard:read',
+        'goal:read',
+        'goal:manage',
+        'goal:checkin',
     ],
     'CLIENT_ADMIN': [
         'user:create',
@@ -90,6 +99,9 @@ ROLE_PERMISSIONS = {
         'onboarding:create',
         'onboarding:assign',
         'dashboard:read',
+        'goal:read',
+        'goal:manage',
+        'goal:checkin',
         'security:mfa_policy',
         'security:mfa_reset',
     ],
@@ -102,6 +114,9 @@ ROLE_PERMISSIONS = {
         'attendance:read',
         'onboarding:assign',
         'dashboard:read',
+        'goal:read',
+        'goal:manage',
+        'goal:checkin',
     ],
     'EMPLOYEE': [
         'employee:read',
@@ -111,6 +126,8 @@ ROLE_PERMISSIONS = {
         'attendance:write',
         'onboarding:assign',
         'dashboard:read',
+        'goal:read',
+        'goal:checkin',
     ],
 }
 
@@ -124,7 +141,18 @@ def validate_role_assignment(actor, roles, tenant_id):
             + ', '.join(sorted(unknown))
         )
 
-    if actor is None or actor.has_role('SUPER_ADMIN'):
+    if actor is None:
+        return
+
+    if actor.has_role('SUPER_ADMIN'):
+        if tenant_id and 'SUPER_ADMIN' in requested:
+            raise ValueError(
+                'SUPER_ADMIN is reserved for platform accounts'
+            )
+        if not tenant_id and requested != {'SUPER_ADMIN'}:
+            raise ValueError(
+                'Platform accounts must use the SUPER_ADMIN role'
+            )
         return
 
     if not tenant_id or str(actor.tenant_id) != str(tenant_id):

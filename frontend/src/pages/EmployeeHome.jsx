@@ -422,7 +422,7 @@ export default function EmployeeHome() {
               ['Popular interests', data.people_statistics.hobbies],
             ].map(([label, items]) => items?.length ? (
               <div key={label}>
-                <p className="text-xs font-bold uppercase tracking-[0.16em] text-slate-400">{label}</p>
+                <p className="text-xs font-bold uppercase tracking-[0.16em] text-slate-600">{label}</p>
                 <div className="mt-2 flex flex-wrap gap-2">
                   {items.slice(0, 6).map((item) => (
                     <Badge key={`${label}-${item.key}`} tone="cyan">

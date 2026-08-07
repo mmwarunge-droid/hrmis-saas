@@ -29,10 +29,32 @@ class Notification(db.Model, TimestampMixin, ReprMixin):
     user_id = db.Column(GUID(), db.ForeignKey('users.id', ondelete='CASCADE'), nullable=False, index=True)
     title = db.Column(db.String(180), nullable=False)
     body = db.Column(db.Text)
-    notification_type = db.Column(db.String(80), nullable=False, default='system')
-    read_at = db.Column(db.DateTime)
+    notification_type = db.Column(db.String(80), nullable=False, default='system', index=True)
+    priority = db.Column(db.String(20), nullable=False, default='normal')
+    action_url = db.Column(db.String(500))
+    metadata_json = db.Column(db.JSON, nullable=False, default=dict)
+    read_at = db.Column(db.DateTime, index=True)
 
     user = db.relationship('User', back_populates='notifications')
 
+    __table_args__ = (
+        db.CheckConstraint(
+            "priority IN ('low','normal','high','urgent')",
+            name='ck_notifications_priority',
+        ),
+    )
+
     def to_dict(self):
-        return {'id': str(self.id), 'tenant_id': str(self.tenant_id), 'user_id': str(self.user_id), 'title': self.title, 'body': self.body, 'notification_type': self.notification_type, 'read_at': self.read_at.isoformat() if self.read_at else None}
+        return {
+            'id': str(self.id),
+            'tenant_id': str(self.tenant_id),
+            'user_id': str(self.user_id),
+            'title': self.title,
+            'body': self.body,
+            'notification_type': self.notification_type,
+            'priority': self.priority,
+            'action_url': self.action_url,
+            'metadata': self.metadata_json or {},
+            'read_at': self.read_at.isoformat() if self.read_at else None,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+        }

@@ -4,6 +4,7 @@ export default function Button({
   variant = 'primary',
   size = 'md',
   type,
+  as: Component = 'button',
   ...props
 }) {
   const variants = {
@@ -22,12 +23,12 @@ export default function Button({
   };
 
   return (
-    <button
-      type={type}
+    <Component
+      type={Component === 'button' ? type : undefined}
       className={`inline-flex shrink-0 items-center justify-center gap-2 font-semibold leading-none transition duration-150 focus:outline-none focus-visible:ring-4 disabled:cursor-not-allowed disabled:opacity-50 ${variants[variant] || variants.primary} ${sizes[size] || sizes.md} ${className}`}
       {...props}
     >
       {children}
-    </button>
+    </Component>
   );
 }

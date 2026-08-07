@@ -48,3 +48,40 @@ test('supports keyboard activation on interactive rows', () => {
   fireEvent.keyDown(row, { key: 'Enter' });
   expect(onRowClick).toHaveBeenCalledWith({ id: '1', name: 'Amina' });
 });
+
+test('supports server-controlled table pagination and sorting', () => {
+  const onPageChange = vi.fn();
+  const onSortChange = vi.fn();
+
+  render(
+    <MemoryRouter>
+      <Table
+        columns={[{ key: 'name', label: 'Name', sortable: true }]}
+        rows={[
+          { id: '16', name: 'Page two first' },
+          { id: '17', name: 'Page two second' },
+        ]}
+        pagination={{
+          page: 2,
+          pageSize: 15,
+          total: 35,
+          onPageChange,
+          label: 'people',
+        }}
+        sort={{ key: 'name', direction: 'asc' }}
+        onSortChange={onSortChange}
+      />
+    </MemoryRouter>,
+  );
+
+  expect(screen.getByText('16–30 of 35 people')).toBeInTheDocument();
+
+  fireEvent.click(screen.getByRole('button', { name: /next page/i }));
+  expect(onPageChange).toHaveBeenCalledWith(3);
+
+  fireEvent.click(screen.getByRole('button', { name: /name/i }));
+  expect(onSortChange).toHaveBeenCalledWith({
+    key: 'name',
+    direction: 'desc',
+  });
+});

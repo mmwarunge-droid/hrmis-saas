@@ -23,7 +23,7 @@ export default function KineticLogo({ compact = false, inverse = false, classNam
           </span>
           <span
             className={`mt-1 block text-[9px] font-bold uppercase tracking-[0.18em] ${
-              inverse ? 'text-blue-200' : 'text-slate-400'
+              inverse ? 'text-blue-200' : 'text-slate-600'
             }`}
           >
             People platform

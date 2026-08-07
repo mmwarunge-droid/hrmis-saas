@@ -49,7 +49,7 @@ export function TenantProvider({ children }) {
     setError('');
 
     try {
-      const response = await tenantApi.list({ per_page: 100 });
+      const response = await tenantApi.options();
       const items = (response.data.items || []).filter(
         (tenant) => tenant.status === 'active',
       );

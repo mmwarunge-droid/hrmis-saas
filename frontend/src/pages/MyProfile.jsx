@@ -324,7 +324,7 @@ export default function MyProfile() {
               ['Employee number', viewer.employee_number || 'Not set'],
             ].map(([label, value]) => (
               <div key={label} className="rounded-lg bg-slate-50 p-4">
-                <dt className="text-xs font-bold uppercase tracking-[0.12em] text-slate-400">
+                <dt className="text-xs font-bold uppercase tracking-[0.12em] text-slate-600">
                   {label}
                 </dt>
                 <dd className="mt-1 text-sm font-semibold text-slate-900">{value}</dd>

@@ -1,5 +1,8 @@
 from datetime import date
 
+from app.extensions import db
+from app.models import Department, Employee
+
 def _create_employee(client, auth_headers, **overrides):
     payload = {
         'employee_number': overrides.pop('employee_number', 'EMP-001'),
@@ -324,3 +327,119 @@ def test_department_parent_cycle_is_rejected(client, auth_headers):
 
     assert response.status_code == 400
     assert 'cycle' in response.get_json()['error']['message'].lower()
+
+
+
+def test_employee_directory_pagination_filters_and_summary_use_full_dataset(
+    app,
+    client,
+    tenant,
+    auth_headers,
+):
+    with app.app_context():
+        departments = [
+            Department(
+                tenant_id=tenant.id,
+                name='Operations',
+                code='OPS-PAGE',
+            ),
+            Department(
+                tenant_id=tenant.id,
+                name='Product',
+                code='PRD-PAGE',
+            ),
+        ]
+        db.session.add_all(departments)
+        db.session.flush()
+
+        employees = []
+        for index in range(35):
+            if index < 27:
+                employment_status = 'active'
+            elif index < 32:
+                employment_status = 'probation'
+            else:
+                employment_status = 'terminated'
+
+            employees.append(Employee(
+                tenant_id=tenant.id,
+                employee_number=f'PAGE-{index:03d}',
+                first_name='Employee',
+                last_name=f'{index:02d}',
+                email=f'employee-{index:03d}@pagination.test',
+                hire_date=date(2026, 1, 1),
+                job_title=(
+                    'Customer Success Partner'
+                    if index % 2
+                    else 'Product Analyst'
+                ),
+                work_location=['Nairobi', 'Mombasa', 'Remote'][index % 3],
+                employment_status=employment_status,
+                department_id=departments[index % 2].id,
+            ))
+
+        db.session.add_all(employees)
+        db.session.commit()
+
+    second_page = client.get(
+        '/api/employees',
+        headers=auth_headers,
+        query_string={
+            'page': 2,
+            'per_page': 15,
+            'sort': 'full_name',
+            'direction': 'asc',
+        },
+    )
+
+    assert second_page.status_code == 200
+    page_data = second_page.get_json()['data']
+    assert page_data['meta']['total'] == 35
+    assert page_data['meta']['pages'] == 3
+    assert len(page_data['items']) == 15
+    assert page_data['items'][0]['full_name'] == 'Employee 15'
+    assert page_data['items'][-1]['full_name'] == 'Employee 29'
+
+    active_page = client.get(
+        '/api/employees',
+        headers=auth_headers,
+        query_string={
+            'status': 'active',
+            'page': 1,
+            'per_page': 10,
+        },
+    )
+    assert active_page.status_code == 200
+    assert active_page.get_json()['data']['meta']['total'] == 27
+
+    location_search = client.get(
+        '/api/employees',
+        headers=auth_headers,
+        query_string={'q': 'Mombasa'},
+    )
+    assert location_search.status_code == 200
+    assert location_search.get_json()['data']['meta']['total'] == 12
+
+    title_search = client.get(
+        '/api/employees',
+        headers=auth_headers,
+        query_string={'q': 'Customer Success'},
+    )
+    assert title_search.status_code == 200
+    assert title_search.get_json()['data']['meta']['total'] == 17
+
+    summary = client.get('/api/employees/summary', headers=auth_headers)
+    assert summary.status_code == 200
+    summary_data = summary.get_json()['data']
+    assert summary_data == {
+        'total': 35,
+        'active': 27,
+        'not_active': 8,
+        'work_locations': 3,
+        'departments': 2,
+        'by_status': {
+            'active': 27,
+            'probation': 5,
+            'terminated': 3,
+        },
+    }

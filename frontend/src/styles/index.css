@@ -83,7 +83,27 @@ textarea {
 }
 
 :focus-visible {
-  outline: none;
+  outline: 2px solid transparent;
+  outline-offset: 2px;
+}
+
+.kinetic-skip-link {
+  position: fixed;
+  top: 0.75rem;
+  left: 0.75rem;
+  z-index: 100;
+  transform: translateY(-160%);
+  border-radius: 0.5rem;
+  background: #0f172a;
+  padding: 0.65rem 0.9rem;
+  color: white;
+  font-size: 0.875rem;
+  font-weight: 700;
+  transition: transform 120ms ease-out;
+}
+
+.kinetic-skip-link:focus {
+  transform: translateY(0);
 }
 
 .kinetic-page-enter {

@@ -99,3 +99,7 @@ class MfaAdminResetSchema(Schema):
         required=True,
         validate=validate.Length(min=6, max=32),
     )
+
+
+class UserEmployeeLinkSchema(Schema):
+    employee_id = fields.UUID(required=False, allow_none=True)

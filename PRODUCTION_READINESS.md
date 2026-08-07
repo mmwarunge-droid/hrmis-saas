@@ -52,12 +52,16 @@ Validation status:
 - Add database-level tenant invariants and concurrency tests.
 - Establish backup, point-in-time recovery, and restore drills.
 
-## Step 5 — Observability and operational resilience
+## Step 5 — Observability and operational resilience: baseline complete
 
-- Add structured JSON logs and correlation IDs.
-- Add privacy-safe error monitoring, metrics, tracing, and alerting.
-- Add Redis-backed distributed rate limits.
-- Add deployment smoke tests, rollback procedures, and incident runbooks.
+- Added structured JSON logs and generated or propagated correlation IDs.
+- Added request timing, release metadata, dependency-level readiness output, and hardened API response headers.
+- Added Redis to the reproducible local Compose stack and retained Redis-backed authentication controls.
+- Added deployment smoke checks, release verification, rollback guidance, and an isolated production-demo runbook.
+- Added desktop and mobile Playwright acceptance scaffolding with serious/critical axe checks.
+- Added a real 404 experience, application error boundary, skip navigation, and keyboard-complete tabs.
+
+Remaining platform operations work: connect logs to a managed collector, add privacy-safe error monitoring and metrics, define alert thresholds in the hosting platform, and prove restore objectives against the selected production database provider.
 
 ## Step 6 — HRMIS security and compliance controls
 

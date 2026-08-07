@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   ArrowRight,
   BriefcaseBusiness,
@@ -8,13 +8,12 @@ import {
   FileWarning,
   Network,
   Sparkles,
+  Target,
   UserPlus,
   UsersRound,
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { dashboardApi } from '../api/dashboardApi';
-import { employeeApi } from '../api/employeeApi';
-import { leaveApi } from '../api/leaveApi';
 import { onboardingApi } from '../api/onboardingApi';
 import Alert from '../components/ui/Alert.jsx';
 import Avatar from '../components/ui/Avatar.jsx';
@@ -56,8 +55,6 @@ export default function Dashboard() {
   const [today] = useState(() => new Date());
   const [summary, setSummary] = useState(null);
   const [alerts, setAlerts] = useState({ expiring_documents: [], employees_missing_contracts: [] });
-  const [employees, setEmployees] = useState([]);
-  const [leaveRequests, setLeaveRequests] = useState([]);
   const [leaveSummary, setLeaveSummary] = useState({});
   const [tasks, setTasks] = useState([]);
   const [error, setError] = useState('');
@@ -67,18 +64,14 @@ export default function Dashboard() {
     const requests = [
       dashboardApi.summary(),
       dashboardApi.complianceAlerts(),
-      employeeApi.list(),
       dashboardApi.leaveSummary(),
-      leaveApi.requests(),
       onboardingApi.myTasks(),
     ];
     Promise.allSettled(requests).then((results) => {
-      const [summaryResult, alertsResult, employeesResult, leaveSummaryResult, requestsResult, tasksResult] = results;
+      const [summaryResult, alertsResult, leaveSummaryResult, tasksResult] = results;
       setSummary(settleData(summaryResult, null));
       setAlerts(settleData(alertsResult, { expiring_documents: [], employees_missing_contracts: [] }));
-      setEmployees(settleData(employeesResult, { items: [] }).items || []);
       setLeaveSummary(settleData(leaveSummaryResult, { by_status: {} }).by_status || {});
-      setLeaveRequests(settleData(requestsResult, { items: [] }).items || []);
       setTasks(settleData(tasksResult, { items: [] }).items || []);
       if (summaryResult.status === 'rejected') {
         setError(summaryResult.reason?.error?.message || 'Some dashboard data could not be loaded.');
@@ -87,25 +80,23 @@ export default function Dashboard() {
     });
   }, []);
 
-  const activeEmployees = employees.filter((employee) => employee.employment_status === 'active').length;
-  const peopleHealth = employees.length ? Math.round((activeEmployees / employees.length) * 100) : 0;
+  const activeEmployees = summary?.active_employees || 0;
+  const employeeTotal = summary?.employees || 0;
+  const peopleHealth = summary?.people_health_percent || 0;
   const pendingTasks = tasks.filter((task) => !['completed', 'waived'].includes(task.status)).length;
   const pendingLeave = leaveSummary.pending || summary?.pending_leave_requests || 0;
-  const approvedUpcoming = leaveRequests
-    .filter((request) => request.status === 'approved' && dateFromValue(request.end_date).setHours(23, 59, 59) >= today.getTime())
-    .sort((a, b) => a.start_date.localeCompare(b.start_date))
-    .slice(0, 5);
-  const recentHires = useMemo(
-    () => [...employees].filter((item) => item.hire_date).sort((a, b) => b.hire_date.localeCompare(a.hire_date)).slice(0, 5),
-    [employees],
-  );
+  const approvedUpcoming = summary?.upcoming_leave || [];
+  const recentHires = summary?.recent_hires || [];
   const complianceCount = (alerts.expiring_documents?.length || 0) + (alerts.employees_missing_contracts?.length || 0);
+  const goalSummary = summary?.goals || { average_progress: 0, at_risk: 0, off_track: 0, overdue: 0 };
+  const goalAttention = (goalSummary.at_risk || 0) + (goalSummary.off_track || 0);
 
   const quickActions = [
     hasPermission('leave:create') && { to: '/leave', label: 'Request time off', detail: 'Submit a new request', icon: CalendarDays },
     hasPermission('employee:create') && { to: '/employees', label: 'Add a person', detail: 'Create an employee record', icon: UserPlus },
     hasPermission('document:upload') && { to: '/documents', label: 'Upload a file', detail: 'Add a policy or document', icon: FileText },
     hasPermission('onboarding:assign') && { to: '/tasks', label: 'Review tasks', detail: 'Open assigned work', icon: CheckCircle2 },
+    hasPermission('goal:read') && { to: '/goals', label: 'Review goals', detail: 'Check performance progress', icon: Target },
   ].filter(Boolean);
 
   const PrimaryActionIcon = quickActions[0]?.icon;
@@ -127,17 +118,18 @@ export default function Dashboard() {
         title={`${dayPart(today)}, ${user?.first_name || 'there'}`}
         description={`${formatLongDate(today)}. Here is what is happening across your organization.`}
         actions={quickActions[0] && (
-          <Link to={quickActions[0].to}><Button>{PrimaryActionIcon && <PrimaryActionIcon size={16} />}{quickActions[0].label}</Button></Link>
+          <Button as={Link} to={quickActions[0].to}>{PrimaryActionIcon && <PrimaryActionIcon size={16} />}{quickActions[0].label}</Button>
         )}
       />
 
       {error && <Alert type="warning">{error}</Alert>}
 
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <StatCard label="Total people" value={summary?.employees ?? employees.length} detail={`${activeEmployees} currently active`} icon={UsersRound} tone="blue" />
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+        <StatCard label="Total people" value={employeeTotal} detail={`${activeEmployees} currently active`} icon={UsersRound} tone="blue" />
         <StatCard label="Open tasks" value={pendingTasks} detail={`${tasks.length - pendingTasks} completed or waived`} icon={CheckCircle2} tone="violet" />
         <StatCard label="Pending time off" value={pendingLeave} detail={`${leaveSummary.approved || 0} approved requests`} icon={CalendarDays} tone="amber" />
-        <StatCard label="Workforce active" value={`${peopleHealth}%`} detail={`${employees.length - activeEmployees} not active`} icon={Network} tone="emerald" />
+        <StatCard label="Workforce active" value={`${peopleHealth}%`} detail={`${summary?.inactive_employees || 0} not active`} icon={Network} tone="emerald" />
+        <StatCard label="Goal progress" value={`${goalSummary.average_progress || 0}%`} detail={`${goalAttention} need attention`} icon={Target} tone="blue" />
       </div>
 
       <div className="grid gap-5 xl:grid-cols-[minmax(0,1.55fr)_minmax(320px,0.75fr)]">
@@ -157,19 +149,20 @@ export default function Dashboard() {
                 <EmptyState title="No upcoming time off" description="Approved requests will appear here so the team can plan ahead." icon={CalendarDays} />
               ) : (
                 <div className="divide-y divide-slate-100 rounded-lg border border-slate-200">
-                  {approvedUpcoming.map((request) => {
-                    const employee = employees.find((item) => item.id === request.employee_id);
-                    return (
-                      <div key={request.id} className="flex items-center gap-3 px-4 py-3 hover:bg-slate-50">
-                        <Avatar name={employee?.full_name || 'Employee'} size="sm" />
-                        <div className="min-w-0 flex-1">
-                          <p className="truncate text-sm font-semibold text-slate-900">{employee?.full_name || 'Employee'}</p>
-                          <p className="truncate text-xs text-slate-500">{formatDate(request.start_date)} – {formatDate(request.end_date)}</p>
-                        </div>
-                        <Badge tone="blue">{request.total_days} {request.total_days === 1 ? 'day' : 'days'}</Badge>
+                  {approvedUpcoming.map((request) => (
+                    <div key={request.id} className="flex items-center gap-3 px-4 py-3 hover:bg-slate-50">
+                      <Avatar
+                        name={request.employee_name || 'Employee'}
+                        size="sm"
+                        src={request.employee_profile_photo_url}
+                      />
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-semibold text-slate-900">{request.employee_name || 'Employee'}</p>
+                        <p className="truncate text-xs text-slate-500">{formatDate(request.start_date)} – {formatDate(request.end_date)}</p>
                       </div>
-                    );
-                  })}
+                      <Badge tone="blue">{request.total_days} {request.total_days === 1 ? 'day' : 'days'}</Badge>
+                    </div>
+                  ))}
                 </div>
               )}
             </div>
@@ -214,6 +207,7 @@ export default function Dashboard() {
                 { to: '/leave', label: 'Time-off approvals', value: pendingLeave, icon: CalendarDays },
                 { to: '/tasks', label: 'Open onboarding tasks', value: pendingTasks, icon: CheckCircle2 },
                 { to: '/documents', label: 'Compliance items', value: complianceCount, icon: FileWarning },
+                { to: '/goals', label: 'Goals needing attention', value: goalAttention, icon: Target },
               ].map(({ to, label, value, icon: Icon }) => (
                 <Link key={label} to={to} className="flex items-center gap-3 px-3.5 py-3 hover:bg-slate-50">
                   <Icon size={17} className="text-slate-500" />

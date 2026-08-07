@@ -1,18 +1,25 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { CheckCircle2, CircleDashed, ClipboardCheck, Clock3 } from 'lucide-react';
 
-import { onboardingApi } from '../api/onboardingApi';
+import { onboardingApi } from '../api/onboardingApi.js';
+import OnboardingAdminPanel from '../components/onboarding/OnboardingAdminPanel.jsx';
 import OnboardingChecklist from '../components/onboarding/OnboardingChecklist.jsx';
 import Alert from '../components/ui/Alert.jsx';
 import PageHeader from '../components/ui/PageHeader.jsx';
 import StatCard from '../components/ui/StatCard.jsx';
+import Tabs from '../components/ui/Tabs.jsx';
+import { useToast } from '../context/ToastContext.jsx';
+import usePermissions from '../hooks/usePermissions.js';
 
 export default function Onboarding() {
   const [tasks, setTasks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [completingId, setCompletingId] = useState('');
   const [error, setError] = useState('');
-  const [message, setMessage] = useState('');
+  const [view, setView] = useState('my-work');
+  const { hasPermission } = usePermissions();
+  const canAdminister = hasPermission('onboarding:create');
+  const toast = useToast();
 
   const load = useCallback(async () => {
     setError('');
@@ -26,9 +33,7 @@ export default function Onboarding() {
     }
   }, []);
 
-  useEffect(() => {
-    load();
-  }, [load]);
+  useEffect(() => { load(); }, [load]);
 
   const metrics = useMemo(() => ({
     completed: tasks.filter((task) => task.status === 'completed').length,
@@ -39,10 +44,9 @@ export default function Onboarding() {
   const complete = async (id) => {
     setCompletingId(id);
     setError('');
-    setMessage('');
     try {
       await onboardingApi.complete(id);
-      setMessage('Onboarding task completed.');
+      toast.success('Onboarding task completed.');
       await load();
     } catch (err) {
       setError(err.error?.message || 'The onboarding task could not be completed.');
@@ -54,26 +58,49 @@ export default function Onboarding() {
   return (
     <div className="space-y-6">
       <PageHeader
-        eyebrow="My work"
+        eyebrow="Employee journey"
         title="Onboarding"
-        description="Review assigned new-hire activities, due dates and completion progress in one place."
+        description="Complete assigned new-hire work and administer reusable onboarding plans from one workflow."
       />
 
-      {error && <Alert type="error">{error}</Alert>}
-      {message && <Alert type="success">{message}</Alert>}
+      {canAdminister && (
+        <Tabs
+          ariaLabel="Onboarding views"
+          idPrefix="onboarding-views"
+          value={view}
+          onChange={setView}
+          items={[
+            { value: 'my-work', label: 'My onboarding work', count: metrics.open },
+            { value: 'administration', label: 'Administration' },
+          ]}
+        />
+      )}
 
-      <div className="grid gap-4 md:grid-cols-3">
-        <StatCard label="Assigned" value={tasks.length} detail="Tasks in your checklist" icon={ClipboardCheck} tone="blue" loading={loading} />
-        <StatCard label="Open" value={metrics.open} detail="Still requiring action" icon={CircleDashed} tone="amber" loading={loading} />
-        <StatCard label="Completed" value={metrics.completed} detail={metrics.overdue ? `${metrics.overdue} overdue` : 'No overdue tasks'} icon={metrics.overdue ? Clock3 : CheckCircle2} tone={metrics.overdue ? 'rose' : 'emerald'} loading={loading} />
-      </div>
-
-      <OnboardingChecklist
-        tasks={tasks}
-        loading={loading}
-        completingId={completingId}
-        onComplete={complete}
-      />
+      <section
+        id={canAdminister ? `onboarding-views-panel-${view}` : undefined}
+        role={canAdminister ? 'tabpanel' : undefined}
+        aria-labelledby={canAdminister ? `onboarding-views-tab-${view}` : undefined}
+        tabIndex={canAdminister ? 0 : undefined}
+      >
+        {view === 'administration' && canAdminister ? (
+          <OnboardingAdminPanel />
+        ) : (
+          <>
+            {error && <Alert type="error">{error}</Alert>}
+            <div className="grid gap-4 md:grid-cols-3">
+            <StatCard label="Assigned" value={tasks.length} detail="Tasks in your checklist" icon={ClipboardCheck} tone="blue" loading={loading} />
+            <StatCard label="Open" value={metrics.open} detail="Still requiring action" icon={CircleDashed} tone="amber" loading={loading} />
+            <StatCard label="Completed" value={metrics.completed} detail={metrics.overdue ? `${metrics.overdue} overdue` : 'No overdue tasks'} icon={metrics.overdue ? Clock3 : CheckCircle2} tone={metrics.overdue ? 'rose' : 'emerald'} loading={loading} />
+            </div>
+            <OnboardingChecklist
+              tasks={tasks}
+              loading={loading}
+              completingId={completingId}
+              onComplete={complete}
+            />
+          </>
+        )}
+      </section>
     </div>
   );
 }

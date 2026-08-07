@@ -7,3 +7,73 @@ def test_onboarding_task_completion(client, auth_headers):
     done = client.patch(f'/api/onboarding/tasks/{task_id}/complete', headers=auth_headers, json={'completion_notes': 'Done'})
     assert done.status_code == 200
     assert done.get_json()['data']['status'] == 'completed'
+
+
+def test_onboarding_administration_summary_and_assignment(client, auth_headers):
+    employee = client.post(
+        '/api/employees',
+        headers=auth_headers,
+        json={
+            'employee_number': 'EMP-ADMIN-01',
+            'first_name': 'Administered',
+            'last_name': 'Hire',
+            'email': 'administered@acme.test',
+            'hire_date': '2026-08-01',
+        },
+    ).get_json()['data']
+    template = client.post(
+        '/api/onboarding/templates',
+        headers=auth_headers,
+        json={
+            'name': 'First Week Plan',
+            'description': 'A deterministic onboarding plan.',
+            'tasks': [
+                {
+                    'title': 'Complete profile',
+                    'assignee_role': 'EMPLOYEE',
+                    'due_days_after_start': 1,
+                },
+                {
+                    'title': 'Manager welcome',
+                    'assignee_role': 'MANAGER',
+                    'due_days_after_start': 2,
+                },
+            ],
+        },
+    ).get_json()['data']
+
+    assigned = client.post(
+        '/api/onboarding/assign',
+        headers=auth_headers,
+        json={
+            'employee_id': employee['id'],
+            'template_id': template['id'],
+        },
+    )
+    assert assigned.status_code == 201
+    items = assigned.get_json()['data']['items']
+    assert len(items) == 2
+    assert {item['task_title'] for item in items} == {
+        'Complete profile',
+        'Manager welcome',
+    }
+
+    summary = client.get('/api/onboarding/summary', headers=auth_headers)
+    assert summary.status_code == 200
+    assert summary.get_json()['data']['total'] == 2
+
+    listing = client.get(
+        '/api/onboarding/assignments?per_page=1',
+        headers=auth_headers,
+    )
+    assert listing.status_code == 200
+    assert listing.get_json()['data']['meta']['total'] == 2
+    assignment = listing.get_json()['data']['items'][0]
+
+    updated = client.patch(
+        f"/api/onboarding/assignments/{assignment['id']}",
+        headers=auth_headers,
+        json={'status': 'waived', 'completion_notes': 'Not required'},
+    )
+    assert updated.status_code == 200
+    assert updated.get_json()['data']['status'] == 'waived'

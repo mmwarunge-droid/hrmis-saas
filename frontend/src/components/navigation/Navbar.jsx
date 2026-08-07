@@ -1,5 +1,4 @@
 import {
-  Bell,
   Bot,
   ChevronDown,
   HelpCircle,
@@ -15,6 +14,7 @@ import { getPageTitle } from '../../config/navigation.js';
 import useAuth from '../../hooks/useAuth.js';
 import Avatar from '../ui/Avatar.jsx';
 import Button from '../ui/Button.jsx';
+import NotificationMenu from '../notifications/NotificationMenu.jsx';
 import GlobalSearch from './GlobalSearch.jsx';
 
 export default function Navbar({ onMenu }) {
@@ -22,7 +22,6 @@ export default function Navbar({ onMenu }) {
   const location = useLocation();
   const [searchOpen, setSearchOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
-  const [notificationsOpen, setNotificationsOpen] = useState(false);
   const menuRef = useRef(null);
   const title = getPageTitle(location.pathname);
 
@@ -41,7 +40,6 @@ export default function Navbar({ onMenu }) {
     const closeMenus = (event) => {
       if (!menuRef.current?.contains(event.target)) {
         setProfileOpen(false);
-        setNotificationsOpen(false);
       }
     };
     document.addEventListener('mousedown', closeMenus);
@@ -65,7 +63,7 @@ export default function Navbar({ onMenu }) {
             className="hidden h-10 min-w-0 max-w-[520px] flex-1 items-center gap-3 rounded-lg border border-slate-300 bg-slate-50 px-3 text-left text-sm text-slate-500 shadow-sm transition hover:border-slate-400 hover:bg-white md:flex"
           >
             <Search size={17} className="shrink-0" />
-            <span className="truncate">Search Kinetic</span>
+            <span className="truncate">Quick navigation</span>
             <span className="ml-auto hidden items-center gap-1 rounded border border-slate-300 bg-white px-1.5 py-0.5 text-[10px] font-semibold text-slate-500 xl:flex">⌘ K</span>
           </button>
 
@@ -76,45 +74,16 @@ export default function Navbar({ onMenu }) {
             <Link to="/ask-kinetic" className="hidden sm:block">
               <Button variant="soft" size="sm"><Bot size={16} /> <span className="hidden xl:inline">Ask Kinetic</span></Button>
             </Link>
-            <Button variant="ghost" size="sm" className="hidden px-2 md:inline-flex" aria-label="Help">
-              <HelpCircle size={18} />
-            </Button>
-            <div className="relative">
-              <Button
-                variant="ghost"
-                size="sm"
-                className="relative px-2"
-                aria-label="Notifications"
-                aria-expanded={notificationsOpen}
-                onClick={() => {
-                  setNotificationsOpen((value) => !value);
-                  setProfileOpen(false);
-                }}
-              >
-                <Bell size={18} />
-                <span className="absolute right-1.5 top-1 h-2 w-2 rounded-full bg-blue-600 ring-2 ring-white" />
+            <Link to="/help" className="hidden md:block">
+              <Button variant="ghost" size="sm" className="px-2" aria-label="Help center">
+                <HelpCircle size={18} />
               </Button>
-              {notificationsOpen && (
-                <div className="absolute right-0 top-11 w-80 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
-                  <div className="border-b border-slate-200 px-4 py-3">
-                    <p className="text-sm font-bold text-slate-900">Notifications</p>
-                    <p className="mt-0.5 text-xs text-slate-500">Updates requiring your attention appear here.</p>
-                  </div>
-                  <div className="px-4 py-8 text-center">
-                    <Bell className="mx-auto text-slate-300" size={23} />
-                    <p className="mt-2 text-sm font-semibold text-slate-700">You’re all caught up</p>
-                    <p className="mt-1 text-xs text-slate-500">No new notifications.</p>
-                  </div>
-                </div>
-              )}
-            </div>
+            </Link>
+            <NotificationMenu />
             <div className="relative ml-1 border-l border-slate-200 pl-2">
               <button
                 type="button"
-                onClick={() => {
-                  setProfileOpen((value) => !value);
-                  setNotificationsOpen(false);
-                }}
+                onClick={() => setProfileOpen((value) => !value)}
                 className="flex items-center gap-2 rounded-lg p-1 pr-1.5 text-left hover:bg-slate-100"
                 aria-expanded={profileOpen}
               >

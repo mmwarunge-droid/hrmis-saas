@@ -167,6 +167,31 @@ class User(db.Model, TimestampMixin, SoftDeleteMixin, ReprMixin):
                 if self.mfa_reset_at
                 else None
             ),
+            'last_login_at': (
+                self.last_login_at.isoformat()
+                if self.last_login_at
+                else None
+            ),
+            'created_at': (
+                self.created_at.isoformat()
+                if self.created_at
+                else None
+            ),
+            'updated_at': (
+                self.updated_at.isoformat()
+                if self.updated_at
+                else None
+            ),
             'roles': self.role_names,
             'permissions': self.permission_codes,
+            'employee_profile': (
+                {
+                    'id': str(self.employee_profile.id),
+                    'employee_number': self.employee_profile.employee_number,
+                    'full_name': self.employee_profile.full_name,
+                    'employment_status': self.employee_profile.employment_status,
+                }
+                if self.employee_profile
+                else None
+            ),
         }

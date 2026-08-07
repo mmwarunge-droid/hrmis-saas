@@ -35,7 +35,7 @@ function SidebarContent({ collapsed, mobile, onClose, onToggleCollapsed }) {
 
       {isSuperAdmin && !compact && (
         <div className="border-b border-slate-200 p-3">
-          <label htmlFor={mobile ? 'active-organization-mobile' : 'active-organization'} className="block text-[10px] font-bold uppercase tracking-[0.13em] text-slate-400">
+          <label htmlFor={mobile ? 'active-organization-mobile' : 'active-organization'} className="block text-[10px] font-bold uppercase tracking-[0.13em] text-slate-600">
             Active organization
           </label>
           <select
@@ -56,7 +56,7 @@ function SidebarContent({ collapsed, mobile, onClose, onToggleCollapsed }) {
         <div className="space-y-5">
           {groups.map((group) => (
             <div key={group.label}>
-              {!compact && <p className="mb-1.5 px-2 text-[10px] font-bold uppercase tracking-[0.14em] text-slate-400">{group.label}</p>}
+              {!compact && <p className="mb-1.5 px-2 text-[10px] font-bold uppercase tracking-[0.14em] text-slate-600">{group.label}</p>}
               <div className="space-y-0.5">
                 {group.links.map(({ to, label, icon: Icon }) => (
                   <NavLink

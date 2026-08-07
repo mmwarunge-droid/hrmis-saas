@@ -52,3 +52,14 @@
 - Use Alembic downgrade only for reversible schema changes.
 - Prefer forward fixes for data migrations.
 - Restore database from managed backup if data integrity is compromised.
+
+## Deterministic demo regression
+
+```bash
+cd backend
+flask --app run.py demo-reset --yes --as-of 2026-08-06
+flask --app run.py demo-status --as-of 2026-08-06
+pytest -q app/tests/test_demo_seed.py
+```
+
+Confirm the manifest reports 42 employees, 40 documents, 320 attendance records, 10 leave requests, 15 onboarding assignments and 9 goals. Confirm an unrelated tenant survives reset and production mode rejects every mutating demo command. See `docs/DEMO_ENVIRONMENT.md` for the role matrix and presentation checklist.

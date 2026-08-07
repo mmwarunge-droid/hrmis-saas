@@ -23,6 +23,7 @@ const TENANT_SCOPED_ROUTES = [
   '/attendance',
   '/tasks',
   '/onboarding',
+  '/goals',
 ];
 
 function isTenantScopedRoute(pathname) {
@@ -97,6 +98,7 @@ export default function DashboardLayout() {
 
   return (
     <div className="min-h-screen bg-[#f4f6f8]">
+      <a href="#main-content" className="kinetic-skip-link">Skip to main content</a>
       <Sidebar
         open={sidebarOpen}
         onClose={() => setSidebarOpenPath(null)}
@@ -105,7 +107,7 @@ export default function DashboardLayout() {
       />
       <div className={`min-h-screen transition-[padding] duration-200 ${sidebarCollapsed ? 'lg:pl-[76px]' : 'lg:pl-[236px]'}`}>
         <Navbar onMenu={() => setSidebarOpenPath(location.pathname)} />
-        <main className="mx-auto max-w-[1540px] p-4 md:p-5 lg:p-6">
+        <main id="main-content" tabIndex={-1} className="mx-auto max-w-[1540px] p-4 md:p-5 lg:p-6">
           {content}
         </main>
       </div>

@@ -17,6 +17,7 @@ import {
 
 vi.mock('../api/tenantApi.js', () => ({
   tenantApi: {
+    options: vi.fn(),
     list: vi.fn(),
   },
 }));
@@ -74,7 +75,7 @@ function renderProvider(user) {
 beforeEach(() => {
   sessionStorage.clear();
   vi.clearAllMocks();
-  tenantApi.list.mockResolvedValue({
+  tenantApi.options.mockResolvedValue({
     data: {
       items: tenants,
     },
@@ -137,7 +138,7 @@ test('tenant-bound users use their assigned tenant without storage', async () =>
   });
 
   expect(await screen.findByText('tenant-2:0')).toBeInTheDocument();
-  expect(tenantApi.list).not.toHaveBeenCalled();
+  expect(tenantApi.options).not.toHaveBeenCalled();
   expect(
     sessionStorage.getItem(ACTIVE_TENANT_STORAGE_KEY),
   ).toBeNull();
