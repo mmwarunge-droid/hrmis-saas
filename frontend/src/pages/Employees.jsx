@@ -428,14 +428,34 @@ export default function Employees() {
         open={open}
         onClose={() => setOpen(false)}
         size="xl"
+        footer={
+          <>
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => setOpen(false)}
+              disabled={saving}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              form="create-employee-form"
+              disabled={saving}
+              className="min-w-36"
+            >
+              {saving ? 'Saving...' : 'Save employee'}
+            </Button>
+          </>
+        }
       >
         <EmployeeForm
+          formId="create-employee-form"
+          showActions={false}
           onSubmit={create}
           loading={saving}
           employees={employeeOptions}
           departments={departments}
-          onCancel={() => setOpen(false)}
-          stickyActions
         />
       </Modal>
       <Modal title="Change department" description="This change is applied to every selected employee." open={transferOpen} onClose={() => setTransferOpen(false)}>
