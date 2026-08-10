@@ -6,7 +6,13 @@ class RegisterSchema(Schema):
     email = fields.Email(required=True)
     first_name = fields.Str(required=True, validate=validate.Length(min=1, max=120))
     last_name = fields.Str(required=True, validate=validate.Length(min=1, max=120))
-    password = fields.Str(required=True, load_only=True, validate=validate.Length(min=10, max=128))
+    # Deprecated compatibility input. The secure invite flow ignores it.
+    password = fields.Str(
+        required=False,
+        allow_none=True,
+        load_only=True,
+        validate=validate.Length(min=10, max=128),
+    )
     roles = fields.List(fields.Str(), required=False)
 
 
@@ -30,6 +36,21 @@ class ResetPasswordSchema(Schema):
 
 class VerifyEmailSchema(Schema):
     token = fields.Str(required=True, validate=validate.Length(min=20, max=512))
+
+
+class AccountInvitationTokenSchema(Schema):
+    token = fields.Str(
+        required=True,
+        validate=validate.Length(min=20, max=512),
+    )
+
+
+class AcceptAccountInvitationSchema(AccountInvitationTokenSchema):
+    password = fields.Str(
+        required=True,
+        load_only=True,
+        validate=validate.Length(min=10, max=128),
+    )
 
 
 class MfaChallengeSchema(Schema):

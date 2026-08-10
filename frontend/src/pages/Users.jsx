@@ -6,6 +6,8 @@ import {
 } from 'react';
 import {
   KeyRound,
+  MailCheck,
+  Send,
   Pencil,
   Plus,
   Search,
@@ -58,6 +60,7 @@ export default function Users() {
   const [summary, setSummary] = useState({
     total: 0,
     active: 0,
+    invited: 0,
     verified: 0,
     mfa_enabled: 0,
     privileged: 0,
@@ -82,6 +85,7 @@ export default function Users() {
   const [open, setOpen] = useState(false);
   const [selectedUser, setSelectedUser] = useState(null);
   const [saving, setSaving] = useState(false);
+  const [resendingId, setResendingId] = useState(null);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const { user } = useAuth();
@@ -171,14 +175,34 @@ export default function Users() {
     try {
       const response = await userApi.create(payload);
       setOpen(false);
+      const profileText = response.data.employee_profile
+        ? ' with an employee profile'
+        : '';
       setSuccess(
-        `${response.data.full_name} was created${response.data.employee_profile ? ' with an employee profile' : ''}.`,
+        response.data.invitation?.delivery === 'sent'
+          ? `${response.data.full_name} was created${profileText}. A secure activation invitation was sent to ${response.data.email}.`
+          : `${response.data.full_name} was created${profileText}, but the activation email could not be delivered. Use Resend invitation from the user row.`,
       );
       await refresh();
     } catch (err) {
       setError(err.error?.message || 'User creation failed');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const resendInvitation = async (account) => {
+    setResendingId(account.id);
+    setError('');
+    setSuccess('');
+    try {
+      await userApi.resendInvitation(account.id);
+      setSuccess(`A new activation invitation was sent to ${account.email}.`);
+      await refresh();
+    } catch (err) {
+      setError(err.error?.message || 'Invitation could not be resent');
+    } finally {
+      setResendingId(null);
     }
   };
 
@@ -296,11 +320,21 @@ export default function Users() {
       key: 'status',
       label: 'Status',
       sortable: true,
-      render: (row) => (
-        <Badge tone={row.is_active ? 'green' : 'red'}>
-          {row.is_active ? 'Active' : 'Inactive'}
-        </Badge>
-      ),
+      render: (row) => {
+        const accountStatus = row.account_status
+          || (row.is_active ? 'active' : 'suspended');
+        const tone = accountStatus === 'active'
+          ? 'green'
+          : accountStatus === 'invited'
+            ? 'amber'
+            : 'red';
+        const label = accountStatus === 'invited'
+          ? 'Invited'
+          : accountStatus === 'active'
+            ? 'Active'
+            : 'Inactive';
+        return <Badge tone={tone}>{label}</Badge>;
+      },
     },
     {
       key: 'last_login',
@@ -311,18 +345,32 @@ export default function Users() {
     ...(canUpdateUsers ? [{
       key: 'actions',
       label: '',
-      cellClassName: 'w-24 text-right',
+      cellClassName: 'min-w-44 text-right',
       render: (row) => (
         canManageAccount(row) ? (
-          <Button
-            size="xs"
-            variant="ghost"
-            onClick={() => setSelectedUser(row)}
-            aria-label={`Manage ${row.full_name}`}
-          >
-            <Pencil size={14} />
-            Manage
-          </Button>
+          <div className="flex flex-wrap justify-end gap-1">
+            {row.account_status === 'invited' && (
+              <Button
+                size="xs"
+                variant="secondary"
+                disabled={resendingId === row.id}
+                onClick={() => resendInvitation(row)}
+                aria-label={`Resend invitation to ${row.full_name}`}
+              >
+                <Send size={14} />
+                {resendingId === row.id ? 'Sending...' : 'Resend'}
+              </Button>
+            )}
+            <Button
+              size="xs"
+              variant="ghost"
+              onClick={() => setSelectedUser(row)}
+              aria-label={`Manage ${row.full_name}`}
+            >
+              <Pencil size={14} />
+              Manage
+            </Button>
+          </div>
         ) : (
           <span className="text-xs text-slate-400">Protected</span>
         )
@@ -336,8 +384,8 @@ export default function Users() {
         eyebrow="Access & identity"
         title={isSuperAdmin ? 'Platform users' : 'People access'}
         description={isSuperAdmin
-          ? 'Review identities across organizations, maintain lifecycle status and keep privileged access deliberately limited.'
-          : 'Create employee and manager accounts, maintain access roles and immediately deactivate accounts when access should end.'}
+          ? 'Review identities across organizations, send secure first-time activation invitations and keep privileged access deliberately limited.'
+          : 'Create employee and manager accounts through private activation invitations, maintain access roles and immediately deactivate accounts when access should end.'}
         actions={hasPermission('user:create') && (
           <Button variant="accent" onClick={() => setOpen(true)}>
             <Plus size={17} /> Create user
@@ -350,7 +398,7 @@ export default function Users() {
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <StatCard label="User accounts" value={summary.total} detail="Complete identity scope" icon={UsersRound} tone="blue" />
-        <StatCard label="Active users" value={summary.active} detail="Currently allowed to sign in" icon={UserCheck} tone="emerald" />
+        <StatCard label="Active users" value={summary.active} detail={`${summary.invited || 0} awaiting activation`} icon={UserCheck} tone="emerald" />
         <StatCard label="Verified identities" value={summary.verified} detail={`${summary.mfa_enabled} with MFA enabled`} icon={KeyRound} tone="blue" />
         <StatCard label="Privileged users" value={summary.privileged} detail="Review administrative access regularly" icon={ShieldCheck} tone="violet" />
       </div>
@@ -362,13 +410,13 @@ export default function Users() {
         />
       )}
 
-      <div className="rounded-xl border border-amber-200 bg-amber-50/80 px-5 py-4 text-sm text-amber-900">
+      <div className="rounded-xl border border-blue-200 bg-blue-50/80 px-5 py-4 text-sm text-blue-950">
         <div className="flex items-start gap-3">
-          <KeyRound className="mt-0.5 shrink-0" size={18} />
+          <MailCheck className="mt-0.5 shrink-0" size={18} />
           <div>
-            <p className="font-semibold">Least-privilege administration</p>
-            <p className="mt-1 text-amber-800">
-              Deactivated accounts lose active sessions immediately. Organization administrators can assign manager and employee access only.
+            <p className="font-semibold">Private first-time activation</p>
+            <p className="mt-1 text-blue-800">
+              New users receive a single-use email invitation and create their own password. Administrators never know or distribute another user’s credential.
             </p>
           </div>
         </div>
@@ -410,6 +458,7 @@ export default function Users() {
           >
             <option value="">All statuses</option>
             <option value="active">Active</option>
+            <option value="invited">Invited</option>
             <option value="inactive">Inactive</option>
           </Select>
           <Select

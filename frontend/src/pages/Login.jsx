@@ -1,6 +1,6 @@
 import { ArrowRight, Eye, EyeOff, LockKeyhole } from 'lucide-react';
 import { useState } from 'react';
-import { Link, Navigate, useNavigate } from 'react-router-dom';
+import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import Alert from '../components/ui/Alert.jsx';
 import Button from '../components/ui/Button.jsx';
 import Card from '../components/ui/Card.jsx';
@@ -10,7 +10,12 @@ import useAuth from '../hooks/useAuth';
 export default function Login() {
   const { user, login } = useAuth();
   const navigate = useNavigate();
-  const [form, setForm] = useState({ email: '', password: '' });
+  const location = useLocation();
+  const activated = new URLSearchParams(location.search).get('activated') === '1';
+  const [form, setForm] = useState(() => ({
+    email: location.state?.email || '',
+    password: '',
+  }));
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -49,6 +54,11 @@ export default function Login() {
       <h1 className="mt-5 text-3xl font-bold tracking-tight text-slate-950">Welcome back</h1>
       <p className="mt-2 text-sm leading-6 text-slate-600">Sign in to your organization’s people workspace.</p>
       <form onSubmit={submit} className="mt-7 space-y-4">
+        {activated && (
+          <Alert type="success">
+            Account activated successfully. Sign in with the password you just created.
+          </Alert>
+        )}
         {error && <Alert type="error">{error}</Alert>}
         <Input label="Work email" type="email" value={form.email} onChange={(event) => setForm({ ...form, email: event.target.value })} autoComplete="email" required />
 

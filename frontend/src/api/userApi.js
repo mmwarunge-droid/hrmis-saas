@@ -9,4 +9,5 @@ export const userApi = {
   updateRoles: (id, roles) => apiClient.patch(`/users/${id}/roles`, { roles }),
   linkEmployee: (id, employeeId) => apiClient.patch(`/users/${id}/employee-link`, { employee_id: employeeId }),
   resetMfa: (id, payload) => apiClient.post(`/users/${id}/mfa/reset`, payload),
+  resendInvitation: (id) => apiClient.post(`/users/${id}/invitation/resend`),
 };

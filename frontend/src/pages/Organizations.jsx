@@ -131,7 +131,9 @@ export default function Organizations() {
       const response = await tenantApi.provision(payload);
       setOpen(false);
       setSuccess(
-        `${response.data.organization.name} is ready. ${response.data.admin.full_name} is the organization administrator.`,
+        response.data.invitation?.delivery === 'sent'
+          ? `${response.data.organization.name} is ready. A secure activation invitation was sent to ${response.data.admin.email}.`
+          : `${response.data.organization.name} is ready, but the administrator invitation could not be delivered. Resend it from Access & users.`,
       );
       await refresh();
     } catch (err) {
@@ -309,7 +311,12 @@ export default function Organizations() {
                         <Avatar name={tenant.primary_admin.full_name} size="sm" />
                         <div className="min-w-0">
                           <p className="truncate text-sm font-semibold text-slate-900">{tenant.primary_admin.full_name}</p>
-                          <p className="truncate text-xs text-slate-500">{tenant.primary_admin.email}</p>
+                          <div className="mt-1 flex flex-wrap items-center gap-2">
+                            <p className="truncate text-xs text-slate-500">{tenant.primary_admin.email}</p>
+                            {tenant.primary_admin.account_status === 'invited' && (
+                              <Badge tone="amber">Invited</Badge>
+                            )}
+                          </div>
                         </div>
                       </div>
                     ) : (

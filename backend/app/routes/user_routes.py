@@ -5,7 +5,8 @@ from sqlalchemy import or_
 from sqlalchemy.exc import IntegrityError
 
 from app.extensions import db
-from app.models import Employee, Role, Tenant, User, UserRole
+from app.models import AccountToken, Employee, Role, Tenant, User, UserRole
+from app.models.base import utcnow
 from app.schemas.user_schema import (
     MfaAdminResetSchema,
     UserCreateSchema,
@@ -13,7 +14,11 @@ from app.schemas.user_schema import (
     UserRoleUpdateSchema,
     UserUpdateSchema,
 )
-from app.services.auth_service import register_user
+from app.services.account_recovery_service import (
+    issue_account_token,
+    send_account_invitation_email,
+)
+from app.services.auth_service import register_invited_user
 from app.services.audit_service import log_event
 from app.services.employee_service import create_employee
 from app.services.mfa_policy_service import (
@@ -27,6 +32,7 @@ from app.services.mfa_service import (
 from app.services.rbac_service import set_user_roles, validate_role_assignment
 from app.services.session_service import revoke_all_user_sessions
 from app.utils.decorators import permission_required, tenant_query
+from app.utils.email import EmailDeliveryError
 from app.utils.pagination import get_pagination, paginated_response
 from app.utils.response import fail, success
 
@@ -56,6 +62,22 @@ def _can_manage_user(user):
     return not user.has_any_role(PRIVILEGED_ROLES)
 
 
+def _invitation_data(user, account_token, delivery):
+    return {
+        'delivery': delivery,
+        'expires_at': (
+            account_token.expires_at.isoformat()
+            if account_token
+            else None
+        ),
+        'sent_at': (
+            user.invitation_sent_at.isoformat()
+            if user.invitation_sent_at
+            else None
+        ),
+    }
+
+
 def _apply_user_filters(query):
     search = request.args.get('q', '').strip().lower()
     if search:
@@ -79,7 +101,15 @@ def _apply_user_filters(query):
 
     status = request.args.get('status', '').strip().lower()
     if status == 'active':
-        query = query.filter(User.is_active.is_(True))
+        query = query.filter(
+            User.is_active.is_(True),
+            User.activation_required.is_(False),
+        )
+    elif status == 'invited':
+        query = query.filter(
+            User.is_active.is_(True),
+            User.activation_required.is_(True),
+        )
     elif status == 'inactive':
         query = query.filter(User.is_active.is_(False))
 
@@ -111,7 +141,12 @@ def _apply_user_sort(query):
         'full_name': [User.first_name, User.last_name],
         'email': [User.email],
         'organization': [Tenant.name, User.first_name, User.last_name],
-        'status': [User.is_active, User.first_name, User.last_name],
+        'status': [
+            User.is_active,
+            User.activation_required,
+            User.first_name,
+            User.last_name,
+        ],
         'verified': [User.email_verified_at, User.first_name, User.last_name],
         'mfa': [User.mfa_enabled_at, User.first_name, User.last_name],
         'last_login': [User.last_login_at, User.first_name, User.last_name],
@@ -151,7 +186,14 @@ def user_summary():
     query = _user_scope_query()
     return success({
         'total': query.count(),
-        'active': query.filter(User.is_active.is_(True)).count(),
+        'active': query.filter(
+            User.is_active.is_(True),
+            User.activation_required.is_(False),
+        ).count(),
+        'invited': query.filter(
+            User.is_active.is_(True),
+            User.activation_required.is_(True),
+        ).count(),
         'verified': query.filter(
             User.email_verified_at.is_not(None)
         ).count(),
@@ -178,13 +220,23 @@ def create_user():
         payload['tenant_id'] = current_user.tenant_id
 
     try:
-        validate_role_assignment(current_user, payload['roles'], payload.get('tenant_id'))
-        user = register_user(payload, actor=current_user, commit=False)
+        validate_role_assignment(
+            current_user,
+            payload['roles'],
+            payload.get('tenant_id'),
+        )
+        user = register_invited_user(
+            payload,
+            actor=current_user,
+            commit=False,
+        )
         employee = None
 
         if employee_payload:
             if not user.tenant_id:
-                raise ValueError('An organization is required when creating an employee profile')
+                raise ValueError(
+                    'An organization is required when creating an employee profile'
+                )
             employee_payload = {
                 **employee_payload,
                 'user_id': user.id,
@@ -192,33 +244,179 @@ def create_user():
                 'last_name': user.last_name,
                 'email': user.email,
             }
-            employee = create_employee(employee_payload, user.tenant_id, commit=False)
+            employee = create_employee(
+                employee_payload,
+                user.tenant_id,
+                commit=False,
+            )
 
-        log_event('user.create', 'User', user.id, tenant_id=user.tenant_id)
+        account_token, raw_token = issue_account_token(
+            user,
+            AccountToken.PURPOSE_ACCOUNT_INVITE,
+        )
+        log_event(
+            'user.invited',
+            'AccountToken',
+            account_token.id,
+            tenant_id=user.tenant_id,
+            actor=current_user,
+            metadata={'user_id': str(user.id)},
+        )
+        log_event(
+            'user.create',
+            'User',
+            user.id,
+            tenant_id=user.tenant_id,
+        )
         db.session.commit()
     except (ValueError, IntegrityError) as exc:
         db.session.rollback()
-        message = 'User or employee identifier is already in use' if isinstance(exc, IntegrityError) else str(exc)
+        message = (
+            'User or employee identifier is already in use'
+            if isinstance(exc, IntegrityError)
+            else str(exc)
+        )
         return fail('USER_CREATE_FAILED', message, 400)
     except Exception:
         db.session.rollback()
         raise
 
+    delivery = 'sent'
+    try:
+        send_account_invitation_email(user, raw_token)
+        user.invitation_sent_at = utcnow()
+        log_event(
+            'user.invitation_sent',
+            'User',
+            user.id,
+            tenant_id=user.tenant_id,
+            actor=current_user,
+            metadata={'account_token_id': str(account_token.id)},
+        )
+        db.session.commit()
+    except EmailDeliveryError:
+        db.session.rollback()
+        delivery = 'failed'
+        log_event(
+            'user.invitation_delivery_failed',
+            'User',
+            user.id,
+            tenant_id=user.tenant_id,
+            actor=current_user,
+            metadata={'account_token_id': str(account_token.id)},
+        )
+        db.session.commit()
+
     data = user.to_dict()
     if employee:
         data['employee_profile'] = employee.to_dict()
-    return success(data, 'User created', 201)
+    data['invitation'] = _invitation_data(
+        user,
+        account_token,
+        delivery,
+    )
+    message = (
+        'User created and invitation sent'
+        if delivery == 'sent'
+        else (
+            'User created, but the invitation email could not be delivered. '
+            'Resend the invitation from Access & users.'
+        )
+    )
+    return success(data, message, 201)
 
 
 @user_bp.get('/options')
 @jwt_required()
 @permission_required('user:read')
 def user_options():
-    query = _user_scope_query().filter(User.is_active.is_(True)).order_by(
+    query = _user_scope_query().filter(
+        User.is_active.is_(True),
+        User.activation_required.is_(False),
+    ).order_by(
         User.first_name.asc(),
         User.last_name.asc(),
     )
     return success({'items': [user.to_dict() for user in query.all()]})
+
+
+@user_bp.post('/<user_id>/invitation/resend')
+@jwt_required()
+@permission_required('user:update')
+def resend_user_invitation(user_id):
+    user = _user_scope_query().filter_by(id=user_id).first_or_404()
+    if not _can_manage_user(user):
+        return fail(
+            'PRIVILEGED_USER_PROTECTED',
+            'Only a platform administrator can manage this account',
+            403,
+        )
+    if not user.is_active or not user.activation_required:
+        return fail(
+            'INVITATION_NOT_AVAILABLE',
+            'Only active accounts awaiting activation can be reinvited',
+            409,
+        )
+
+    account_token, raw_token = issue_account_token(
+        user,
+        AccountToken.PURPOSE_ACCOUNT_INVITE,
+    )
+    log_event(
+        'user.invitation_resent',
+        'AccountToken',
+        account_token.id,
+        tenant_id=user.tenant_id,
+        actor=current_user,
+        metadata={'user_id': str(user.id)},
+    )
+    db.session.commit()
+
+    try:
+        send_account_invitation_email(user, raw_token)
+    except EmailDeliveryError:
+        log_event(
+            'user.invitation_delivery_failed',
+            'User',
+            user.id,
+            tenant_id=user.tenant_id,
+            actor=current_user,
+            metadata={
+                'account_token_id': str(account_token.id),
+                'trigger': 'resend',
+            },
+        )
+        db.session.commit()
+        return fail(
+            'EMAIL_DELIVERY_FAILED',
+            'The invitation could not be delivered. Try again later.',
+            503,
+        )
+
+    user.invitation_sent_at = utcnow()
+    log_event(
+        'user.invitation_sent',
+        'User',
+        user.id,
+        tenant_id=user.tenant_id,
+        actor=current_user,
+        metadata={
+            'account_token_id': str(account_token.id),
+            'trigger': 'resend',
+        },
+    )
+    db.session.commit()
+    return success(
+        {
+            'user': user.to_dict(),
+            'invitation': _invitation_data(
+                user,
+                account_token,
+                'sent',
+            ),
+        },
+        'Invitation sent',
+    )
 
 
 @user_bp.get('/<user_id>')

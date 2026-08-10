@@ -50,6 +50,8 @@ def test_client_admin_provisions_access_for_existing_employee(client, app, tenan
     data = response.get_json()['data']
     assert data['user']['email'] == 'existing@acme.test'
     assert data['user']['roles'] == ['EMPLOYEE']
+    assert data['user']['account_status'] == 'invited'
+    assert data['user']['email_verified'] is False
     assert data['employee']['user_id'] == data['user']['id']
 
     with app.app_context():
@@ -57,6 +59,8 @@ def test_client_admin_provisions_access_for_existing_employee(client, app, tenan
         employee = Employee.query.filter_by(id=employee_id).one()
         assert employee.user_id == user.id
         assert user.tenant_id == tenant.id
+        assert user.activation_required is True
+        assert user.invitation_sent_at is not None
         assert AuditLog.query.filter_by(action='employee.access_provisioned').count() == 1
 
 

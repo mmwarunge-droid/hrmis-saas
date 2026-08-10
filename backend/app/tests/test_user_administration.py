@@ -114,6 +114,7 @@ def test_user_directory_uses_complete_scope_and_server_controls(
         'verified': 20,
         'mfa_enabled': 0,
         'privileged': 1,
+        'invited': 0,
     }
 
 
@@ -218,7 +219,6 @@ def test_platform_role_assignments_respect_account_scope(app, tenant):
             'email': 'tenant-super-admin@example.test',
             'first_name': 'Tenant',
             'last_name': 'Super Admin',
-            'password': 'StrongTenantSuperPass123!',
             'roles': ['SUPER_ADMIN'],
         },
     )
@@ -234,7 +234,6 @@ def test_platform_role_assignments_respect_account_scope(app, tenant):
             'email': 'platform-employee@example.test',
             'first_name': 'Platform',
             'last_name': 'Employee',
-            'password': 'StrongPlatformEmployeePass123!',
             'roles': ['EMPLOYEE'],
         },
     )

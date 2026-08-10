@@ -1,18 +1,29 @@
 import { useState } from 'react';
-import { KeyRound, ShieldCheck } from 'lucide-react';
+import { MailCheck, ShieldCheck } from 'lucide-react';
 import Button from '../ui/Button.jsx';
-import Input from '../ui/Input.jsx';
 import Select from '../ui/Select.jsx';
 
-export default function EmployeeAccessForm({ employee, onSubmit, loading = false }) {
-  const [form, setForm] = useState({ role: 'EMPLOYEE', password: '' });
-  const update = (event) => setForm((current) => ({ ...current, [event.target.name]: event.target.value }));
+function legacySchemaNonce() {
+  const values = new Uint32Array(4);
+  globalThis.crypto?.getRandomValues?.(values);
+  return `Invite-${Array.from(values).join('-')}-${Date.now()}!`;
+}
+
+export default function EmployeeAccessForm({
+  employee,
+  onSubmit,
+  loading = false,
+}) {
+  const [role, setRole] = useState('EMPLOYEE');
 
   const submit = (event) => {
     event.preventDefault();
     onSubmit({
-      password: form.password,
-      roles: [form.role],
+      // Compatibility only for the existing employee-access request schema.
+      // The backend invitation flow deliberately ignores this value and
+      // generates an inaccessible bootstrap secret server-side.
+      password: legacySchemaNonce(),
+      roles: [role],
     });
   };
 
@@ -24,32 +35,32 @@ export default function EmployeeAccessForm({ employee, onSubmit, loading = false
             <ShieldCheck size={19} />
           </span>
           <div>
-            <h3 className="font-bold text-slate-950">Provision access for {employee.full_name}</h3>
-            <p className="mt-1 text-sm text-slate-600">The account will use {employee.email} and link directly to this employee record.</p>
+            <h3 className="font-bold text-slate-950">
+              Provision access for {employee.full_name}
+            </h3>
+            <p className="mt-1 text-sm text-slate-600">
+              The account will use {employee.email} and link directly to this
+              employee record.
+            </p>
           </div>
         </div>
       </section>
 
-      <div className="grid gap-4 md:grid-cols-2">
-        <Select label="Access role" name="role" value={form.role} onChange={update}>
-          <option value="EMPLOYEE">Employee</option>
-          <option value="MANAGER">Manager</option>
-        </Select>
-        <Input
-          label="Temporary password"
-          type="password"
-          name="password"
-          value={form.password}
-          onChange={update}
-          minLength={10}
-          autoComplete="new-password"
-          required
-        />
-      </div>
+      <Select
+        label="Access role"
+        name="role"
+        value={role}
+        onChange={(event) => setRole(event.target.value)}
+      >
+        <option value="EMPLOYEE">Employee</option>
+        <option value="MANAGER">Manager</option>
+      </Select>
 
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <p className="flex items-center gap-2 text-xs text-slate-500">
-          <KeyRound size={15} /> The employee can reset this password through the secure recovery flow.
+      <div className="flex flex-wrap items-center justify-between gap-4 rounded-lg border border-blue-100 bg-blue-50/70 px-4 py-3">
+        <p className="flex max-w-xl items-start gap-2 text-xs leading-5 text-blue-900">
+          <MailCheck size={16} className="mt-0.5 shrink-0" />
+          Kinetic will send an activation invitation to {employee.email}. The
+          employee creates their own private password before sign-in.
         </p>
         <Button variant="accent" disabled={loading}>
           {loading ? 'Provisioning...' : 'Provision access'}
