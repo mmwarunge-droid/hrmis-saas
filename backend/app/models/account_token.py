@@ -7,7 +7,12 @@ class AccountToken(db.Model, TimestampMixin, ReprMixin):
 
     PURPOSE_PASSWORD_RESET = 'password_reset'
     PURPOSE_EMAIL_VERIFICATION = 'email_verification'
-    PURPOSES = {PURPOSE_PASSWORD_RESET, PURPOSE_EMAIL_VERIFICATION}
+    PURPOSE_ACCOUNT_INVITE = 'account_invite'
+    PURPOSES = {
+        PURPOSE_PASSWORD_RESET,
+        PURPOSE_EMAIL_VERIFICATION,
+        PURPOSE_ACCOUNT_INVITE,
+    }
 
     id = db.Column(GUID(), primary_key=True, default=uuid_pk)
     tenant_id = db.Column(GUID(), db.ForeignKey('tenants.id', ondelete='CASCADE'), nullable=True, index=True)
@@ -21,7 +26,7 @@ class AccountToken(db.Model, TimestampMixin, ReprMixin):
 
     __table_args__ = (
         db.CheckConstraint(
-            "purpose IN ('password_reset','email_verification')",
+            "purpose IN ('password_reset','email_verification','account_invite')",
             name='ck_account_tokens_purpose',
         ),
         db.Index(

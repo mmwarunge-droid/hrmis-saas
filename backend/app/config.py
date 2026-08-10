@@ -148,6 +148,7 @@ class BaseConfig:
     AUTH_SUSPICIOUS_LOGIN_ENABLED = _bool_env('AUTH_SUSPICIOUS_LOGIN_ENABLED', True)
     PASSWORD_RESET_TOKEN_MINUTES = int(os.getenv('PASSWORD_RESET_TOKEN_MINUTES', '30'))
     EMAIL_VERIFICATION_TOKEN_HOURS = int(os.getenv('EMAIL_VERIFICATION_TOKEN_HOURS', '24'))
+    ACCOUNT_INVITE_TOKEN_HOURS = int(os.getenv('ACCOUNT_INVITE_TOKEN_HOURS', '48'))
     MFA_REQUIRED_ROLES = _csv_or_default(os.getenv('MFA_REQUIRED_ROLES'), ['SUPER_ADMIN', 'CLIENT_ADMIN'])
     MFA_CHALLENGE_MINUTES = int(os.getenv('MFA_CHALLENGE_MINUTES', '5'))
     MFA_MAX_CHALLENGE_ATTEMPTS = int(os.getenv('MFA_MAX_CHALLENGE_ATTEMPTS', '5'))
@@ -164,8 +165,10 @@ class BaseConfig:
     )
     PASSWORD_RESET_URL = os.getenv('PASSWORD_RESET_URL', f'{FRONTEND_URL}/reset-password')
     EMAIL_VERIFICATION_URL = os.getenv('EMAIL_VERIFICATION_URL', f'{FRONTEND_URL}/verify-email')
+    ACCOUNT_INVITE_URL = os.getenv('ACCOUNT_INVITE_URL', f'{FRONTEND_URL}/activate-account')
     MAIL_TRANSPORT = os.getenv('MAIL_TRANSPORT', 'console')
     MAIL_FROM = os.getenv('MAIL_FROM', 'no-reply@localhost')
+    MAIL_REPLY_TO = os.getenv('MAIL_REPLY_TO') or None
     MAIL_SMTP_HOST = os.getenv('MAIL_SMTP_HOST', '127.0.0.1')
     MAIL_SMTP_PORT = int(os.getenv('MAIL_SMTP_PORT', '587'))
     MAIL_SMTP_USERNAME = os.getenv('MAIL_SMTP_USERNAME') or None
@@ -193,6 +196,7 @@ class TestingConfig(BaseConfig):
     MAIL_TRANSPORT = 'memory'
     PASSWORD_RESET_URL = 'https://frontend.test/reset-password'
     EMAIL_VERIFICATION_URL = 'https://frontend.test/verify-email'
+    ACCOUNT_INVITE_URL = 'https://frontend.test/activate-account'
     MFA_REQUIRED_ROLES = []
 
 
@@ -309,16 +313,36 @@ class ProductionConfig(BaseConfig):
             raise RuntimeError('MAIL_TRANSPORT must be smtp in production')
         if not cls.MAIL_SMTP_USE_TLS:
             raise RuntimeError('MAIL_SMTP_USE_TLS must be enabled in production')
-        mail_missing = [key for key in ('MAIL_FROM', 'MAIL_SMTP_HOST') if not os.getenv(key)]
+        mail_missing = [
+            key
+            for key in (
+                'MAIL_FROM',
+                'MAIL_SMTP_HOST',
+                'MAIL_SMTP_USERNAME',
+                'MAIL_SMTP_PASSWORD',
+            )
+            if not os.getenv(key)
+        ]
         if mail_missing:
-            raise RuntimeError(f"Missing required production email variables: {', '.join(mail_missing)}")
+            raise RuntimeError(
+                'Missing required production SMTP variables: '
+                + ', '.join(mail_missing)
+            )
         account_urls = {
             'PASSWORD_RESET_URL': cls.PASSWORD_RESET_URL,
             'EMAIL_VERIFICATION_URL': cls.EMAIL_VERIFICATION_URL,
+            'ACCOUNT_INVITE_URL': cls.ACCOUNT_INVITE_URL,
         }
-        insecure_urls = [name for name, value in account_urls.items() if not value.startswith('https://')]
+        insecure_urls = [
+            name
+            for name, value in account_urls.items()
+            if not value.startswith('https://')
+        ]
         if insecure_urls:
-            raise RuntimeError(f"Production account URLs must use HTTPS: {', '.join(insecure_urls)}")
+            raise RuntimeError(
+                'Production account URLs must use HTTPS: '
+                + ', '.join(insecure_urls)
+            )
 
 
 config_by_name = {

@@ -82,6 +82,15 @@ class User(db.Model, TimestampMixin, SoftDeleteMixin, ReprMixin):
     last_failed_login_at = db.Column(db.DateTime, nullable=True)
     locked_until = db.Column(db.DateTime, nullable=True, index=True)
     email_verified_at = db.Column(db.DateTime, nullable=True, index=True)
+    activation_required = db.Column(
+        db.Boolean,
+        nullable=False,
+        default=False,
+        index=True,
+    )
+    invited_at = db.Column(db.DateTime, nullable=True, index=True)
+    invitation_sent_at = db.Column(db.DateTime, nullable=True, index=True)
+    activated_at = db.Column(db.DateTime, nullable=True, index=True)
     mfa_secret_encrypted = db.Column(db.Text, nullable=True)
     mfa_pending_secret_encrypted = db.Column(db.Text, nullable=True)
     mfa_enabled_at = db.Column(db.DateTime, nullable=True, index=True)
@@ -114,6 +123,14 @@ class User(db.Model, TimestampMixin, SoftDeleteMixin, ReprMixin):
         remote_side=[id],
         foreign_keys=[mfa_reset_by_user_id],
     )
+
+    @property
+    def account_status(self):
+        if not self.is_active:
+            return 'suspended'
+        if self.activation_required:
+            return 'invited'
+        return 'active'
 
     @property
     def full_name(self):
@@ -154,6 +171,23 @@ class User(db.Model, TimestampMixin, SoftDeleteMixin, ReprMixin):
             'last_name': self.last_name,
             'full_name': self.full_name,
             'is_active': self.is_active,
+            'account_status': self.account_status,
+            'activation_required': self.activation_required,
+            'invited_at': (
+                self.invited_at.isoformat()
+                if self.invited_at
+                else None
+            ),
+            'invitation_sent_at': (
+                self.invitation_sent_at.isoformat()
+                if self.invitation_sent_at
+                else None
+            ),
+            'activated_at': (
+                self.activated_at.isoformat()
+                if self.activated_at
+                else None
+            ),
             'email_verified': self.email_verified_at is not None,
             'email_verified_at': self.email_verified_at.isoformat() if self.email_verified_at else None,
             'mfa_enabled': self.mfa_enabled_at is not None,

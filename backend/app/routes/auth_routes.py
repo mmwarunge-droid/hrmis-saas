@@ -10,8 +10,11 @@ from flask_jwt_extended import (
 from marshmallow import ValidationError
 
 from app.extensions import db, limiter
-from app.models import AuthSession, User
+from app.models import AccountToken, AuthSession, User
+from app.models.base import utcnow
 from app.schemas.auth_schema import (
+    AcceptAccountInvitationSchema,
+    AccountInvitationTokenSchema,
     ForgotPasswordSchema,
     LoginSchema,
     MfaChallengeSchema,
@@ -26,8 +29,11 @@ from app.schemas.auth_schema import (
 from app.services.account_recovery_service import (
     AccountTokenError,
     PasswordReuseError,
+    accept_account_invitation,
+    account_invitation_context,
     issue_account_token,
     reset_password_with_token,
+    send_account_invitation_email,
     send_email_verification_email,
     send_password_reset_email,
     token_fingerprint,
@@ -38,7 +44,7 @@ from app.services.auth_service import (
     AuthenticationError,
     authenticate,
     record_successful_login,
-    register_user,
+    register_invited_user,
 )
 from app.services.mfa_service import (
     MfaError,
@@ -77,30 +83,181 @@ auth_bp = Blueprint('auth', __name__, url_prefix='/auth')
 @auth_bp.post('/register')
 @jwt_required()
 def register():
-    """Create a user through an authenticated administrative workflow.
-
-    The initial SUPER_ADMIN must be provisioned with the ``bootstrap-admin``
-    Flask CLI command; public first-user bootstrap is intentionally disabled.
-    """
+    """Create an invite-only user through an administrative workflow."""
     if not current_user.has_permissions({'user:create'}):
-        return fail('FORBIDDEN', 'Insufficient permissions to register users', 403)
+        return fail(
+            'FORBIDDEN',
+            'Insufficient permissions to register users',
+            403,
+        )
 
     try:
         payload = RegisterSchema().load(request.get_json() or {})
         if not current_user.has_role('SUPER_ADMIN'):
             payload['tenant_id'] = current_user.tenant_id
-        validate_role_assignment(current_user, payload.get('roles') or ['EMPLOYEE'], payload.get('tenant_id'))
+        validate_role_assignment(
+            current_user,
+            payload.get('roles') or ['EMPLOYEE'],
+            payload.get('tenant_id'),
+        )
+        user = register_invited_user(
+            payload,
+            actor=current_user,
+            commit=False,
+        )
+        account_token, raw_token = issue_account_token(
+            user,
+            AccountToken.PURPOSE_ACCOUNT_INVITE,
+        )
+        log_event(
+            'user.invited',
+            'AccountToken',
+            account_token.id,
+            tenant_id=user.tenant_id,
+            actor=current_user,
+            metadata={'user_id': str(user.id), 'source': 'auth_register'},
+        )
+        db.session.commit()
     except ValidationError as err:
         return fail('VALIDATION_ERROR', err.messages, 422)
     except ValueError as exc:
-        return fail('FORBIDDEN_ROLE_ASSIGNMENT', str(exc), 403)
-
-    try:
-        user = register_user(payload, actor=current_user)
-    except ValueError as exc:
         db.session.rollback()
         return fail('REGISTRATION_FAILED', str(exc), 400)
-    return success(user.to_dict(), 'User registered', 201)
+
+    delivery = 'sent'
+    try:
+        send_account_invitation_email(user, raw_token)
+        user.invitation_sent_at = utcnow()
+        log_event(
+            'user.invitation_sent',
+            'User',
+            entity_id=user.id,
+            tenant_id=user.tenant_id,
+            actor=current_user,
+            metadata={
+                'account_token_id': str(account_token.id),
+                'source': 'auth_register',
+            },
+        )
+        db.session.commit()
+    except EmailDeliveryError:
+        db.session.rollback()
+        delivery = 'failed'
+        log_event(
+            'user.invitation_delivery_failed',
+            'User',
+            entity_id=user.id,
+            tenant_id=user.tenant_id,
+            actor=current_user,
+            metadata={
+                'account_token_id': str(account_token.id),
+                'source': 'auth_register',
+            },
+        )
+        db.session.commit()
+
+    data = user.to_dict()
+    data['invitation'] = {
+        'delivery': delivery,
+        'expires_at': account_token.expires_at.isoformat(),
+        'sent_at': (
+            user.invitation_sent_at.isoformat()
+            if user.invitation_sent_at
+            else None
+        ),
+    }
+    message = (
+        'User registered and invitation sent'
+        if delivery == 'sent'
+        else (
+            'User registered, but the invitation email could not be '
+            'delivered. Resend the invitation from Access & users.'
+        )
+    )
+    return success(data, message, 201)
+
+
+@auth_bp.post('/invitations/validate')
+@limiter.limit('20 per hour')
+def validate_account_invitation():
+    try:
+        payload = AccountInvitationTokenSchema().load(
+            request.get_json(silent=True) or {}
+        )
+        context = account_invitation_context(payload['token'])
+    except ValidationError as err:
+        return fail('VALIDATION_ERROR', err.messages, 422)
+    except AccountTokenError:
+        db.session.rollback()
+        log_event(
+            'auth.account_invitation_rejected',
+            'AccountToken',
+            actor=None,
+            metadata={
+                'token_fingerprint': token_fingerprint(
+                    (request.get_json(silent=True) or {}).get('token')
+                ),
+                'stage': 'validate',
+            },
+        )
+        db.session.commit()
+        return fail(
+            'INVALID_OR_EXPIRED_INVITATION',
+            AccountTokenError.public_message,
+            400,
+        )
+
+    return success(context, 'Invitation is valid')
+
+
+@auth_bp.post('/invitations/accept')
+@limiter.limit('10 per hour')
+def accept_invitation():
+    try:
+        payload = AcceptAccountInvitationSchema().load(
+            request.get_json(silent=True) or {}
+        )
+    except ValidationError as err:
+        return fail('VALIDATION_ERROR', err.messages, 422)
+
+    try:
+        user, revoked_count = accept_account_invitation(
+            payload['token'],
+            payload['password'],
+        )
+    except AccountTokenError:
+        db.session.rollback()
+        log_event(
+            'auth.account_invitation_rejected',
+            'AccountToken',
+            actor=None,
+            metadata={
+                'token_fingerprint': token_fingerprint(payload.get('token')),
+                'stage': 'accept',
+            },
+        )
+        db.session.commit()
+        return fail(
+            'INVALID_OR_EXPIRED_INVITATION',
+            AccountTokenError.public_message,
+            400,
+        )
+
+    log_event(
+        'auth.account_activated',
+        'User',
+        entity_id=user.id,
+        tenant_id=user.tenant_id,
+        actor=None,
+        metadata={'revoked_sessions': revoked_count},
+    )
+    db.session.commit()
+    response, status = success(
+        {'email': user.email},
+        'Kinetic account activated',
+    )
+    unset_jwt_cookies(response)
+    return response, status
 
 
 @auth_bp.post('/password/forgot')
@@ -117,6 +274,7 @@ def forgot_password():
     user = User.query.filter(
         User.email == normalized_email,
         User.is_active.is_(True),
+        User.activation_required.is_(False),
         User.deleted_at.is_(None),
     ).first()
 

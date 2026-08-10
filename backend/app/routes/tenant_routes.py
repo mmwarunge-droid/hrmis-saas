@@ -5,7 +5,7 @@ from sqlalchemy import or_
 from sqlalchemy.exc import IntegrityError
 
 from app.extensions import db
-from app.models import Role, Tenant, User, UserRole
+from app.models import AccountToken, Role, Tenant, User, UserRole
 from app.models.base import utcnow
 from app.schemas.user_schema import (
     OrganizationProvisionSchema,
@@ -13,7 +13,11 @@ from app.schemas.user_schema import (
     TenantMfaPolicySchema,
     TenantUpdateSchema,
 )
-from app.services.auth_service import register_user
+from app.services.account_recovery_service import (
+    issue_account_token,
+    send_account_invitation_email,
+)
+from app.services.auth_service import register_invited_user
 from app.services.audit_service import log_event
 from app.services.mfa_policy_service import (
     configure_tenant_mfa_policy,
@@ -22,6 +26,7 @@ from app.services.mfa_policy_service import (
 )
 from app.services.session_service import revoke_all_user_sessions
 from app.utils.decorators import permission_required
+from app.utils.email import EmailDeliveryError
 from app.utils.pagination import get_pagination
 from app.utils.response import fail, success
 
@@ -150,6 +155,12 @@ def _primary_admins(tenant_ids):
                 'full_name': user.full_name,
                 'email': user.email,
                 'is_active': user.is_active,
+                'account_status': user.account_status,
+                'invitation_sent_at': (
+                    user.invitation_sent_at.isoformat()
+                    if user.invitation_sent_at
+                    else None
+                ),
             },
         )
     return primary
@@ -273,7 +284,12 @@ def create_tenant():
 @permission_required('tenant:create')
 def provision_organization():
     if not current_user.has_role('SUPER_ADMIN'):
-        return fail('FORBIDDEN', 'Only platform super administrators can provision organization administrators', 403)
+        return fail(
+            'FORBIDDEN',
+            'Only platform super administrators can provision '
+            'organization administrators',
+            403,
+        )
 
     try:
         payload = OrganizationProvisionSchema().load(request.get_json() or {})
@@ -285,16 +301,39 @@ def provision_organization():
             **payload['admin'],
             'tenant_id': tenant.id,
             'roles': ['CLIENT_ADMIN'],
-            'email_verified_at': utcnow(),
         }
-        admin = register_user(admin_payload, actor=current_user, commit=False)
-        log_event('tenant.create', 'Tenant', tenant.id, tenant_id=tenant.id)
+        admin = register_invited_user(
+            admin_payload,
+            actor=current_user,
+            commit=False,
+        )
+        account_token, raw_token = issue_account_token(
+            admin,
+            AccountToken.PURPOSE_ACCOUNT_INVITE,
+        )
+        log_event(
+            'tenant.create',
+            'Tenant',
+            tenant.id,
+            tenant_id=tenant.id,
+        )
         log_event(
             'tenant.admin_provisioned',
             'User',
             admin.id,
             tenant_id=tenant.id,
-            metadata={'role': 'CLIENT_ADMIN'},
+            metadata={
+                'role': 'CLIENT_ADMIN',
+                'activation_required': True,
+            },
+        )
+        log_event(
+            'user.invited',
+            'AccountToken',
+            account_token.id,
+            tenant_id=tenant.id,
+            actor=current_user,
+            metadata={'user_id': str(admin.id)},
         )
         db.session.commit()
     except ValidationError as err:
@@ -302,15 +341,69 @@ def provision_organization():
         return fail('VALIDATION_ERROR', err.messages, 422)
     except (ValueError, IntegrityError) as exc:
         db.session.rollback()
-        message = 'Organization name, slug or administrator email is already in use' if isinstance(exc, IntegrityError) else str(exc)
+        message = (
+            'Organization name, slug or administrator email is already in use'
+            if isinstance(exc, IntegrityError)
+            else str(exc)
+        )
         return fail('ORGANIZATION_PROVISION_FAILED', message, 400)
     except Exception:
         db.session.rollback()
         raise
 
+    delivery = 'sent'
+    try:
+        send_account_invitation_email(admin, raw_token)
+        admin.invitation_sent_at = utcnow()
+        log_event(
+            'user.invitation_sent',
+            'User',
+            admin.id,
+            tenant_id=tenant.id,
+            actor=current_user,
+            metadata={'account_token_id': str(account_token.id)},
+        )
+        db.session.commit()
+    except EmailDeliveryError:
+        db.session.rollback()
+        delivery = 'failed'
+        log_event(
+            'user.invitation_delivery_failed',
+            'User',
+            admin.id,
+            tenant_id=tenant.id,
+            actor=current_user,
+            metadata={
+                'account_token_id': str(account_token.id),
+                'trigger': 'organization_provisioning',
+            },
+        )
+        db.session.commit()
+
+    invitation = {
+        'delivery': delivery,
+        'expires_at': account_token.expires_at.isoformat(),
+        'sent_at': (
+            admin.invitation_sent_at.isoformat()
+            if admin.invitation_sent_at
+            else None
+        ),
+    }
+    message = (
+        'Organization provisioned and administrator invitation sent'
+        if delivery == 'sent'
+        else (
+            'Organization provisioned, but the administrator invitation '
+            'could not be delivered. Resend it from Access & users.'
+        )
+    )
     return success(
-        {'organization': tenant.to_dict(), 'admin': admin.to_dict()},
-        'Organization and administrator provisioned',
+        {
+            'organization': tenant.to_dict(),
+            'admin': admin.to_dict(),
+            'invitation': invitation,
+        },
+        message,
         201,
     )
 

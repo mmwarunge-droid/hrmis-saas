@@ -1,3 +1,4 @@
+import secrets
 from datetime import timedelta
 
 from flask import current_app
@@ -41,6 +42,10 @@ def register_user(payload: dict, actor=None, commit: bool = True) -> User:
         last_name=payload['last_name'],
         password_hash=hash_password(payload['password']),
         email_verified_at=payload.get('email_verified_at'),
+        activation_required=payload.get('activation_required', False),
+        invited_at=payload.get('invited_at'),
+        invitation_sent_at=payload.get('invitation_sent_at'),
+        activated_at=payload.get('activated_at'),
     )
     db.session.add(user)
     db.session.flush()
@@ -48,6 +53,25 @@ def register_user(payload: dict, actor=None, commit: bool = True) -> User:
     if commit:
         db.session.commit()
     return user
+
+
+def register_invited_user(payload: dict, actor=None, commit: bool = True) -> User:
+    """Create an account whose credential can only be chosen by the invitee."""
+    now = utcnow()
+    invited_payload = {
+        **payload,
+        'password': secrets.token_urlsafe(48),
+        'email_verified_at': None,
+        'activation_required': True,
+        'invited_at': now,
+        'invitation_sent_at': None,
+        'activated_at': None,
+    }
+    return register_user(
+        invited_payload,
+        actor=actor,
+        commit=commit,
+    )
 
 
 def _reset_expired_lock(user: User, now) -> None:
@@ -85,6 +109,12 @@ def authenticate(email: str, password: str) -> User:
         raise AuthenticationError('invalid_credentials')
 
     _reset_expired_lock(user, now)
+
+    if user.activation_required:
+        # Preserve password-hash timing without allowing the server-generated
+        # inaccessible bootstrap secret to authenticate an invited account.
+        verify_password(password, user.password_hash)
+        raise AuthenticationError('activation_required', user=user)
 
     if user.locked_until and user.locked_until > now:
         verify_password(password, user.password_hash)

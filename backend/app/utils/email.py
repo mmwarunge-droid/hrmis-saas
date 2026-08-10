@@ -12,20 +12,47 @@ class EmailDeliveryError(RuntimeError):
     pass
 
 
-def send_email(to_address: str, subject: str, text_body: str) -> dict:
-    """Deliver an account email through the configured transport.
-
-    The memory transport is isolated to tests. The console transport is for
-    local development and intentionally logs the full message, including any
-    one-time link. Production validation requires SMTP.
-    """
-    transport = current_app.config['MAIL_TRANSPORT'].strip().lower()
-    message = {
+def _message_payload(
+    to_address: str,
+    subject: str,
+    text_body: str,
+    *,
+    html_body: str | None,
+    reply_to: str | None,
+) -> dict:
+    return {
         'to': to_address,
         'from': current_app.config['MAIL_FROM'],
         'subject': subject,
         'text': text_body,
+        'html': html_body,
+        'reply_to': reply_to,
     }
+
+
+def send_email(
+    to_address: str,
+    subject: str,
+    text_body: str,
+    *,
+    html_body: str | None = None,
+    reply_to: str | None = None,
+) -> dict:
+    """Deliver a transactional account email through the configured transport.
+
+    ``memory`` is isolated to automated tests and ``console`` is for local
+    development. Production Kinetic deployments use authenticated SMTP. This
+    keeps the account workflow provider-independent; Brevo is configured
+    through the standard SMTP settings.
+    """
+    transport = current_app.config['MAIL_TRANSPORT'].strip().lower()
+    message = _message_payload(
+        to_address,
+        subject,
+        text_body,
+        html_body=html_body,
+        reply_to=reply_to,
+    )
 
     if transport == 'memory':
         current_app.extensions.setdefault('mail_outbox', []).append(message)
@@ -44,10 +71,14 @@ def send_email(to_address: str, subject: str, text_body: str) -> dict:
         raise EmailDeliveryError(f'Unsupported email transport: {transport}')
 
     email = EmailMessage()
-    email['From'] = current_app.config['MAIL_FROM']
-    email['To'] = to_address
-    email['Subject'] = subject
-    email.set_content(text_body)
+    email['From'] = message['from']
+    email['To'] = message['to']
+    email['Subject'] = message['subject']
+    if message.get('reply_to'):
+        email['Reply-To'] = message['reply_to']
+    email.set_content(message['text'])
+    if message.get('html'):
+        email.add_alternative(message['html'], subtype='html')
 
     try:
         with smtplib.SMTP(

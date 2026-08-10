@@ -4,6 +4,7 @@ import DashboardLayout from './layouts/DashboardLayout.jsx';
 import PermissionRoute from './routes/PermissionRoute.jsx';
 import ProtectedRoute from './routes/ProtectedRoute.jsx';
 import RoleRoute from './routes/RoleRoute.jsx';
+import ActivateAccount from './pages/ActivateAccount.jsx';
 import Attendance from './pages/Attendance.jsx';
 import AskKinetic from './pages/AskKinetic.jsx';
 import EmployeeExperienceSettings from './pages/EmployeeExperienceSettings.jsx';
@@ -39,6 +40,7 @@ export default function App() {
     <Routes>
       <Route element={<AuthLayout />}>
         <Route path="/login" element={<Login />} />
+        <Route path="/activate-account" element={<ActivateAccount />} />
         <Route path="/mfa" element={<MfaChallenge />} />
         <Route path="/forgot-password" element={<ForgotPassword />} />
         <Route path="/reset-password" element={<ResetPassword />} />

@@ -46,7 +46,6 @@ def test_super_admin_provisions_organization_and_client_admin(client, app):
                 'email': 'admin@northstar.test',
                 'first_name': 'Amina',
                 'last_name': 'Otieno',
-                'password': 'StrongNorthstarPass123!',
             },
         },
     )
@@ -56,12 +55,16 @@ def test_super_admin_provisions_organization_and_client_admin(client, app):
     assert body['organization']['slug'] == 'northstar-logistics'
     assert body['admin']['roles'] == ['CLIENT_ADMIN']
     assert body['admin']['tenant_id'] == body['organization']['id']
+    assert body['admin']['account_status'] == 'invited'
+    assert body['invitation']['delivery'] == 'sent'
 
     with app.app_context():
         tenant = Tenant.query.filter_by(slug='northstar-logistics').one()
         admin = User.query.filter_by(email='admin@northstar.test').one()
         assert admin.tenant_id == tenant.id
-        assert admin.email_verified_at is not None
+        assert admin.email_verified_at is None
+        assert admin.activation_required is True
+        assert admin.invitation_sent_at is not None
         assert AuditLog.query.filter_by(action='tenant.admin_provisioned').count() == 1
 
 
@@ -79,7 +82,6 @@ def test_client_admin_creates_employee_account_and_profile(client, app, tenant, 
             'email': 'jane@acme.test',
             'first_name': 'Jane',
             'last_name': 'Doe',
-            'password': 'StrongEmployeePass123!',
             'roles': ['EMPLOYEE'],
             'employee_profile': {
                 'employee_number': 'EMP-001',
@@ -94,6 +96,8 @@ def test_client_admin_creates_employee_account_and_profile(client, app, tenant, 
     assert response.status_code == 201
     data = response.get_json()['data']
     assert data['roles'] == ['EMPLOYEE']
+    assert data['account_status'] == 'invited'
+    assert data['invitation']['delivery'] == 'sent'
     assert data['employee_profile']['employee_number'] == 'EMP-001'
 
     with app.app_context():
@@ -118,7 +122,6 @@ def test_client_admin_cannot_create_another_client_admin(client, admin_user):
             'email': 'other-admin@acme.test',
             'first_name': 'Other',
             'last_name': 'Admin',
-            'password': 'StrongOtherAdminPass123!',
             'roles': ['CLIENT_ADMIN'],
         },
     )
@@ -145,7 +148,6 @@ def test_client_admin_cannot_assign_super_admin(client, admin_user):
             'email': 'platform-admin@acme.test',
             'first_name': 'Platform',
             'last_name': 'Escalation',
-            'password': 'StrongEscalationPass123!',
             'roles': ['SUPER_ADMIN'],
         },
     )
@@ -188,7 +190,6 @@ def test_client_admin_cannot_escape_its_tenant(
             'email': 'tenant-bound@acme.test',
             'first_name': 'Tenant',
             'last_name': 'Bound',
-            'password': 'StrongTenantBoundPass123!',
             'roles': ['EMPLOYEE'],
             'employee_profile': {
                 'employee_number': 'EMP-TENANT-BOUND',
@@ -239,7 +240,6 @@ def test_client_admin_cannot_provision_organization(
                 'email': 'admin@unauthorized.test',
                 'first_name': 'Unauthorized',
                 'last_name': 'Administrator',
-                'password': 'StrongUnauthorizedPass123!',
             },
         },
     )
@@ -265,7 +265,6 @@ def test_provisioning_rolls_back_when_admin_creation_fails(
                 'email': 'platform@example.com',
                 'first_name': 'Duplicate',
                 'last_name': 'Administrator',
-                'password': 'StrongDuplicatePass123!',
             },
         },
     )

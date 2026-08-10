@@ -39,7 +39,14 @@ class UserCreateSchema(Schema):
     email = fields.Email(required=True)
     first_name = fields.Str(required=True, validate=validate.Length(min=1, max=120))
     last_name = fields.Str(required=True, validate=validate.Length(min=1, max=120))
-    password = fields.Str(required=True, validate=validate.Length(min=10, max=128), load_only=True)
+    # Backward-compatible input only. Invite provisioning never uses this as
+    # the account credential; the invitee chooses the real password.
+    password = fields.Str(
+        required=False,
+        allow_none=True,
+        load_only=True,
+        validate=validate.Length(min=10, max=128),
+    )
     roles = fields.List(fields.Str(), required=True, validate=validate.Length(min=1))
     employee_profile = fields.Nested(EmployeeAccountProfileSchema, required=False, allow_none=True)
 
@@ -48,7 +55,14 @@ class OrganizationAdminSchema(Schema):
     email = fields.Email(required=True)
     first_name = fields.Str(required=True, validate=validate.Length(min=1, max=120))
     last_name = fields.Str(required=True, validate=validate.Length(min=1, max=120))
-    password = fields.Str(required=True, validate=validate.Length(min=10, max=128), load_only=True)
+    # Accepted only for compatibility with older clients and deliberately
+    # ignored by secure invitation provisioning.
+    password = fields.Str(
+        required=False,
+        allow_none=True,
+        load_only=True,
+        validate=validate.Length(min=10, max=128),
+    )
 
 
 class OrganizationProvisionSchema(Schema):
