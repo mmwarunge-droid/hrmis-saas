@@ -82,3 +82,39 @@ def test_notification_feed_read_state_is_user_scoped(
     assert after.status_code == 200
     assert after.get_json()['data']['unread_count'] == 0
     assert after.get_json()['data']['items'] == []
+
+
+def test_actionable_notification_sends_email_and_rejects_external_url(
+    app,
+    tenant,
+    admin_user,
+):
+    from app.services.notification_service import create_notification
+
+    with app.app_context():
+        admin = db.session.merge(admin_user)
+        notification = create_notification(
+            tenant_id=tenant.id,
+            user_id=admin.id,
+            title='Contract needs attention',
+            body='Review and sign the assigned contract.',
+            notification_type='signature',
+            action_url='/signature-tasks/recipient-123',
+            commit=True,
+        )
+        assert notification.action_url == '/signature-tasks/recipient-123'
+        message = app.extensions['mail_outbox'][-1]
+        assert message['to'] == admin.email
+        assert '/signature-tasks/recipient-123' in message['text']
+
+        try:
+            create_notification(
+                tenant_id=tenant.id,
+                user_id=admin.id,
+                title='Unsafe link',
+                action_url='https://attacker.example/phish',
+            )
+        except ValueError as exc:
+            assert 'internal application path' in str(exc)
+        else:
+            raise AssertionError('External notification URLs must be rejected')

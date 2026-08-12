@@ -107,11 +107,9 @@ def refresh_document_signature_status(document):
     return document.signature_status
 
 
-def _task_url():
-    return (
-        current_app.config['FRONTEND_URL'].rstrip('/')
-        + '/tasks'
-    )
+def _task_url(recipient_id=None):
+    path = f'/signature-tasks/{recipient_id}' if recipient_id else '/tasks'
+    return current_app.config['FRONTEND_URL'].rstrip('/') + path
 
 
 def _due_text(due_at):
@@ -157,6 +155,9 @@ def _create_notification(
     user_id,
     title,
     body,
+    *,
+    action_url=None,
+    metadata=None,
 ):
     if not user_id:
         return None
@@ -167,6 +168,8 @@ def _create_notification(
         title=title,
         body=body,
         notification_type='signature',
+        action_url=action_url,
+        metadata_json=metadata or {},
     )
     db.session.add(notification)
     return notification
@@ -215,7 +218,7 @@ def _notify_recipient(
         f'your review and signature.\n\n'
         f'Document: {document.title}\n'
         f'Due: {_due_text(recipient.due_at)}\n\n'
-        f'Open Kinetic to review the task:\n{_task_url()}'
+        f'Open Kinetic to review the task:\n{_task_url(recipient.id)}'
     )
 
     _create_notification(
@@ -223,6 +226,12 @@ def _notify_recipient(
         recipient.user_id,
         title,
         body,
+        action_url=f'/signature-tasks/{recipient.id}',
+        metadata={
+            'signature_request_id': str(signature_request.id),
+            'signature_recipient_id': str(recipient.id),
+            'document_id': str(signature_request.document_id),
+        },
     )
 
     delivered = _deliver_email(
@@ -275,6 +284,8 @@ def _notify_admin(
         administrator.id,
         title,
         body,
+        action_url=f'/signature-requests?request={signature_request.id}',
+        metadata={'signature_request_id': str(signature_request.id)},
     )
 
     _deliver_email(
@@ -673,6 +684,8 @@ def create_signature_request(
                     'Complete the eID process there; Kinetic cannot '
                     'record this signature directly.'
                 ),
+                action_url=f'/signature-tasks/{recipient.id}',
+                metadata={'signature_request_id': str(signature_request.id), 'signature_recipient_id': str(recipient.id)},
             )
 
         _record_event(
@@ -796,6 +809,7 @@ def list_my_signature_tasks(user):
         SignatureRecipient.status.in_([
             'notified',
             'viewed',
+            'declined',
         ]),
     ).order_by(
         SignatureRecipient.due_at.asc(),
@@ -959,6 +973,7 @@ def _advance_sequential_request(
 def mark_recipient_signed(
     recipient,
     actor,
+    signature_name=None,
 ):
     _require_recipient_actor(recipient, actor)
 
@@ -980,8 +995,13 @@ def mark_recipient_signed(
 
     now = utcnow()
 
+    normalized_signature_name = (signature_name or actor.full_name or '').strip()
+    if len(normalized_signature_name) < 2 or len(normalized_signature_name) > 240:
+        raise ValueError('A valid typed signature name is required')
+
     recipient.status = 'signed'
     recipient.signed_at = now
+    recipient.signature_name = normalized_signature_name
 
     if not recipient.viewed_at:
         recipient.viewed_at = now
@@ -997,6 +1017,7 @@ def mark_recipient_signed(
         metadata={
             'sequence': recipient.sequence,
             'signed_at': now.isoformat(),
+            'signature_name': normalized_signature_name,
         },
     )
 
@@ -1102,6 +1123,10 @@ def decline_signature(
         },
     )
 
+    from app.services.signature_discussion_service import add_comment
+
+    add_comment(recipient, actor, reason, commit=False, notify=False)
+
     _notify_admin(
         signature_request,
         f'Signature declined: {signature_request.subject}',
@@ -1187,6 +1212,8 @@ def send_signature_reminder(
                 recipient.user_id,
                 title,
                 body,
+                action_url=f'/signature-tasks/{recipient.id}',
+                metadata={'signature_request_id': str(signature_request.id), 'signature_recipient_id': str(recipient.id)},
             )
             delivered = None
         else:
@@ -1195,13 +1222,15 @@ def send_signature_reminder(
                 f'{signature_request.document.title} is waiting '
                 f'for your signature.\n\n'
                 f'Due: {_due_text(recipient.due_at)}\n\n'
-                f'Open Kinetic to complete the task:\n{_task_url()}'
+                f'Open Kinetic to complete the task:\n{_task_url(recipient.id)}'
             )
             _create_notification(
                 signature_request.tenant_id,
                 recipient.user_id,
                 title,
                 body,
+                action_url=f'/signature-tasks/{recipient.id}',
+                metadata={'signature_request_id': str(signature_request.id), 'signature_recipient_id': str(recipient.id)},
             )
             delivered = _deliver_email(
                 signature_request,
@@ -1325,19 +1354,23 @@ def update_signature_deadline(
                 recipient.user_id,
                 title,
                 body,
+                action_url=f'/signature-tasks/{recipient.id}',
+                metadata={'signature_request_id': str(signature_request.id), 'signature_recipient_id': str(recipient.id)},
             )
         else:
             body = (
                 f'{recipient.name}, the deadline for signing '
                 f'{signature_request.document.title} has changed.'
                 f'\n\nNew due date: {_due_text(due_at)}\n\n'
-                f'Open Kinetic to review the task:\n{_task_url()}'
+                f'Open Kinetic to review the task:\n{_task_url(recipient.id)}'
             )
             _create_notification(
                 signature_request.tenant_id,
                 recipient.user_id,
                 title,
                 body,
+                action_url=f'/signature-tasks/{recipient.id}',
+                metadata={'signature_request_id': str(signature_request.id), 'signature_recipient_id': str(recipient.id)},
             )
             _deliver_email(
                 signature_request,
@@ -1501,6 +1534,8 @@ def cancel_signature_request(
             recipient.user_id,
             title,
             body,
+            action_url=f'/signature-tasks/{recipient.id}',
+            metadata={'signature_request_id': str(signature_request.id), 'signature_recipient_id': str(recipient.id)},
         )
 
         _deliver_email(

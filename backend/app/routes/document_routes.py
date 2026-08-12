@@ -176,6 +176,27 @@ def download_document(document_id):
     return send_stored_file(document.file_path, document.original_filename)
 
 
+@document_bp.get('/<document_id>/content')
+@jwt_required()
+@permission_required('document:read')
+def view_document_content(document_id):
+    document = tenant_query(Document).filter_by(
+        id=document_id,
+        deleted_at=None,
+    ).first_or_404()
+    if not can_access_document(current_user, document):
+        return fail('FORBIDDEN', 'You cannot review this document', 403)
+    response = send_stored_file(
+        document.file_path,
+        document.original_filename,
+        as_attachment=False,
+        mimetype=document.mime_type,
+    )
+    response.headers['Content-Security-Policy'] = "default-src 'none'; frame-ancestors 'self'"
+    response.headers['X-Content-Type-Options'] = 'nosniff'
+    return response
+
+
 @document_bp.patch('/<document_id>')
 @jwt_required()
 @permission_required('document:approve')

@@ -164,6 +164,22 @@ class SignatureRequestCreateSchema(Schema):
                 raise ValidationError(errors)
 
 
+class SignatureSignSchema(Schema):
+    signature_name = fields.Str(
+        required=False,
+        allow_none=True,
+        load_default=None,
+        validate=validate.Length(min=2, max=240),
+    )
+
+
+class SignatureDiscussionCommentSchema(Schema):
+    body = fields.Str(
+        required=True,
+        validate=validate.Length(min=2, max=5000),
+    )
+
+
 class SignatureDeclineSchema(Schema):
     reason = fields.Str(
         required=True,

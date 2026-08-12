@@ -40,7 +40,6 @@ describe('SignatureTaskCard', () => {
           assurance_level: 'qes',
         }}
         onViewed={onViewed}
-        onSign={onSign}
         onDecline={onDecline}
       />,
     );
@@ -50,7 +49,7 @@ describe('SignatureTaskCard', () => {
       screen.getByText('Complete signing through Dropbox Sign'),
     ).toBeInTheDocument();
     expect(
-      screen.queryByRole('button', { name: 'Confirm signature' }),
+      screen.queryByRole('link', { name: 'Review & sign' }),
     ).not.toBeInTheDocument();
     expect(
       screen.queryByRole('button', { name: 'Decline' }),
@@ -79,14 +78,12 @@ describe('SignatureTaskCard', () => {
           assurance_level: 'standard',
         }}
         onViewed={onViewed}
-        onSign={onSign}
         onDecline={onDecline}
       />,
     );
 
-    fireEvent.click(
-      screen.getByRole('button', { name: 'Confirm signature' }),
-    );
+    const signLink = screen.getByRole('link', { name: 'Review & sign' });
+    expect(signLink).toHaveAttribute('href', '/signature-tasks/recipient-1');
     fireEvent.click(
       screen.getByRole('button', { name: 'Decline' }),
     );
@@ -98,7 +95,7 @@ describe('SignatureTaskCard', () => {
       screen.getByRole('button', { name: 'Submit decline' }),
     );
 
-    expect(onSign).toHaveBeenCalledWith('recipient-1');
+    expect(onSign).not.toHaveBeenCalled();
     expect(onDecline).toHaveBeenCalledWith(
       'recipient-1',
       'Needs revision',

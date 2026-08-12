@@ -7,4 +7,5 @@ export const documentApi = {
   get: (id) => apiClient.get(`/documents/${id}`),
   update: (id, payload) => apiClient.patch(`/documents/${id}`, payload),
   downloadUrl: (id) => `${apiClient.defaults.baseURL}/documents/${id}/download`,
+  content: (id) => apiClient.get(`/documents/${id}/content`, { responseType: 'blob' }),
 };

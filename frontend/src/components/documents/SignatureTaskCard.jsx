@@ -7,7 +7,6 @@ import {
   XCircle,
 } from 'lucide-react';
 
-import { documentApi } from '../../api/documentApi';
 import Badge from '../ui/Badge.jsx';
 import Button from '../ui/Button.jsx';
 
@@ -27,11 +26,11 @@ export default function SignatureTaskCard({
   task,
   loading = false,
   onViewed,
-  onSign,
   onDecline,
 }) {
   const [showDecline, setShowDecline] = useState(false);
   const [reason, setReason] = useState('');
+  const activeTask = ['notified', 'viewed'].includes(task.status);
   const externalQes = (
     task.external_signing_required
     && task.provider === 'dropbox_sign'
@@ -111,7 +110,7 @@ export default function SignatureTaskCard({
 
         <div className="flex flex-wrap gap-2">
           <a
-            href={documentApi.downloadUrl(task.document.id)}
+            href={`/signature-tasks/${task.id}`}
             target="_blank"
             rel="noreferrer"
             onClick={externalQes
@@ -125,18 +124,17 @@ export default function SignatureTaskCard({
               : 'Review document'}
           </a>
 
-          {!externalQes && (
+          {!externalQes && activeTask && (
             <>
-              <Button
-                type="button"
-                size="sm"
-                variant="accent"
-                disabled={loading}
-                onClick={() => onSign(task.id)}
+              <a
+                href={`/signature-tasks/${task.id}`}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-700 px-3 py-2 text-xs font-semibold text-white hover:bg-blue-800"
               >
                 <Send size={14} />
-                Confirm signature
-              </Button>
+                Review & sign
+              </a>
 
               <Button
                 type="button"
@@ -151,6 +149,16 @@ export default function SignatureTaskCard({
                 Decline
               </Button>
             </>
+          )}
+          {!externalQes && task.status === 'declined' && (
+            <a
+              href={`/signature-tasks/${task.id}`}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-800 hover:bg-slate-50"
+            >
+              Open discussion
+            </a>
           )}
         </div>
       </div>

@@ -464,6 +464,11 @@ def update_user(user_id):
             'account_deactivated_by_administrator',
             commit=False,
         )
+        if user.employee_profile and user.employee_profile.employment_status not in {'terminated'}:
+            user.employee_profile.employment_status = 'inactive'
+    elif not previous_active and user.is_active:
+        if user.employee_profile and user.employee_profile.employment_status == 'inactive':
+            user.employee_profile.employment_status = 'active'
 
     log_event(
         'user.update',

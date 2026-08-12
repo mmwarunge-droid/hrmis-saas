@@ -25,15 +25,13 @@ const task = {
 };
 
 describe('SignatureTaskCard', () => {
-  it('records document review and signature confirmation', () => {
+  it('routes document review and signing to the secure task ceremony', () => {
     const onViewed = vi.fn();
-    const onSign = vi.fn();
 
     render(
       <SignatureTaskCard
         task={task}
         onViewed={onViewed}
-        onSign={onSign}
         onDecline={vi.fn()}
       />,
     );
@@ -44,14 +42,9 @@ describe('SignatureTaskCard', () => {
       }),
     );
 
-    fireEvent.click(
-      screen.getByRole('button', {
-        name: 'Confirm signature',
-      }),
-    );
-
+    const signLink = screen.getByRole('link', { name: 'Review & sign' });
+    expect(signLink).toHaveAttribute('href', '/signature-tasks/recipient-1');
     expect(onViewed).toHaveBeenCalledWith('recipient-1');
-    expect(onSign).toHaveBeenCalledWith('recipient-1');
   });
 
   it('submits a decline reason', () => {
@@ -61,7 +54,6 @@ describe('SignatureTaskCard', () => {
       <SignatureTaskCard
         task={task}
         onViewed={vi.fn()}
-        onSign={vi.fn()}
         onDecline={onDecline}
       />,
     );

@@ -83,7 +83,7 @@ def get_goal_summary():
 
 @goal_bp.post('')
 @jwt_required()
-@permission_required('goal:manage')
+@permission_required('goal:read')
 def post_goal():
     try:
         payload = GoalCreateSchema().load(request.get_json() or {})

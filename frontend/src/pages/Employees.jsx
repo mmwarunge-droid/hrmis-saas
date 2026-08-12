@@ -317,6 +317,7 @@ export default function Employees() {
               <option value="">All statuses</option>
               <option value="active">Active</option>
               <option value="probation">Probation</option>
+              <option value="inactive">Inactive</option>
               <option value="suspended">Suspended</option>
               <option value="terminated">Terminated</option>
             </Select>

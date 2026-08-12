@@ -509,6 +509,12 @@ def login():
                 },
             )
         db.session.commit()
+        if exc.reason == 'inactive_account':
+            return fail(
+                'ACCOUNT_INACTIVE',
+                "You don't have access to Kinetic. Please contact your system administrator.",
+                403,
+            )
         return fail('INVALID_CREDENTIALS', AuthenticationError.public_message, 401)
 
     ip_address = request_ip_address()
