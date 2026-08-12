@@ -62,6 +62,12 @@ def _provider_error(code, exc, status):
     return fail(code, str(exc), status)
 
 
+def _recipient_for_active_tenant(recipient_id):
+    return tenant_query(SignatureRecipient).filter_by(
+        id=recipient_id,
+    ).first_or_404()
+
+
 @signature_bp.post('')
 @jwt_required()
 @permission_required('document:approve')
@@ -183,7 +189,7 @@ def request_details(request_id):
 @signature_bp.get('/recipients/<recipient_id>')
 @jwt_required()
 def recipient_details(recipient_id):
-    recipient = SignatureRecipient.query.filter_by(id=recipient_id).first_or_404()
+    recipient = _recipient_for_active_tenant(recipient_id)
     if not can_access_signature_request(current_user, recipient.signature_request):
         return fail('FORBIDDEN', 'You cannot access this signature task', 403)
     signature_request = recipient.signature_request
@@ -213,9 +219,7 @@ def recipient_details(recipient_id):
 @signature_bp.patch('/recipients/<recipient_id>/viewed')
 @jwt_required()
 def recipient_viewed(recipient_id):
-    recipient = SignatureRecipient.query.filter_by(
-        id=recipient_id,
-    ).first_or_404()
+    recipient = _recipient_for_active_tenant(recipient_id)
 
     try:
         recipient = mark_recipient_viewed(
@@ -240,9 +244,7 @@ def recipient_viewed(recipient_id):
 @signature_bp.patch('/recipients/<recipient_id>/sign')
 @jwt_required()
 def recipient_signed(recipient_id):
-    recipient = SignatureRecipient.query.filter_by(
-        id=recipient_id,
-    ).first_or_404()
+    recipient = _recipient_for_active_tenant(recipient_id)
 
     try:
         payload = SignatureSignSchema().load(request.get_json(silent=True) or {})
@@ -271,9 +273,7 @@ def recipient_signed(recipient_id):
 @signature_bp.patch('/recipients/<recipient_id>/decline')
 @jwt_required()
 def recipient_declined(recipient_id):
-    recipient = SignatureRecipient.query.filter_by(
-        id=recipient_id,
-    ).first_or_404()
+    recipient = _recipient_for_active_tenant(recipient_id)
 
     try:
         payload = SignatureDeclineSchema().load(
@@ -310,7 +310,7 @@ def recipient_declined(recipient_id):
 def recipient_discussion(recipient_id):
     from app.services.signature_discussion_service import get_or_create_discussion
 
-    recipient = SignatureRecipient.query.filter_by(id=recipient_id).first_or_404()
+    recipient = _recipient_for_active_tenant(recipient_id)
     try:
         discussion = get_or_create_discussion(recipient, current_user)
     except PermissionError as exc:
@@ -323,7 +323,7 @@ def recipient_discussion(recipient_id):
 def recipient_discussion_comment(recipient_id):
     from app.services.signature_discussion_service import add_comment
 
-    recipient = SignatureRecipient.query.filter_by(id=recipient_id).first_or_404()
+    recipient = _recipient_for_active_tenant(recipient_id)
     try:
         payload = SignatureDiscussionCommentSchema().load(request.get_json() or {})
         discussion, comment = add_comment(recipient, current_user, payload['body'])
@@ -341,7 +341,7 @@ def recipient_discussion_comment(recipient_id):
 def recipient_discussion_resolve(recipient_id):
     from app.services.signature_discussion_service import resolve_discussion
 
-    recipient = SignatureRecipient.query.filter_by(id=recipient_id).first_or_404()
+    recipient = _recipient_for_active_tenant(recipient_id)
     try:
         discussion = resolve_discussion(recipient, current_user)
     except PermissionError as exc:
