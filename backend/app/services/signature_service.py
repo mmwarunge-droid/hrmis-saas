@@ -724,6 +724,7 @@ def can_access_signature_request(
         return False
 
     if user.has_any_role({
+        'ORGANIZATION_OWNER',
         'HR_CONSULTANT',
         'CLIENT_ADMIN',
     }):

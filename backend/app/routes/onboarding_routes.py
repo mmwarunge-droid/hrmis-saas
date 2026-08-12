@@ -34,6 +34,37 @@ from app.utils.response import fail, success
 
 onboarding_bp = Blueprint('onboarding', __name__, url_prefix='/onboarding')
 
+UNRESTRICTED_ONBOARDING_ROLES = {
+    'HR_CONSULTANT',
+    'CLIENT_ADMIN',
+    'SUPER_ADMIN',
+}
+
+
+def _onboarding_admin_scope():
+    if current_user.has_any_role(UNRESTRICTED_ONBOARDING_ROLES):
+        return 'tenant'
+    if current_user.has_role('MANAGER') and current_user.employee_profile:
+        return 'team'
+    return None
+
+
+def _forbidden_onboarding_admin():
+    return fail(
+        'FORBIDDEN',
+        'You cannot administer onboarding for this employee',
+        403,
+    )
+
+
+def _manager_can_administer(employee):
+    profile = current_user.employee_profile
+    return bool(
+        current_user.has_role('MANAGER')
+        and profile
+        and str(employee.manager_id) == str(profile.id)
+    )
+
 
 def _serialize_assignment(assignment):
     data = assignment.to_dict()
@@ -115,6 +146,10 @@ def patch_onboarding_template(template_id):
 @jwt_required()
 @permission_required('onboarding:assign')
 def assign_onboarding():
+    scope = _onboarding_admin_scope()
+    if not scope:
+        return _forbidden_onboarding_admin()
+
     try:
         payload = OnboardingAssignSchema().load(
             request.get_json() or {},
@@ -126,6 +161,15 @@ def assign_onboarding():
                 'tenant_id is required for onboarding assignments',
                 422,
             )
+        employee = Employee.query.filter_by(
+            id=payload['employee_id'],
+            tenant_id=tenant_id,
+            deleted_at=None,
+        ).first()
+        if scope == 'team' and (
+            not employee or not _manager_can_administer(employee)
+        ):
+            return _forbidden_onboarding_admin()
         assignments = assign_template(
             payload['employee_id'],
             payload['template_id'],
@@ -149,10 +193,18 @@ def assign_onboarding():
 @jwt_required()
 @permission_required('onboarding:assign')
 def list_assignments():
+    scope = _onboarding_admin_scope()
+    if not scope:
+        return _forbidden_onboarding_admin()
+
     page, per_page = get_pagination(default_per_page=15)
     query = tenant_query(EmployeeOnboardingTask).join(
         EmployeeOnboardingTask.employee,
     ).join(EmployeeOnboardingTask.task)
+    if scope == 'team':
+        query = query.filter(
+            Employee.manager_id == current_user.employee_profile.id,
+        )
     status = request.args.get('status', '').strip()
     if status:
         query = query.filter(EmployeeOnboardingTask.status == status)
@@ -180,7 +232,17 @@ def list_assignments():
 @jwt_required()
 @permission_required('onboarding:assign')
 def onboarding_summary():
+    scope = _onboarding_admin_scope()
+    if not scope:
+        return _forbidden_onboarding_admin()
+
     query = tenant_query(EmployeeOnboardingTask)
+    if scope == 'team':
+        query = query.join(
+            EmployeeOnboardingTask.employee,
+        ).filter(
+            Employee.manager_id == current_user.employee_profile.id,
+        )
     return success({
         'total': query.count(),
         'open': query.filter(
@@ -198,9 +260,17 @@ def onboarding_summary():
 @jwt_required()
 @permission_required('onboarding:assign')
 def patch_assignment(assignment_id):
+    scope = _onboarding_admin_scope()
+    if not scope:
+        return _forbidden_onboarding_admin()
+
     assignment = tenant_query(EmployeeOnboardingTask).filter_by(
         id=assignment_id,
     ).first_or_404()
+    if scope == 'team' and not _manager_can_administer(
+        assignment.employee,
+    ):
+        return _forbidden_onboarding_admin()
     try:
         payload = OnboardingAssignmentUpdateSchema().load(
             request.get_json() or {},

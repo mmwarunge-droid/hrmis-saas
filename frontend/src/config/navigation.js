@@ -55,7 +55,7 @@ export const navigationGroups = [
     links: [
       { to: '/documents', label: 'Files', icon: FileText, permission: 'document:read', keywords: 'documents contracts policies' },
       { to: '/signature-requests', label: 'Signatures', icon: FileSignature, permission: 'document:approve', keywords: 'electronic signing requests' },
-      { to: '/onboarding', label: 'Onboarding', icon: UserPlus, permissionAny: ['onboarding:create', 'onboarding:assign'], keywords: 'new hires checklist templates assignments' },
+      { to: '/onboarding', label: 'Onboarding', icon: UserPlus, permissionAny: ['onboarding:self', 'onboarding:create', 'onboarding:assign'], keywords: 'new hires checklist templates assignments' },
     ],
   },
   {

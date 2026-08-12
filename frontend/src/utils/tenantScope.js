@@ -9,6 +9,7 @@ const TENANT_SCOPED_PREFIXES = [
   '/leave',
   '/attendance',
   '/onboarding',
+  '/goals',
 ];
 
 function normalizePath(url = '') {

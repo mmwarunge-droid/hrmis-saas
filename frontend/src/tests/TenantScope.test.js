@@ -31,6 +31,15 @@ test('adds the active tenant to tenant-scoped API requests', () => {
     status: 'sent',
     tenant_id: 'tenant-1',
   });
+
+  expect(
+    withActiveTenantParams('/goals', {
+      status: 'active',
+    }),
+  ).toEqual({
+    status: 'active',
+    tenant_id: 'tenant-1',
+  });
 });
 
 test('does not override an explicit tenant or scope platform APIs', () => {
