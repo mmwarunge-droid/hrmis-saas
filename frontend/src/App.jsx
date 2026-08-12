@@ -16,6 +16,7 @@ import LeaveSetup from './pages/LeaveSetup.jsx';
 import MyProfile from './pages/MyProfile.jsx';
 import Departments from './pages/Departments.jsx';
 import Documents from './pages/Documents.jsx';
+import DocumentReview from './pages/DocumentReview.jsx';
 import EmployeeDetails from './pages/EmployeeDetails.jsx';
 import Employees from './pages/Employees.jsx';
 import ForgotPassword from './pages/ForgotPassword.jsx';
@@ -30,6 +31,7 @@ import OrgChart from './pages/OrgChart.jsx';
 import ResetPassword from './pages/ResetPassword.jsx';
 import Settings from './pages/Settings.jsx';
 import SignatureRequests from './pages/SignatureRequests.jsx';
+import SignatureTask from './pages/SignatureTask.jsx';
 import Tasks from './pages/Tasks.jsx';
 import Unauthorized from './pages/Unauthorized.jsx';
 import Users from './pages/Users.jsx';
@@ -62,6 +64,7 @@ export default function App() {
             <Route path="/departments" element={<Departments />} />
           </Route>
           <Route path="/documents" element={<Documents />} />
+          <Route path="/documents/:documentId/review" element={<DocumentReview />} />
           <Route element={<PermissionRoute permission="document:approve" />}>
             <Route
               path="/signature-requests"
@@ -77,6 +80,7 @@ export default function App() {
             <Route path="/goals" element={<Goals />} />
           </Route>
           <Route path="/tasks" element={<Tasks />} />
+          <Route path="/signature-tasks/:recipientId" element={<SignatureTask />} />
           <Route path="/onboarding" element={<Onboarding />} />
           <Route element={<PermissionRoute permission="user:read" />}>
             <Route path="/users" element={<Users />} />

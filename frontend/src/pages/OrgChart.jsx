@@ -123,6 +123,7 @@ function filterTree(nodes, query) {
 
 export default function OrgChart() {
   const [roots, setRoots] = useState([]);
+  const [vacancies, setVacancies] = useState([]);
   const [meta, setMeta] = useState({ total: 0, root_count: 0, manager_count: 0, max_depth: 0 });
   const [query, setQuery] = useState('');
   const [collapsedIds, setCollapsedIds] = useState(() => new Set());
@@ -138,6 +139,7 @@ export default function OrgChart() {
       .then((response) => {
         if (cancelled) return;
         setRoots(response.data.roots || []);
+        setVacancies(response.data.vacancies || []);
         setMeta(response.data.meta || { total: 0, root_count: 0, manager_count: 0, max_depth: 0 });
       })
       .catch((err) => {
@@ -323,6 +325,27 @@ export default function OrgChart() {
         </span>
         <span>Zoom controls affect only the chart canvas, not the rest of Kinetic.</span>
       </div>
+
+      {vacancies.length > 0 && (
+        <Card>
+          <div className="flex items-center gap-3">
+            <span className="grid h-10 w-10 place-items-center rounded-full bg-slate-100 text-slate-500"><UsersRound size={18} /></span>
+            <div>
+              <h2 className="font-bold text-slate-950">Vacant positions</h2>
+              <p className="text-sm text-slate-500">Positions whose previous employee is no longer active are kept visible without showing that former employee in the active org structure.</p>
+            </div>
+          </div>
+          <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+            {vacancies.map((vacancy) => (
+              <div key={vacancy.id} className="rounded-xl border border-dashed border-slate-300 bg-slate-50 p-4">
+                <Avatar name="Vacant position" />
+                <p className="mt-3 font-semibold text-slate-800">{vacancy.job_title || 'Vacant position'}</p>
+                <p className="text-xs text-slate-500">{vacancy.department_name || 'Department not assigned'} · Vacant</p>
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
     </div>
   );
 }

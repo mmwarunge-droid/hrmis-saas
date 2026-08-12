@@ -14,6 +14,8 @@ from app.models.emergency_contact import EmergencyContact
 from app.models.job_history import JobHistory
 from app.models.document import Document
 from app.models.signature import (
+    SignatureDiscussion,
+    SignatureDiscussionComment,
     SignatureEvent,
     SignatureRecipient,
     SignatureReminderRule,
@@ -39,7 +41,7 @@ __all__ = [
     'TenantHomepageSettings', 'OrganizationEvent', 'HomepageEssential',
     'EmergencyContact', 'JobHistory', 'Document',
     'SignatureRequest', 'SignatureRecipient',
-    'SignatureReminderRule', 'SignatureEvent',
+    'SignatureReminderRule', 'SignatureEvent', 'SignatureDiscussion', 'SignatureDiscussionComment',
     'SignatureArtifact', 'SignatureProviderEvent',
     'LeaveType', 'LeaveBalance', 'LeaveRequest', 'LeaveLedgerEntry',
     'AttendanceRecord', 'OnboardingTemplate', 'OnboardingTask', 'EmployeeOnboardingTask', 'AuditLog', 'Notification', 'Goal', 'GoalCheckIn',

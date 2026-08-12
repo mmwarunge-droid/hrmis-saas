@@ -41,7 +41,7 @@ def save_document_file(file: FileStorage, tenant_id: str) -> dict:
     }
 
 
-def send_stored_file(file_path: str, download_name: str):
+def send_stored_file(file_path: str, download_name: str, *, as_attachment=True, mimetype=None):
     path = Path(file_path)
     upload_root = Path(current_app.config['UPLOAD_FOLDER']).resolve()
     resolved = path.resolve()
@@ -49,4 +49,10 @@ def send_stored_file(file_path: str, download_name: str):
         raise ValueError('Invalid file path')
     if not resolved.exists():
         raise FileNotFoundError('File does not exist')
-    return send_file(resolved, as_attachment=True, download_name=download_name)
+    return send_file(
+        resolved,
+        as_attachment=as_attachment,
+        download_name=download_name,
+        mimetype=mimetype,
+        conditional=True,
+    )

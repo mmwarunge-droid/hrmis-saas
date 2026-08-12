@@ -212,7 +212,7 @@ def org_chart():
         .options(selectinload(Employee.department))
         .filter(
             Employee.deleted_at.is_(None),
-            Employee.employment_status != 'terminated',
+            Employee.employment_status.in_(['active', 'probation']),
         )
         .order_by(Employee.last_name.asc(), Employee.first_name.asc())
         .all()
@@ -273,8 +273,31 @@ def org_chart():
     def depth(node):
         return 1 + max((depth(child) for child in node['children']), default=0)
 
+    inactive_positions = (
+        tenant_query(Employee)
+        .options(selectinload(Employee.department))
+        .filter(
+            Employee.deleted_at.is_(None),
+            Employee.employment_status.in_(['inactive', 'suspended', 'terminated']),
+            Employee.job_title.is_not(None),
+        )
+        .order_by(Employee.job_title.asc())
+        .all()
+    )
+    vacancies = [
+        {
+            'id': f'vacant:{employee.id}',
+            'job_title': employee.job_title,
+            'department_name': employee.department.name if employee.department else None,
+            'former_employee_id': str(employee.id),
+            'status': 'vacant',
+        }
+        for employee in inactive_positions
+    ]
+
     return success({
         'roots': tree,
+        'vacancies': vacancies,
         'meta': {
             'total': len(employees),
             'root_count': len(tree),
@@ -305,7 +328,7 @@ def list_departments():
         .filter(
             Employee.tenant_id == tenant_id,
             Employee.deleted_at.is_(None),
-            Employee.employment_status != 'terminated',
+            Employee.employment_status.in_(['active', 'probation']),
             Employee.department_id.is_not(None),
         )
         .group_by(Employee.department_id)

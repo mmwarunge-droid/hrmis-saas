@@ -1,7 +1,7 @@
 from sqlalchemy import inspect as sa_inspect
 
 from app.extensions import db
-from app.models import AuthSession, Tenant, User
+from app.models import AuthSession, Employee, Tenant, User
 from app.models.base import utcnow
 from app.services.auth_service import register_user
 from app.services.rbac_service import set_user_roles
@@ -133,6 +133,19 @@ def test_deactivating_user_revokes_sessions_and_blocks_login(
             'roles': ['EMPLOYEE'],
         })
         target_id = target.id
+        employee = Employee(
+            tenant_id=tenant.id,
+            user_id=target.id,
+            employee_number='LIFE-001',
+            first_name='Lifecycle',
+            last_name='User',
+            email='lifecycle.profile@acme.test',
+            hire_date=utcnow().date(),
+            employment_status='active',
+        )
+        db.session.add(employee)
+        db.session.commit()
+        employee_id = employee.id
 
     employee_client = app.test_client()
     login = employee_client.post(
@@ -167,6 +180,8 @@ def test_deactivating_user_revokes_sessions_and_blocks_login(
         session = AuthSession.query.filter_by(user_id=target_id).one()
         assert session.revoked_at is not None
         assert session.revoked_reason == 'account_deactivated_by_administrator'
+        employee = db.session.get(Employee, employee_id)
+        assert employee.employment_status == 'inactive'
 
     blocked = app.test_client().post(
         '/api/auth/login',
@@ -175,7 +190,9 @@ def test_deactivating_user_revokes_sessions_and_blocks_login(
             'password': 'StrongLifecyclePass123!',
         },
     )
-    assert blocked.status_code == 401
+    assert blocked.status_code == 403
+    assert blocked.get_json()['error']['code'] == 'ACCOUNT_INACTIVE'
+    assert 'system administrator' in blocked.get_json()['error']['message']
 
     with app.app_context():
         admin_id = sa_inspect(admin_user).identity[0]

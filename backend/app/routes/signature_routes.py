@@ -14,6 +14,8 @@ from app.schemas.signature_schema import (
     SignatureCancelSchema,
     SignatureDeadlineUpdateSchema,
     SignatureDeclineSchema,
+    SignatureDiscussionCommentSchema,
+    SignatureSignSchema,
     SignatureRequestCreateSchema,
 )
 from app.services.signature_evidence_service import (
@@ -175,6 +177,36 @@ def request_details(request_id):
     )
 
 
+@signature_bp.get('/recipients/<recipient_id>')
+@jwt_required()
+def recipient_details(recipient_id):
+    recipient = SignatureRecipient.query.filter_by(id=recipient_id).first_or_404()
+    if not can_access_signature_request(current_user, recipient.signature_request):
+        return fail('FORBIDDEN', 'You cannot access this signature task', 403)
+    signature_request = recipient.signature_request
+    data = {
+        **recipient.to_dict(),
+        'subject': signature_request.subject,
+        'message': signature_request.message,
+        'request_status': signature_request.status,
+        'provider': signature_request.provider,
+        'provider_status': signature_request.provider_status,
+        'assurance_level': signature_request.assurance_level,
+        'external_signing_required': bool(
+            signature_request.provider
+            and signature_request.assurance_level == 'qes'
+        ),
+        'document': {
+            'id': str(signature_request.document.id),
+            'title': signature_request.document.title,
+            'document_type': signature_request.document.document_type,
+            'original_filename': signature_request.document.original_filename,
+            'mime_type': signature_request.document.mime_type,
+        },
+    }
+    return success(data)
+
+
 @signature_bp.patch('/recipients/<recipient_id>/viewed')
 @jwt_required()
 def recipient_viewed(recipient_id):
@@ -210,10 +242,14 @@ def recipient_signed(recipient_id):
     ).first_or_404()
 
     try:
+        payload = SignatureSignSchema().load(request.get_json(silent=True) or {})
         recipient = mark_recipient_signed(
             recipient,
             current_user,
+            payload['signature_name'],
         )
+    except ValidationError as err:
+        return fail('VALIDATION_ERROR', err.messages, 422)
     except PermissionError as exc:
         return fail('FORBIDDEN', str(exc), 403)
     except ValueError as exc:
@@ -264,6 +300,50 @@ def recipient_declined(recipient_id):
         recipient.to_dict(),
         'Signature request declined',
     )
+
+
+@signature_bp.get('/recipients/<recipient_id>/discussion')
+@jwt_required()
+def recipient_discussion(recipient_id):
+    from app.services.signature_discussion_service import get_or_create_discussion
+
+    recipient = SignatureRecipient.query.filter_by(id=recipient_id).first_or_404()
+    try:
+        discussion = get_or_create_discussion(recipient, current_user)
+    except PermissionError as exc:
+        return fail('FORBIDDEN', str(exc), 403)
+    return success(discussion.to_dict())
+
+
+@signature_bp.post('/recipients/<recipient_id>/discussion/comments')
+@jwt_required()
+def recipient_discussion_comment(recipient_id):
+    from app.services.signature_discussion_service import add_comment
+
+    recipient = SignatureRecipient.query.filter_by(id=recipient_id).first_or_404()
+    try:
+        payload = SignatureDiscussionCommentSchema().load(request.get_json() or {})
+        discussion, comment = add_comment(recipient, current_user, payload['body'])
+    except ValidationError as err:
+        return fail('VALIDATION_ERROR', err.messages, 422)
+    except PermissionError as exc:
+        return fail('FORBIDDEN', str(exc), 403)
+    except ValueError as exc:
+        return fail('DISCUSSION_COMMENT_FAILED', str(exc), 400)
+    return success({'discussion': discussion.to_dict(), 'comment': comment.to_dict()}, 'Comment added', 201)
+
+
+@signature_bp.patch('/recipients/<recipient_id>/discussion/resolve')
+@jwt_required()
+def recipient_discussion_resolve(recipient_id):
+    from app.services.signature_discussion_service import resolve_discussion
+
+    recipient = SignatureRecipient.query.filter_by(id=recipient_id).first_or_404()
+    try:
+        discussion = resolve_discussion(recipient, current_user)
+    except PermissionError as exc:
+        return fail('FORBIDDEN', str(exc), 403)
+    return success(discussion.to_dict(), 'Discussion resolved')
 
 
 def _manageable_request(request_id):

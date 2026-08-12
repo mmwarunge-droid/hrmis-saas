@@ -379,6 +379,7 @@ class SignatureRecipient(
     last_reminder_at = db.Column(db.DateTime, nullable=True)
 
     decline_reason = db.Column(db.Text, nullable=True)
+    signature_name = db.Column(db.String(240), nullable=True)
     provider_recipient_id = db.Column(
         db.String(255),
         nullable=True,
@@ -483,6 +484,7 @@ class SignatureRecipient(
                 else None
             ),
             'decline_reason': self.decline_reason,
+            'signature_name': self.signature_name,
             'provider_recipient_id': (
                 self.provider_recipient_id
             ),
@@ -679,4 +681,105 @@ class SignatureEvent(
                 if self.created_at
                 else None
             ),
+        }
+
+
+class SignatureDiscussion(
+    db.Model,
+    TenantMixin,
+    TimestampMixin,
+    ReprMixin,
+):
+    __tablename__ = 'signature_discussions'
+
+    id = db.Column(GUID(), primary_key=True, default=uuid_pk)
+    signature_request_id = db.Column(
+        GUID(),
+        db.ForeignKey('signature_requests.id', ondelete='CASCADE'),
+        nullable=False,
+        index=True,
+    )
+    recipient_id = db.Column(
+        GUID(),
+        db.ForeignKey('signature_recipients.id', ondelete='SET NULL'),
+        nullable=True,
+        index=True,
+    )
+    status = db.Column(db.String(20), nullable=False, default='open', index=True)
+    resolved_at = db.Column(db.DateTime, nullable=True)
+    resolved_by_user_id = db.Column(
+        GUID(), db.ForeignKey('users.id', ondelete='SET NULL'), nullable=True
+    )
+
+    signature_request = db.relationship('SignatureRequest')
+    recipient = db.relationship('SignatureRecipient')
+    resolved_by = db.relationship('User', foreign_keys=[resolved_by_user_id])
+    comments = db.relationship(
+        'SignatureDiscussionComment',
+        back_populates='discussion',
+        cascade='all, delete-orphan',
+        order_by='SignatureDiscussionComment.created_at',
+    )
+
+    __table_args__ = (
+        db.CheckConstraint(
+            "status IN ('open','resolved')",
+            name='ck_signature_discussions_status',
+        ),
+        db.UniqueConstraint(
+            'signature_request_id',
+            'recipient_id',
+            name='uq_signature_discussion_request_recipient',
+        ),
+    )
+
+    def to_dict(self, include_comments=True):
+        data = {
+            'id': str(self.id),
+            'signature_request_id': str(self.signature_request_id),
+            'recipient_id': str(self.recipient_id) if self.recipient_id else None,
+            'status': self.status,
+            'resolved_at': self.resolved_at.isoformat() if self.resolved_at else None,
+            'resolved_by_user_id': (
+                str(self.resolved_by_user_id) if self.resolved_by_user_id else None
+            ),
+        }
+        if include_comments:
+            data['comments'] = [comment.to_dict() for comment in self.comments]
+        return data
+
+
+class SignatureDiscussionComment(
+    db.Model,
+    TenantMixin,
+    TimestampMixin,
+    ReprMixin,
+):
+    __tablename__ = 'signature_discussion_comments'
+
+    id = db.Column(GUID(), primary_key=True, default=uuid_pk)
+    discussion_id = db.Column(
+        GUID(),
+        db.ForeignKey('signature_discussions.id', ondelete='CASCADE'),
+        nullable=False,
+        index=True,
+    )
+    author_user_id = db.Column(
+        GUID(), db.ForeignKey('users.id', ondelete='SET NULL'), nullable=True, index=True
+    )
+    body = db.Column(db.Text, nullable=False)
+    mentioned_user_ids_json = db.Column(db.JSON, nullable=False, default=list)
+
+    discussion = db.relationship('SignatureDiscussion', back_populates='comments')
+    author = db.relationship('User', foreign_keys=[author_user_id])
+
+    def to_dict(self):
+        return {
+            'id': str(self.id),
+            'discussion_id': str(self.discussion_id),
+            'author_user_id': str(self.author_user_id) if self.author_user_id else None,
+            'author_name': self.author.full_name if self.author else 'Former user',
+            'body': self.body,
+            'mentioned_user_ids': list(self.mentioned_user_ids_json or []),
+            'created_at': self.created_at.isoformat() if self.created_at else None,
         }

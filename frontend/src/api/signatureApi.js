@@ -14,12 +14,30 @@ export const signatureApi = {
     '/signature-requests/my-tasks',
   ),
 
+  recipient: (recipientId) => apiClient.get(
+    `/signature-requests/recipients/${recipientId}`,
+  ),
+
   viewed: (recipientId) => apiClient.patch(
     `/signature-requests/recipients/${recipientId}/viewed`,
   ),
 
-  sign: (recipientId) => apiClient.patch(
+  sign: (recipientId, signatureName) => apiClient.patch(
     `/signature-requests/recipients/${recipientId}/sign`,
+    { signature_name: signatureName },
+  ),
+
+  discussion: (recipientId) => apiClient.get(
+    `/signature-requests/recipients/${recipientId}/discussion`,
+  ),
+
+  comment: (recipientId, body) => apiClient.post(
+    `/signature-requests/recipients/${recipientId}/discussion/comments`,
+    { body },
+  ),
+
+  resolveDiscussion: (recipientId) => apiClient.patch(
+    `/signature-requests/recipients/${recipientId}/discussion/resolve`,
   ),
 
   decline: (recipientId, reason) => apiClient.patch(

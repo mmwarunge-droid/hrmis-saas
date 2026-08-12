@@ -28,6 +28,17 @@ vi.mock('../hooks/usePermissions.js', () => ({
   default: vi.fn(),
 }));
 
+vi.mock('../hooks/useAuth.js', () => ({
+  default: () => ({
+    user: {
+      employee_profile: {
+        id: 'employee-1',
+        full_name: 'Neema Hassan',
+      },
+    },
+  }),
+}));
+
 const sampleGoal = {
   id: 'goal-1',
   title: 'Increase onboarding completion',

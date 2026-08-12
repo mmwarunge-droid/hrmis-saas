@@ -18,12 +18,13 @@ export default function GoalForm({
   departments = [],
   onSubmit,
   loading = false,
+  selfEmployee = null,
 }) {
   const [form, setForm] = useState(() => ({
     title: '',
     description: '',
     owner_type: 'employee',
-    employee_id: '',
+    employee_id: selfEmployee?.id || '',
     department_id: '',
     target_value: '100',
     current_value: '0',
@@ -66,7 +67,7 @@ export default function GoalForm({
             required
           />
         </div>
-        <Select
+        {!selfEmployee && <Select
           label="Owner type"
           value={form.owner_type}
           onChange={(event) => {
@@ -79,8 +80,12 @@ export default function GoalForm({
           <option value="employee">Employee</option>
           <option value="department">Department</option>
           <option value="organization">Organization</option>
-        </Select>
-        {form.owner_type !== 'organization' ? (
+        </Select>}
+        {selfEmployee ? (
+          <div className="rounded-lg border border-blue-100 bg-blue-50 px-3 py-2 text-sm text-blue-900">
+            Personal goal for <strong>{selfEmployee.full_name}</strong>
+          </div>
+        ) : form.owner_type !== 'organization' ? (
           <Select
             label={form.owner_type === 'employee' ? 'Employee' : 'Department'}
             aria-label={form.owner_type === 'employee' ? 'Employee' : 'Department'}

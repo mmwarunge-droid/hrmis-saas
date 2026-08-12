@@ -75,7 +75,7 @@ export default function EmployeeForm({
 
   const managerOptions = employees.filter(
     (employee) => employee.id !== excludeEmployeeId
-      && employee.employment_status !== 'terminated',
+      && !['inactive', 'terminated'].includes(employee.employment_status),
   );
   const activeDepartments = departments.filter((department) => !department.archived);
 
@@ -107,6 +107,7 @@ export default function EmployeeForm({
       <Select label="Employment status" name="employment_status" value={form.employment_status} onChange={update}>
         <option value="active">Active</option>
         <option value="probation">Probation</option>
+        <option value="inactive">Inactive</option>
         <option value="suspended">Suspended</option>
         <option value="terminated">Terminated</option>
       </Select>

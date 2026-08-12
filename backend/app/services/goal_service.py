@@ -118,10 +118,26 @@ def _validate_owner(payload, tenant_id):
 def can_manage_goal(actor, goal=None, payload=None):
     if actor.has_any_role(ADMIN_ROLES):
         return True
-    if not actor.has_role('MANAGER') or not actor.employee_profile:
+    if not actor.employee_profile:
         return False
 
     employee_profile = actor.employee_profile
+    if actor.has_role('EMPLOYEE') and not actor.has_role('MANAGER'):
+        if goal:
+            return (
+                goal.owner_type == 'employee'
+                and str(goal.employee_id) == str(employee_profile.id)
+                and str(goal.created_by_user_id) == str(actor.id)
+            )
+        owner_type = payload.get('owner_type') if payload else None
+        return (
+            owner_type == 'employee'
+            and str(payload.get('employee_id')) == str(employee_profile.id)
+        )
+
+    if not actor.has_role('MANAGER'):
+        return False
+
     if goal:
         if goal.owner_type == 'employee':
             return (

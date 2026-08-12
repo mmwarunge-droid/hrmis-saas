@@ -16,6 +16,7 @@ const iconByType = {
   leave_decision: CheckCheck,
   onboarding: UserPlus,
   signature: FileText,
+  signature_discussion: FileText,
   compliance: FileText,
   goal: Target,
 };

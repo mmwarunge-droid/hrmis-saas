@@ -206,6 +206,7 @@ def test_client_admin_sends_and_employee_completes_signature_request(
             f'{recipient_id}/sign'
         ),
         headers=employee_headers,
+        json={'signature_name': signer['name']},
     )
     assert signed_response.status_code == 200
 
@@ -334,6 +335,7 @@ def test_sequential_request_notifies_next_signer_after_first_signature(
             f"{recipients[first['email']]['id']}/sign"
         ),
         headers=first_headers,
+        json={'signature_name': first['name']},
     )
     assert sign_response.status_code == 200
 

@@ -63,7 +63,7 @@ class EmployeeCreateSchema(Schema):
     national_identifier_last4 = fields.Str(required=False, allow_none=True)
     hire_date = fields.Date(required=True)
     termination_date = fields.Date(required=False, allow_none=True)
-    employment_status = fields.Str(required=False, validate=validate.OneOf(['active','probation','suspended','terminated']))
+    employment_status = fields.Str(required=False, validate=validate.OneOf(['active','probation','inactive','suspended','terminated']))
     employment_type = fields.Str(required=False, validate=validate.OneOf(['full_time','part_time','contractor','intern','temporary']))
     job_title = fields.Str(required=False, allow_none=True)
     department_id = fields.UUID(required=False, allow_none=True)

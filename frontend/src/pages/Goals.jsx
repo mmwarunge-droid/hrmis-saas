@@ -26,6 +26,7 @@ import Select from '../components/ui/Select.jsx';
 import StatCard from '../components/ui/StatCard.jsx';
 import Table from '../components/ui/Table.jsx';
 import usePermissions from '../hooks/usePermissions.js';
+import useAuth from '../hooks/useAuth.js';
 
 function badgeTone(health) {
   return {
@@ -52,7 +53,10 @@ function ownerName(goal) {
 
 export default function Goals() {
   const { hasPermission } = usePermissions();
+  const { user } = useAuth();
   const canManage = hasPermission('goal:manage');
+  const canCreateOwn = Boolean(user?.employee_profile?.id && hasPermission('goal:read'));
+  const canCreate = canManage || canCreateOwn;
   const canCheckIn = hasPermission('goal:checkin');
   const [goals, setGoals] = useState([]);
   const [summary, setSummary] = useState({
@@ -252,7 +256,7 @@ export default function Goals() {
         eyebrow="Performance"
         title="Goals & KPIs"
         description="Align organization outcomes, team priorities, and individual progress in one measurable workspace."
-        actions={canManage && (
+        actions={canCreate && (
           <Button type="button" onClick={() => setCreateOpen(true)}>
             <Plus size={16} /> Create goal
           </Button>
@@ -341,6 +345,7 @@ export default function Goals() {
         <GoalForm
           employees={employees}
           departments={departments}
+          selfEmployee={canManage ? null : user?.employee_profile}
           onSubmit={createGoal}
           loading={saving}
         />

@@ -185,3 +185,105 @@ def test_employee_goal_scope_and_check_in(app, client, tenant, admin_user):
     data = check_in.get_json()['data']
     assert data['goal']['progress_percent'] == 60.0
     assert data['check_in']['note'] == 'Customer validation completed.'
+
+
+def test_employee_can_create_personal_goal(app, client, tenant):
+    with app.app_context():
+        employee_user = register_user({
+            'tenant_id': tenant.id,
+            'email': 'self.goal@acme.test',
+            'first_name': 'Self',
+            'last_name': 'Goal',
+            'password': 'StrongPass123!',
+            'roles': ['EMPLOYEE'],
+        })
+        employee = Employee(
+            tenant_id=tenant.id,
+            user_id=employee_user.id,
+            employee_number='EMP-SELF-GOAL',
+            first_name='Self',
+            last_name='Goal',
+            email='self.goal.profile@acme.test',
+            hire_date=date.today(),
+        )
+        db.session.add(employee)
+        db.session.commit()
+        employee_id = str(employee.id)
+
+    headers = _csrf_headers(client, 'self.goal@acme.test')
+    response = client.post(
+        '/api/goals',
+        headers=headers,
+        json={
+            'title': 'Improve customer response time',
+            'description': 'Personal KPI for the quarter.',
+            'owner_type': 'employee',
+            'employee_id': employee_id,
+            'target_value': 4,
+            'current_value': 0,
+            'unit': 'hours',
+            'start_date': date.today().isoformat(),
+            'due_date': (date.today() + timedelta(days=90)).isoformat(),
+            'status': 'active',
+        },
+    )
+    assert response.status_code == 201
+    assert response.get_json()['data']['employee_id'] == employee_id
+
+
+def test_employee_cannot_create_goal_for_another_employee(app, client, tenant):
+    with app.app_context():
+        actor = register_user({
+            'tenant_id': tenant.id,
+            'email': 'self.goal.denied@acme.test',
+            'first_name': 'Self',
+            'last_name': 'Denied',
+            'password': 'StrongPass123!',
+            'roles': ['EMPLOYEE'],
+        })
+        other_user = register_user({
+            'tenant_id': tenant.id,
+            'email': 'other.goal.denied@acme.test',
+            'first_name': 'Other',
+            'last_name': 'Denied',
+            'password': 'StrongPass123!',
+            'roles': ['EMPLOYEE'],
+        })
+        actor_employee = Employee(
+            tenant_id=tenant.id,
+            user_id=actor.id,
+            employee_number='EMP-GOAL-DENY-1',
+            first_name='Self',
+            last_name='Denied',
+            email='self.goal.denied.profile@acme.test',
+            hire_date=date.today(),
+        )
+        other_employee = Employee(
+            tenant_id=tenant.id,
+            user_id=other_user.id,
+            employee_number='EMP-GOAL-DENY-2',
+            first_name='Other',
+            last_name='Denied',
+            email='other.goal.denied.profile@acme.test',
+            hire_date=date.today(),
+        )
+        db.session.add_all([actor_employee, other_employee])
+        db.session.commit()
+        other_id = str(other_employee.id)
+
+    headers = _csrf_headers(client, 'self.goal.denied@acme.test')
+    response = client.post(
+        '/api/goals',
+        headers=headers,
+        json={
+            'title': 'Unauthorized goal',
+            'owner_type': 'employee',
+            'employee_id': other_id,
+            'target_value': 10,
+            'unit': 'items',
+            'start_date': date.today().isoformat(),
+            'due_date': (date.today() + timedelta(days=30)).isoformat(),
+            'status': 'active',
+        },
+    )
+    assert response.status_code == 403
