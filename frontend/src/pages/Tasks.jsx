@@ -1,7 +1,6 @@
 import {
   useCallback,
   useEffect,
-  useMemo,
   useState,
 } from 'react';
 import {
@@ -39,7 +38,6 @@ function isOverdue(value) {
 export default function Tasks() {
   const [onboardingTasks, setOnboardingTasks] = useState([]);
   const [signatureTasks, setSignatureTasks] = useState([]);
-  const [templates, setTemplates] = useState([]);
   const [actionId, setActionId] = useState('');
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
@@ -47,7 +45,6 @@ export default function Tasks() {
   const load = useCallback(async () => {
     const results = await Promise.allSettled([
       onboardingApi.myTasks(),
-      onboardingApi.templates(),
       signatureApi.myTasks(),
     ]);
 
@@ -63,16 +60,12 @@ export default function Tasks() {
     }
 
     if (results[1].status === 'fulfilled') {
-      setTemplates(results[1].value.data.items || []);
-    }
-
-    if (results[2].status === 'fulfilled') {
       setSignatureTasks(
-        results[2].value.data.items || [],
+        results[1].value.data.items || [],
       );
     } else {
       setError(
-        results[2].reason?.error?.message
+        results[1].reason?.error?.message
         || 'Unable to load signature tasks',
       );
     }
@@ -82,30 +75,19 @@ export default function Tasks() {
     load();
   }, [load]);
 
-  const taskCatalog = useMemo(
-    () => Object.fromEntries(
-      templates.flatMap((template) => (
-        (template.tasks || []).map((task) => [
-          task.id,
-          {
-            ...task,
-            template: template.name,
-          },
-        ])
-      )),
-    ),
-    [templates],
-  );
-
   const completed = onboardingTasks.filter(
     (task) => task.status === 'completed',
   ).length;
+
+  const activeSignatureTasks = signatureTasks.filter(
+    (task) => ['notified', 'viewed'].includes(task.status),
+  );
 
   const overdue = (
     onboardingTasks.filter(
       (task) => task.status === 'overdue',
     ).length
-    + signatureTasks.filter(
+    + activeSignatureTasks.filter(
       (task) => isOverdue(task.due_at),
     ).length
   );
@@ -151,27 +133,6 @@ export default function Tasks() {
     }
   };
 
-  const signDocument = async (id) => {
-    setActionId(id);
-    setError('');
-    setSuccess('');
-
-    try {
-      await signatureApi.sign(id);
-      setSuccess(
-        'Your signature confirmation was recorded.',
-      );
-      await load();
-    } catch (err) {
-      setError(
-        err.error?.message
-        || 'Unable to record signature',
-      );
-    } finally {
-      setActionId('');
-    }
-  };
-
   const declineDocument = async (id, reason) => {
     setActionId(id);
     setError('');
@@ -212,7 +173,7 @@ export default function Tasks() {
         />
         <StatCard
           label="Documents to sign"
-          value={signatureTasks.length}
+          value={activeSignatureTasks.length}
           detail="Contracts requiring your attention"
           icon={FileSignature}
           tone="violet"
@@ -225,14 +186,6 @@ export default function Tasks() {
           tone="rose"
         />
       </div>
-
-      <Alert type="info">
-        Kinetic is currently recording the internal signing workflow,
-        recipient consent, timestamps and audit events. Embedded
-        document fields and drawn or certificate-backed electronic
-        signatures will be enabled through the signing-provider
-        integration phase.
-      </Alert>
 
       <Card>
         <div className="flex items-center gap-3">
@@ -262,7 +215,6 @@ export default function Tasks() {
                 task={task}
                 loading={actionId === task.id}
                 onViewed={markViewed}
-                onSign={signDocument}
                 onDecline={declineDocument}
               />
             ))
@@ -309,7 +261,6 @@ export default function Tasks() {
               />
             ) : (
               onboardingTasks.map((task) => {
-                const detail = taskCatalog[task.task_id];
                 const done = task.status === 'completed';
 
                 return (
@@ -331,10 +282,10 @@ export default function Tasks() {
 
                     <div className="min-w-0 flex-1">
                       <p className="font-semibold text-slate-900">
-                        {detail?.title || 'Onboarding task'}
+                        {task.task_title || 'Onboarding task'}
                       </p>
                       <p className="mt-1 text-xs text-slate-500">
-                        {detail?.template || 'Employee workflow'}
+                        {task.template_name || 'Employee workflow'}
                         {' · '}
                         Due {task.due_date || 'not set'}
                       </p>

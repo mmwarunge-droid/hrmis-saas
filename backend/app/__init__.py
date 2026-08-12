@@ -163,6 +163,16 @@ def _register_jwt_callbacks() -> None:
 
 
 def _register_error_handlers(app: Flask) -> None:
+    from app.utils.decorators import TenantContextRequired
+
+    @app.errorhandler(TenantContextRequired)
+    def handle_tenant_context_required(error):
+        return fail(
+            'TENANT_CONTEXT_REQUIRED',
+            str(error),
+            422,
+        )
+
     @app.errorhandler(HTTPException)
     def handle_http_error(error):
         code = error.name.upper().replace(' ', '_')

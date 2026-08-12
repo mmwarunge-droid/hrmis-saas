@@ -9,13 +9,13 @@ from app.models import (
 from app.models.base import utcnow
 from app.services.audit_service import log_event
 from app.services.notification_service import create_notification
-from app.services.signature_service import can_access_signature_request
+from app.services.signature_service import can_access_signature_recipient
 
 MENTION_RE = re.compile(r'@([A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,})')
 
 
 def _assert_access(actor, recipient):
-    if not recipient or not can_access_signature_request(actor, recipient.signature_request):
+    if not recipient or not can_access_signature_recipient(actor, recipient):
         raise PermissionError('You cannot access this signature discussion')
 
 

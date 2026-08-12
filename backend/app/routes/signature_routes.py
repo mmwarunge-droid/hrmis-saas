@@ -29,6 +29,7 @@ from app.services.signature_providers.base import (
     SignatureProviderNotConfigured,
 )
 from app.services.signature_service import (
+    can_access_signature_recipient,
     can_access_signature_request,
     cancel_signature_request,
     create_signature_request,
@@ -42,8 +43,10 @@ from app.services.signature_service import (
     update_signature_deadline,
 )
 from app.utils.decorators import (
+    active_tenant_id,
     permission_required,
     request_tenant_id,
+    tenant_query,
 )
 from app.utils.response import fail, success
 
@@ -58,6 +61,12 @@ signature_bp = Blueprint(
 def _provider_error(code, exc, status):
     db.session.rollback()
     return fail(code, str(exc), status)
+
+
+def _recipient_for_active_tenant(recipient_id):
+    return tenant_query(SignatureRecipient).filter_by(
+        id=recipient_id,
+    ).first_or_404()
 
 
 @signature_bp.post('')
@@ -129,9 +138,10 @@ def create_request():
 @jwt_required()
 @permission_required('document:approve')
 def requests():
+    tenant_id = active_tenant_id()
     items = list_signature_requests(
         current_user,
-        tenant_id=request.args.get('tenant_id'),
+        tenant_id=tenant_id,
         status=request.args.get('status'),
         document_id=request.args.get('document_id'),
     )
@@ -155,7 +165,7 @@ def my_tasks():
 @signature_bp.get('/<request_id>')
 @jwt_required()
 def request_details(request_id):
-    signature_request = SignatureRequest.query.filter_by(
+    signature_request = tenant_query(SignatureRequest).filter_by(
         id=request_id,
     ).first_or_404()
 
@@ -180,8 +190,8 @@ def request_details(request_id):
 @signature_bp.get('/recipients/<recipient_id>')
 @jwt_required()
 def recipient_details(recipient_id):
-    recipient = SignatureRecipient.query.filter_by(id=recipient_id).first_or_404()
-    if not can_access_signature_request(current_user, recipient.signature_request):
+    recipient = _recipient_for_active_tenant(recipient_id)
+    if not can_access_signature_recipient(current_user, recipient):
         return fail('FORBIDDEN', 'You cannot access this signature task', 403)
     signature_request = recipient.signature_request
     data = {
@@ -210,9 +220,7 @@ def recipient_details(recipient_id):
 @signature_bp.patch('/recipients/<recipient_id>/viewed')
 @jwt_required()
 def recipient_viewed(recipient_id):
-    recipient = SignatureRecipient.query.filter_by(
-        id=recipient_id,
-    ).first_or_404()
+    recipient = _recipient_for_active_tenant(recipient_id)
 
     try:
         recipient = mark_recipient_viewed(
@@ -237,9 +245,7 @@ def recipient_viewed(recipient_id):
 @signature_bp.patch('/recipients/<recipient_id>/sign')
 @jwt_required()
 def recipient_signed(recipient_id):
-    recipient = SignatureRecipient.query.filter_by(
-        id=recipient_id,
-    ).first_or_404()
+    recipient = _recipient_for_active_tenant(recipient_id)
 
     try:
         payload = SignatureSignSchema().load(request.get_json(silent=True) or {})
@@ -268,9 +274,7 @@ def recipient_signed(recipient_id):
 @signature_bp.patch('/recipients/<recipient_id>/decline')
 @jwt_required()
 def recipient_declined(recipient_id):
-    recipient = SignatureRecipient.query.filter_by(
-        id=recipient_id,
-    ).first_or_404()
+    recipient = _recipient_for_active_tenant(recipient_id)
 
     try:
         payload = SignatureDeclineSchema().load(
@@ -307,7 +311,7 @@ def recipient_declined(recipient_id):
 def recipient_discussion(recipient_id):
     from app.services.signature_discussion_service import get_or_create_discussion
 
-    recipient = SignatureRecipient.query.filter_by(id=recipient_id).first_or_404()
+    recipient = _recipient_for_active_tenant(recipient_id)
     try:
         discussion = get_or_create_discussion(recipient, current_user)
     except PermissionError as exc:
@@ -320,7 +324,7 @@ def recipient_discussion(recipient_id):
 def recipient_discussion_comment(recipient_id):
     from app.services.signature_discussion_service import add_comment
 
-    recipient = SignatureRecipient.query.filter_by(id=recipient_id).first_or_404()
+    recipient = _recipient_for_active_tenant(recipient_id)
     try:
         payload = SignatureDiscussionCommentSchema().load(request.get_json() or {})
         discussion, comment = add_comment(recipient, current_user, payload['body'])
@@ -338,7 +342,7 @@ def recipient_discussion_comment(recipient_id):
 def recipient_discussion_resolve(recipient_id):
     from app.services.signature_discussion_service import resolve_discussion
 
-    recipient = SignatureRecipient.query.filter_by(id=recipient_id).first_or_404()
+    recipient = _recipient_for_active_tenant(recipient_id)
     try:
         discussion = resolve_discussion(recipient, current_user)
     except PermissionError as exc:
@@ -347,7 +351,7 @@ def recipient_discussion_resolve(recipient_id):
 
 
 def _manageable_request(request_id):
-    signature_request = SignatureRequest.query.filter_by(
+    signature_request = tenant_query(SignatureRequest).filter_by(
         id=request_id,
     ).first_or_404()
 

@@ -6,6 +6,15 @@ from flask_jwt_extended import current_user, verify_jwt_in_request
 from app.utils.response import fail
 
 
+class TenantContextRequired(Exception):
+    """Raised when a platform administrator omits tenant context."""
+
+
+TENANT_CONTEXT_MESSAGE = (
+    'Select an organization before accessing tenant-scoped resources'
+)
+
+
 def role_required(*roles):
     def outer(fn):
         @wraps(fn)
@@ -50,24 +59,29 @@ def request_tenant_id(payload=None):
     return current_user.tenant_id
 
 
-def tenant_query(model):
-    """Return a tenant-scoped model query for the current request."""
+def active_tenant_id():
+    """Resolve the required tenant context for tenant-scoped access."""
     if not current_user:
         raise RuntimeError(
-            'tenant_query requires an authenticated user'
+            'active_tenant_id requires an authenticated user'
         )
-    if not hasattr(model, 'tenant_id'):
-        raise RuntimeError(f'{model.__name__} is not tenant-scoped')
 
     if current_user.has_role('SUPER_ADMIN'):
         tenant_id = request.args.get('tenant_id')
-        if tenant_id:
-            return model.query.filter(model.tenant_id == tenant_id)
-        return model.query
+        if not tenant_id:
+            raise TenantContextRequired(TENANT_CONTEXT_MESSAGE)
+        return tenant_id
 
-    return model.query.filter(
-        model.tenant_id == current_user.tenant_id
-    )
+    return current_user.tenant_id
+
+
+def tenant_query(model):
+    """Return a tenant-scoped model query for the current request."""
+    if not hasattr(model, 'tenant_id'):
+        raise RuntimeError(f'{model.__name__} is not tenant-scoped')
+
+    tenant_id = active_tenant_id()
+    return model.query.filter(model.tenant_id == tenant_id)
 
 
 def require_same_tenant(tenant_id):

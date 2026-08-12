@@ -38,6 +38,30 @@ from app.utils.response import fail, success
 
 employee_bp = Blueprint('employees', __name__, url_prefix='/employees')
 
+SENSITIVE_EMPLOYEE_HISTORY_ROLES = {
+    'ORGANIZATION_OWNER',
+    'HR_CONSULTANT',
+    'CLIENT_ADMIN',
+    'SUPER_ADMIN',
+}
+
+
+def _can_read_sensitive_job_history(employee):
+    if current_user.has_any_role(SENSITIVE_EMPLOYEE_HISTORY_ROLES):
+        return True
+
+    profile = current_user.employee_profile
+    if not profile:
+        return False
+
+    if str(profile.id) == str(employee.id):
+        return True
+
+    return bool(
+        current_user.has_role('MANAGER')
+        and str(employee.manager_id) == str(profile.id)
+    )
+
 
 def _request_tenant_id(payload=None):
     if current_user.has_role('SUPER_ADMIN'):
@@ -544,7 +568,16 @@ def get_employee(employee_id):
 @jwt_required()
 @permission_required('employee:read')
 def employee_job_history(employee_id):
-    employee = tenant_query(Employee).filter_by(id=employee_id, deleted_at=None).first_or_404()
+    employee = tenant_query(Employee).filter_by(
+        id=employee_id,
+        deleted_at=None,
+    ).first_or_404()
+    if not _can_read_sensitive_job_history(employee):
+        return fail(
+            'FORBIDDEN',
+            'You cannot access this employee job history',
+            403,
+        )
     history = (
         JobHistory.query.options(
             selectinload(JobHistory.department),

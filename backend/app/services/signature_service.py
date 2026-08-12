@@ -711,6 +711,26 @@ def create_signature_request(
 
 
 
+def can_access_signature_recipient(
+    user,
+    recipient,
+):
+    if user.has_role('SUPER_ADMIN'):
+        return True
+
+    if str(user.tenant_id) != str(recipient.tenant_id):
+        return False
+
+    if user.has_any_role({
+        'ORGANIZATION_OWNER',
+        'HR_CONSULTANT',
+        'CLIENT_ADMIN',
+    }):
+        return True
+
+    return str(recipient.user_id) == str(user.id)
+
+
 def can_access_signature_request(
     user,
     signature_request,
@@ -724,6 +744,7 @@ def can_access_signature_request(
         return False
 
     if user.has_any_role({
+        'ORGANIZATION_OWNER',
         'HR_CONSULTANT',
         'CLIENT_ADMIN',
     }):
