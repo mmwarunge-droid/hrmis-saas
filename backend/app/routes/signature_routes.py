@@ -29,6 +29,7 @@ from app.services.signature_providers.base import (
     SignatureProviderNotConfigured,
 )
 from app.services.signature_service import (
+    can_access_signature_recipient,
     can_access_signature_request,
     cancel_signature_request,
     create_signature_request,
@@ -190,7 +191,7 @@ def request_details(request_id):
 @jwt_required()
 def recipient_details(recipient_id):
     recipient = _recipient_for_active_tenant(recipient_id)
-    if not can_access_signature_request(current_user, recipient.signature_request):
+    if not can_access_signature_recipient(current_user, recipient):
         return fail('FORBIDDEN', 'You cannot access this signature task', 403)
     signature_request = recipient.signature_request
     data = {
