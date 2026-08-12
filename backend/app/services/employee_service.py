@@ -1,7 +1,7 @@
 from datetime import date, timedelta
 
 from app.extensions import db
-from app.models import Department, Employee, JobHistory
+from app.models import Department, Employee, JobHistory, User
 from app.services.audit_service import log_event
 
 
@@ -116,6 +116,7 @@ def _record_job_change(employee, effective_date, reason):
 
 
 def create_employee(payload, tenant_id, commit: bool = True):
+    _assert_tenant_fk(User, payload.get('user_id'), tenant_id, 'user_id')
     _assert_tenant_fk(Department, payload.get('department_id'), tenant_id, 'department_id')
     _assert_valid_manager(None, payload.get('manager_id'), tenant_id)
 
@@ -136,6 +137,8 @@ def update_employee(employee, payload, commit: bool = True):
     effective_date = payload.pop('change_effective_date', None)
     change_reason = payload.pop('change_reason', None)
 
+    if 'user_id' in payload:
+        _assert_tenant_fk(User, payload.get('user_id'), tenant_id, 'user_id')
     if 'department_id' in payload:
         _assert_tenant_fk(Department, payload.get('department_id'), tenant_id, 'department_id')
     if 'manager_id' in payload:
