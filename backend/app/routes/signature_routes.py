@@ -42,8 +42,10 @@ from app.services.signature_service import (
     update_signature_deadline,
 )
 from app.utils.decorators import (
+    active_tenant_id,
     permission_required,
     request_tenant_id,
+    tenant_query,
 )
 from app.utils.response import fail, success
 
@@ -129,9 +131,10 @@ def create_request():
 @jwt_required()
 @permission_required('document:approve')
 def requests():
+    tenant_id = active_tenant_id()
     items = list_signature_requests(
         current_user,
-        tenant_id=request.args.get('tenant_id'),
+        tenant_id=tenant_id,
         status=request.args.get('status'),
         document_id=request.args.get('document_id'),
     )
@@ -155,7 +158,7 @@ def my_tasks():
 @signature_bp.get('/<request_id>')
 @jwt_required()
 def request_details(request_id):
-    signature_request = SignatureRequest.query.filter_by(
+    signature_request = tenant_query(SignatureRequest).filter_by(
         id=request_id,
     ).first_or_404()
 
@@ -347,7 +350,7 @@ def recipient_discussion_resolve(recipient_id):
 
 
 def _manageable_request(request_id):
-    signature_request = SignatureRequest.query.filter_by(
+    signature_request = tenant_query(SignatureRequest).filter_by(
         id=request_id,
     ).first_or_404()
 
