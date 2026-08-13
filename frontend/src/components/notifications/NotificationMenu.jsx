@@ -21,6 +21,10 @@ const iconByType = {
   goal: Target,
 };
 
+const fallbackActionUrlByType = {
+  signature: '/tasks',
+};
+
 function relativeTime(value) {
   if (!value) return '';
   const seconds = Math.round((new Date(value).getTime() - Date.now()) / 1000);
@@ -102,7 +106,11 @@ export default function NotificationMenu() {
       }
     }
     setOpen(false);
-    if (notification.action_url) navigate(notification.action_url);
+    const actionUrl = (
+      notification.action_url
+      || fallbackActionUrlByType[notification.notification_type]
+    );
+    if (actionUrl) navigate(actionUrl);
   };
 
   const readAll = async () => {
