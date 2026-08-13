@@ -261,6 +261,7 @@ def _eligible_governance_users(tenant_id):
             User.tenant_id == tenant_id,
             User.is_active.is_(True),
             User.deleted_at.is_(None),
+            Employee.tenant_id == tenant_id,
             Employee.deleted_at.is_(None),
             Employee.employment_status.in_(['active', 'probation']),
         )
