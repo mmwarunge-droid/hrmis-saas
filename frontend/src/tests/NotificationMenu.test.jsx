@@ -1,5 +1,5 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter, useLocation } from 'react-router-dom';
 import { notificationApi } from '../api/notificationApi.js';
 import NotificationMenu from '../components/notifications/NotificationMenu.jsx';
 
@@ -10,6 +10,16 @@ vi.mock('../api/notificationApi.js', () => ({
     readAll: vi.fn(),
   },
 }));
+
+function LocationProbe() {
+  const location = useLocation();
+  return (
+    <div data-testid="location">
+      {location.pathname}
+      {location.search}
+    </div>
+  );
+}
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -72,4 +82,78 @@ test('marks every notification as read', async () => {
   }));
   fireEvent.click(await screen.findByRole('button', { name: 'Mark all read' }));
   await waitFor(() => expect(notificationApi.readAll).toHaveBeenCalled());
+});
+
+test('navigates to an explicit notification action URL', async () => {
+  notificationApi.list.mockResolvedValue({
+    data: {
+      unread_count: 0,
+      items: [
+        {
+          id: 'signature-deep-link',
+          title: 'Signature task needs attention',
+          notification_type: 'signature',
+          action_url: '/signature-tasks/recipient-123',
+          read_at: new Date().toISOString(),
+          created_at: new Date().toISOString(),
+        },
+      ],
+    },
+  });
+
+  render(
+    <MemoryRouter initialEntries={['/dashboard']}>
+      <NotificationMenu />
+      <LocationProbe />
+    </MemoryRouter>,
+  );
+
+  fireEvent.click(await screen.findByRole('button', {
+    name: 'Notifications',
+  }));
+
+  fireEvent.click(await screen.findByText('Signature task needs attention'));
+
+  await waitFor(() => {
+    expect(screen.getByTestId('location')).toHaveTextContent(
+      '/signature-tasks/recipient-123',
+    );
+  });
+});
+
+test('falls back to tasks for legacy signature notifications without an action URL', async () => {
+  notificationApi.list.mockResolvedValue({
+    data: {
+      unread_count: 0,
+      items: [
+        {
+          id: 'legacy-signature',
+          title: 'Action required: Please sign: Employment Contract',
+          notification_type: 'signature',
+          action_url: null,
+          read_at: new Date().toISOString(),
+          created_at: new Date().toISOString(),
+        },
+      ],
+    },
+  });
+
+  render(
+    <MemoryRouter initialEntries={['/dashboard']}>
+      <NotificationMenu />
+      <LocationProbe />
+    </MemoryRouter>,
+  );
+
+  fireEvent.click(await screen.findByRole('button', {
+    name: 'Notifications',
+  }));
+
+  fireEvent.click(await screen.findByText(
+    'Action required: Please sign: Employment Contract',
+  ));
+
+  await waitFor(() => {
+    expect(screen.getByTestId('location')).toHaveTextContent('/tasks');
+  });
 });
