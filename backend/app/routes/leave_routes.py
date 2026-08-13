@@ -436,6 +436,21 @@ def approve_leave(request_id):
     leave_request = tenant_query(LeaveRequest).filter_by(
         id=request_id,
     ).first_or_404()
+    employee_user_id = leave_request.employee.user_id
+    if (
+        not leave_request.required_approver_id
+        or str(leave_request.required_approver_id) != str(current_user.id)
+        or str(leave_request.requested_by_user_id) == str(current_user.id)
+        or (
+            employee_user_id
+            and str(employee_user_id) == str(current_user.id)
+        )
+    ):
+        return fail(
+            'FORBIDDEN',
+            'You cannot approve this leave request',
+            403,
+        )
     try:
         payload = LeaveDecisionSchema().load(
             request.get_json() or {},
@@ -466,6 +481,21 @@ def reject_leave(request_id):
     leave_request = tenant_query(LeaveRequest).filter_by(
         id=request_id,
     ).first_or_404()
+    employee_user_id = leave_request.employee.user_id
+    if (
+        not leave_request.required_approver_id
+        or str(leave_request.required_approver_id) != str(current_user.id)
+        or str(leave_request.requested_by_user_id) == str(current_user.id)
+        or (
+            employee_user_id
+            and str(employee_user_id) == str(current_user.id)
+        )
+    ):
+        return fail(
+            'FORBIDDEN',
+            'You cannot reject this leave request',
+            403,
+        )
     try:
         payload = LeaveDecisionSchema().load(
             request.get_json() or {},
@@ -496,6 +526,17 @@ def cancel_leave(request_id):
     leave_request = tenant_query(LeaveRequest).filter_by(
         id=request_id,
     ).first_or_404()
+    owns_request = bool(
+        current_user.employee_profile
+        and str(current_user.employee_profile.id)
+        == str(leave_request.employee_id)
+    )
+    if not owns_request and not can_configure_leave(current_user):
+        return fail(
+            'FORBIDDEN',
+            'You cannot cancel this leave request',
+            403,
+        )
     try:
         payload = LeaveCancellationSchema().load(
             request.get_json() or {},
