@@ -4,10 +4,18 @@ import { MemoryRouter } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext.jsx';
 import Login from '../pages/Login.jsx';
 
-function renderLogin() {
+function renderLogin(overrides = {}) {
   render(
     <MemoryRouter>
-      <AuthContext.Provider value={{ user: null, login: vi.fn(), loading: false }}>
+      <AuthContext.Provider
+        value={{
+          user: null,
+          login: vi.fn(),
+          loading: false,
+          sessionMessage: '',
+          ...overrides,
+        }}
+      >
         <Login />
       </AuthContext.Provider>
     </MemoryRouter>,
@@ -33,4 +41,11 @@ test('shows and hides the password without changing its value', async () => {
 
   await user.click(screen.getByRole('button', { name: 'Hide password' }));
   expect(password).toHaveAttribute('type', 'password');
+});
+
+test('shows a friendly session-expired message without token terminology', () => {
+  renderLogin({ sessionMessage: 'Your session has expired. Please sign in again.' });
+
+  expect(screen.getByText('Your session has expired. Please sign in again.')).toBeInTheDocument();
+  expect(screen.queryByText(/token has expired/i)).not.toBeInTheDocument();
 });
