@@ -1,6 +1,11 @@
 import axios from 'axios';
 
 import { withActiveTenantParams } from '../utils/tenantScope.js';
+import {
+  sessionExpiredPayload,
+  shouldHandleSessionExpiry,
+  signalSessionExpired,
+} from '../utils/sessionExpiry.js';
 
 const configuredBaseUrl = import.meta.env.VITE_API_BASE_URL?.trim();
 
@@ -59,6 +64,12 @@ apiClient.interceptors.response.use(
         message: error.code === 'ECONNABORTED' ? 'The request timed out' : error.message,
       },
     };
+
+    if (shouldHandleSessionExpiry(error)) {
+      signalSessionExpired();
+      return Promise.reject(sessionExpiredPayload(payload));
+    }
+
     return Promise.reject(payload);
   },
 );

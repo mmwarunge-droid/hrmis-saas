@@ -1,25 +1,28 @@
 from flask import Blueprint, request
 from flask_jwt_extended import current_user, jwt_required
 from marshmallow import ValidationError
-from sqlalchemy import func, or_
+from sqlalchemy import and_, func, or_
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import selectinload
 
 from app.extensions import db
-from app.models import Department, Employee, JobHistory
+from app.models import Department, Employee, JobHistory, Role, User, UserRole
 from app.schemas.employee_schema import (
     BulkDepartmentTransferSchema,
     DepartmentArchiveSchema,
     DepartmentSchema,
     DepartmentUpdateSchema,
     EmployeeAccessProvisionSchema,
+    EmployeeAccessUpdateSchema,
     EmployeeCreateSchema,
     EmployeeUpdateSchema,
 )
 from app.services.access_provisioning_service import (
+    ACCESS_ROLES,
     AccessProvisioningError,
     provision_employee_access,
 )
+from app.services.audit_service import log_event
 from app.services.department_service import (
     archive_department,
     create_department as create_department_record,
@@ -32,6 +35,8 @@ from app.services.employee_service import (
     transfer_employees_department,
     update_employee,
 )
+from app.services.rbac_service import set_user_roles, validate_role_assignment
+from app.services.session_service import revoke_all_user_sessions
 from app.utils.decorators import permission_required, tenant_query
 from app.utils.pagination import get_pagination, paginated_response
 from app.utils.response import fail, success
@@ -108,6 +113,116 @@ def _apply_employee_sort(query):
         )
 
     return query.order_by(Employee.id.asc())
+
+
+def _employee_access_payload(employee):
+    data = employee.to_dict()
+    account = employee.user
+    if (
+        not account
+        or str(account.tenant_id) != str(employee.tenant_id)
+    ):
+        data['access'] = None
+        return data
+
+    data['access'] = {
+        'user_id': str(account.id),
+        'status': account.account_status,
+        'roles': account.role_names,
+        'is_active': account.is_active,
+        'invitation_sent_at': (
+            account.invitation_sent_at.isoformat()
+            if account.invitation_sent_at
+            else None
+        ),
+        'last_login_at': (
+            account.last_login_at.isoformat()
+            if account.last_login_at
+            else None
+        ),
+    }
+    return data
+
+
+def _employee_access_query():
+    query = (
+        tenant_query(Employee)
+        .options(
+            selectinload(Employee.user)
+            .selectinload(User.role_links)
+            .selectinload(UserRole.role)
+        )
+        .outerjoin(
+            User,
+            and_(
+                Employee.user_id == User.id,
+                Employee.tenant_id == User.tenant_id,
+            ),
+        )
+        .filter(Employee.deleted_at.is_(None))
+    )
+
+    search = request.args.get('q', '').strip().lower()
+    if search:
+        like = f'%{search}%'
+        query = query.filter(
+            or_(
+                func.lower(Employee.first_name).like(like),
+                func.lower(Employee.last_name).like(like),
+                func.lower(Employee.email).like(like),
+                func.lower(
+                    Employee.first_name + ' ' + Employee.last_name
+                ).like(like),
+                func.lower(Employee.employee_number).like(like),
+            )
+        )
+
+    access_status = request.args.get(
+        'access_status',
+        '',
+    ).strip().lower()
+    if access_status == 'none':
+        query = query.filter(Employee.user_id.is_(None))
+    elif access_status == 'active':
+        query = query.filter(
+            User.is_active.is_(True),
+            User.activation_required.is_(False),
+        )
+    elif access_status == 'invited':
+        query = query.filter(
+            User.is_active.is_(True),
+            User.activation_required.is_(True),
+        )
+    elif access_status in {'inactive', 'suspended'}:
+        query = query.filter(User.is_active.is_(False))
+
+    role = request.args.get('role', '').strip().upper()
+    if role:
+        query = query.filter(
+            User.role_links.any(
+                UserRole.role.has(Role.name == role)
+            )
+        )
+
+    return _apply_employee_sort(query)
+
+
+@employee_bp.get('/access-directory')
+@jwt_required()
+@permission_required('employee:read', 'user:read')
+def access_directory():
+    page, per_page = get_pagination()
+    pagination = _employee_access_query().paginate(
+        page=page,
+        per_page=per_page,
+        error_out=False,
+    )
+    data = paginated_response(pagination)
+    data['items'] = [
+        _employee_access_payload(employee)
+        for employee in pagination.items
+    ]
+    return success(data)
 
 
 @employee_bp.get('')
@@ -554,6 +669,111 @@ def provision_access(employee_id):
         'Employee access provisioned',
         201,
     )
+
+
+@employee_bp.patch('/<employee_id>/access')
+@jwt_required()
+@permission_required('user:update', 'employee:update')
+def update_access(employee_id):
+    employee = (
+        tenant_query(Employee)
+        .options(
+            selectinload(Employee.user)
+            .selectinload(User.role_links)
+            .selectinload(UserRole.role)
+        )
+        .filter_by(id=employee_id, deleted_at=None)
+        .first_or_404()
+    )
+    account = employee.user
+    if (
+        not account
+        or str(account.tenant_id) != str(employee.tenant_id)
+    ):
+        return fail(
+            'EMPLOYEE_ACCESS_REQUIRED',
+            'This employee does not have platform access',
+            409,
+        )
+
+    if not set(account.role_names).issubset(ACCESS_ROLES):
+        return fail(
+            'PRIVILEGED_USER_PROTECTED',
+            'Only a platform administrator can update this account',
+            403,
+        )
+
+    try:
+        payload = EmployeeAccessUpdateSchema().load(
+            request.get_json() or {}
+        )
+    except ValidationError as err:
+        return fail('VALIDATION_ERROR', err.messages, 422)
+
+    if not payload:
+        return fail(
+            'VALIDATION_ERROR',
+            'Provide a role or account status to update',
+            422,
+        )
+
+    if (
+        str(account.id) == str(current_user.id)
+        and payload.get('is_active') is False
+    ):
+        return fail(
+            'SELF_DEACTIVATION_NOT_ALLOWED',
+            'You cannot deactivate your own account',
+            409,
+        )
+
+    roles = payload.get('roles')
+    if roles is not None:
+        try:
+            validate_role_assignment(
+                current_user,
+                roles,
+                account.tenant_id,
+            )
+            set_user_roles(
+                account,
+                roles,
+                assigned_by_id=current_user.id,
+                commit=False,
+            )
+        except ValueError as exc:
+            db.session.rollback()
+            return fail('ROLE_ASSIGNMENT_FAILED', str(exc), 400)
+
+    revoked_sessions = 0
+    if 'is_active' in payload:
+        previous_active = account.is_active
+        account.is_active = payload['is_active']
+        if previous_active and not account.is_active:
+            revoked_sessions = revoke_all_user_sessions(
+                account,
+                'employee_access_deactivated_by_administrator',
+                commit=False,
+            )
+
+    log_event(
+        'employee.access_updated',
+        'Employee',
+        employee.id,
+        tenant_id=employee.tenant_id,
+        actor=current_user,
+        metadata={
+            'user_id': str(account.id),
+            'roles': account.role_names,
+            'is_active': account.is_active,
+            'revoked_sessions': revoked_sessions,
+        },
+    )
+    db.session.commit()
+
+    data = _employee_access_payload(employee)
+    data['revoked_sessions'] = revoked_sessions
+    return success(data, 'Employee access updated')
 
 
 @employee_bp.get('/<employee_id>')

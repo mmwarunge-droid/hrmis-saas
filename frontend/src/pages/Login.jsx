@@ -8,7 +8,7 @@ import Input from '../components/ui/Input.jsx';
 import useAuth from '../hooks/useAuth';
 
 export default function Login() {
-  const { user, login } = useAuth();
+  const { user, login, sessionMessage } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const activated = new URLSearchParams(location.search).get('activated') === '1';
@@ -58,6 +58,9 @@ export default function Login() {
           <Alert type="success">
             Account activated successfully. Sign in with the password you just created.
           </Alert>
+        )}
+        {sessionMessage && (
+          <Alert type="error">{sessionMessage}</Alert>
         )}
         {error && <Alert type="error">{error}</Alert>}
         <Input label="Work email" type="email" value={form.email} onChange={(event) => setForm({ ...form, email: event.target.value })} autoComplete="email" required />

@@ -63,14 +63,14 @@ beforeEach(() => {
   useAuth.mockReturnValue({
     user: {
       id: 'admin-user',
-      tenant_id: 'tenant-1',
-      roles: ['CLIENT_ADMIN'],
+      tenant_id: null,
+      roles: ['SUPER_ADMIN'],
       permissions: ['user:create', 'user:read', 'user:update'],
     },
   });
-  useTenant.mockReturnValue({ tenantId: 'tenant-1' });
+  useTenant.mockReturnValue({ tenantId: null });
   usePermissions.mockReturnValue({
-    hasRole: () => false,
+    hasRole: (role) => role === 'SUPER_ADMIN',
     hasPermission: (permission) => [
       'user:create',
       'user:update',

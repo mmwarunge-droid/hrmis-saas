@@ -18,6 +18,7 @@ function Consumer() {
   return (
     <div>
       <span>{auth.loading ? 'loading' : auth.user?.email || 'anonymous'}</span>
+      <span>{auth.sessionMessage || 'no-session-message'}</span>
       <button type="button" onClick={() => auth.login({ email: 'admin@example.com', password: 'secret' })}>
         Login
       </button>
@@ -27,6 +28,10 @@ function Consumer() {
     </div>
   );
 }
+
+beforeEach(() => {
+  vi.clearAllMocks();
+});
 
 test('uses server cookies without writing JWTs to localStorage', async () => {
   authApi.me.mockRejectedValueOnce({ error: { code: 'AUTHENTICATION_REQUIRED' } });
@@ -43,4 +48,21 @@ test('uses server cookies without writing JWTs to localStorage', async () => {
 
   await act(async () => { screen.getByRole('button', { name: 'Logout' }).click(); });
   expect(await screen.findByText('anonymous')).toBeInTheDocument();
+});
+
+test('clears the authenticated user and exposes a friendly notice when the session expires', async () => {
+  authApi.me.mockResolvedValueOnce({
+    data: { email: 'admin@example.com' },
+  });
+
+  render(<AuthProvider><Consumer /></AuthProvider>);
+  expect(await screen.findByText('admin@example.com')).toBeInTheDocument();
+
+  act(() => {
+    window.dispatchEvent(new Event('kinetic:session-expired'));
+  });
+
+  expect(await screen.findByText('anonymous')).toBeInTheDocument();
+  expect(screen.getByText('Your session has expired. Please sign in again.')).toBeInTheDocument();
+  expect(screen.queryByText(/token has expired/i)).not.toBeInTheDocument();
 });
