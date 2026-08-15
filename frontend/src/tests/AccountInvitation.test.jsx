@@ -102,7 +102,7 @@ test('administrative provisioning forms no longer ask for another user password'
   );
   expect(employeeSubmit).toHaveBeenCalledTimes(1);
   expect(employeeSubmit.mock.calls[0][0].roles).toEqual(['EMPLOYEE']);
-  expect(employeeSubmit.mock.calls[0][0].password).toMatch(/^Invite-/);
+  expect(employeeSubmit.mock.calls[0][0]).not.toHaveProperty('password');
   employeeRender.unmount();
 
   render(<OrganizationProvisionForm onSubmit={noop} />);

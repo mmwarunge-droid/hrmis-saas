@@ -20,6 +20,7 @@ import {
 import { Link } from 'react-router-dom';
 import { tenantApi } from '../api/tenantApi';
 import { userApi } from '../api/userApi';
+import EmployeeAccessDirectory from '../components/employees/EmployeeAccessDirectory.jsx';
 import MfaPolicyPanel from '../components/security/MfaPolicyPanel.jsx';
 import UserAccountEditForm from '../components/users/UserAccountEditForm.jsx';
 import UserProvisionForm from '../components/users/UserProvisionForm.jsx';
@@ -55,7 +56,7 @@ function formatDateTime(value) {
   }).format(new Date(value));
 }
 
-export default function Users() {
+function PlatformUsers() {
   const [users, setUsers] = useState([]);
   const [summary, setSummary] = useState({
     total: 0,
@@ -558,4 +559,11 @@ export default function Users() {
       </Modal>
     </div>
   );
+}
+
+export default function Users() {
+  const { hasRole } = usePermissions();
+  return hasRole('SUPER_ADMIN')
+    ? <PlatformUsers />
+    : <EmployeeAccessDirectory />;
 }

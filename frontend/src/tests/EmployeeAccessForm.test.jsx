@@ -48,11 +48,7 @@ test(
 
     const payload = onSubmit.mock.calls[0][0];
 
-    expect(payload.roles).toEqual(['MANAGER']);
-
-    // Compatibility nonce for the existing employee-access request schema.
-    // It is not a user credential and is ignored by the backend invitation flow.
-    expect(payload.password).toMatch(/^Invite-/);
+    expect(payload).toEqual({ roles: ['MANAGER'] });
 
     // Existing employee identity comes from the employee record.
     expect(payload).not.toHaveProperty('email');

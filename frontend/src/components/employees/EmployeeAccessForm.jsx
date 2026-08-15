@@ -3,11 +3,6 @@ import { MailCheck, ShieldCheck } from 'lucide-react';
 import Button from '../ui/Button.jsx';
 import Select from '../ui/Select.jsx';
 
-function legacySchemaNonce() {
-  const values = new Uint32Array(4);
-  globalThis.crypto?.getRandomValues?.(values);
-  return `Invite-${Array.from(values).join('-')}-${Date.now()}!`;
-}
 
 export default function EmployeeAccessForm({
   employee,
@@ -19,10 +14,6 @@ export default function EmployeeAccessForm({
   const submit = (event) => {
     event.preventDefault();
     onSubmit({
-      // Compatibility only for the existing employee-access request schema.
-      // The backend invitation flow deliberately ignores this value and
-      // generates an inaccessible bootstrap secret server-side.
-      password: legacySchemaNonce(),
       roles: [role],
     });
   };

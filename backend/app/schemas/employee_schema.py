@@ -42,12 +42,28 @@ class BulkDepartmentTransferSchema(Schema):
 
 
 class EmployeeAccessProvisionSchema(Schema):
-    password = fields.Str(required=True, validate=validate.Length(min=10, max=128), load_only=True)
+    # Backward-compatible input only. Employee access provisioning uses the
+    # employee record for identity and invitees create their own password.
+    password = fields.Str(
+        required=False,
+        allow_none=True,
+        load_only=True,
+        validate=validate.Length(min=10, max=128),
+    )
     roles = fields.List(
         fields.Str(validate=validate.OneOf(['EMPLOYEE', 'MANAGER'])),
         required=True,
         validate=validate.Length(equal=1),
     )
+
+
+class EmployeeAccessUpdateSchema(Schema):
+    roles = fields.List(
+        fields.Str(validate=validate.OneOf(['EMPLOYEE', 'MANAGER'])),
+        required=False,
+        validate=validate.Length(equal=1),
+    )
+    is_active = fields.Bool(required=False)
 
 
 class EmployeeCreateSchema(Schema):
