@@ -165,15 +165,17 @@ def test_client_admin_sends_and_employee_completes_signature_request(
     request_id = request_data['id']
     recipient_id = request_data['recipients'][0]['id']
 
+    with app.app_context():
+        tenant_name = db.session.merge(admin_user).tenant.name
+
     assert len(app.extensions['mail_outbox']) == 1
-    assert (
-        app.extensions['mail_outbox'][0]['to']
-        == signer['email']
-    )
-    assert (
-        'Action required'
-        in app.extensions['mail_outbox'][0]['subject']
-    )
+    message = app.extensions['mail_outbox'][0]
+
+    assert message['to'] == signer['email']
+    assert tenant_name in message['subject']
+    assert 'Signature required' in message['subject']
+    assert tenant_name in message['text']
+    assert f'/signature-tasks/{recipient_id}' in message['text']
 
     employee_headers = _login(
         client,
@@ -237,11 +239,15 @@ def test_client_admin_sends_and_employee_completes_signature_request(
         assert 'signature.recipient_signed' in event_types
         assert 'signature.request_completed' in event_types
 
-        assert Notification.query.filter_by(
+        notification = Notification.query.filter_by(
             tenant_id=tenant.id,
             user_id=signer['user_id'],
             notification_type='signature',
-        ).count() == 1
+        ).one()
+        assert tenant_name in notification.title
+        assert notification.action_url == (
+            f'/signature-tasks/{recipient_id}'
+        )
 
 
 def test_sequential_request_notifies_next_signer_after_first_signature(

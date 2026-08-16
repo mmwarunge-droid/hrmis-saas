@@ -6,6 +6,7 @@ from app.models import (
     EmployeeOnboardingTask,
     OnboardingTask,
     OnboardingTemplate,
+    Tenant,
     Role,
     User,
     UserRole,
@@ -97,6 +98,13 @@ def assign_template(employee_id, template_id, tenant_id):
     if not employee or not template:
         raise ValueError('Invalid employee_id or template_id for this tenant')
 
+    tenant = db.session.get(Tenant, tenant_id)
+    organization_name = (
+        tenant.name
+        if tenant and tenant.name
+        else 'Your organization'
+    )
+
     created = []
     for task in template.tasks:
         existing = EmployeeOnboardingTask.query.filter_by(
@@ -127,14 +135,20 @@ def assign_template(employee_id, template_id, tenant_id):
             create_notification(
                 tenant_id=tenant_id,
                 user_id=assignee.id,
-                title=f'Onboarding task: {task.title}',
-                body=f'{employee.full_name} · due {due_date.isoformat()}',
+                title=(
+                    f'{organization_name} assigned you a Kinetic task'
+                ),
+                body=(
+                    f'{task.title} · due {due_date.isoformat()}'
+                ),
                 notification_type='onboarding',
-                action_url='/onboarding',
+                action_url='/tasks',
                 priority='high' if status == 'overdue' else 'normal',
                 metadata={
                     'assignment_id': str(assignment.id),
                     'employee_id': str(employee.id),
+                    'task_id': str(task.id),
+                    'template_id': str(template.id),
                 },
             )
     log_event(

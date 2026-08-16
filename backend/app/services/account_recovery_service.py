@@ -144,9 +144,11 @@ def send_account_invitation_email(
         f'{activation_url}\n\n'
         f'This invitation expires in {expiry_hours} hours and can only be '
         'used once.\n\n'
-        'If you were not expecting this invitation, contact your '
-        'organization administrator.\n\n'
-        'Kinetic\nPeople Platform'
+        'If you were not expecting this invitation, contact '
+        'Career Disrupters support.\n\n'
+        'Kinetic\n'
+        'Supported by Career Disrupters\n'
+        'careerdisrupters.com'
     )
 
     safe_first_name = html.escape(user.first_name)
@@ -183,8 +185,12 @@ def send_account_invitation_email(
           <p style="margin:0 0 10px;font-size:13px;line-height:1.6;color:#64748b;">
             This invitation expires in {expiry_hours} hours and can only be used once.
           </p>
-          <p style="margin:0;font-size:13px;line-height:1.6;color:#64748b;">
-            If you were not expecting this invitation, contact your organization administrator.
+          <p style="margin:0 0 16px;font-size:13px;line-height:1.6;color:#64748b;">
+            If you were not expecting this invitation, contact Career Disrupters support.
+          </p>
+          <p style="margin:0;font-size:12px;line-height:1.6;color:#94a3b8;">
+            Kinetic &middot; Supported by Career Disrupters<br>
+            careerdisrupters.com
           </p>
         </div>
       </div>
