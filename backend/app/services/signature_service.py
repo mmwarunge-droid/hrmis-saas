@@ -13,6 +13,7 @@ from app.models import (
     SignatureRecipient,
     SignatureReminderRule,
     SignatureRequest,
+    Tenant,
     User,
 )
 from app.models.base import to_utc_naive, utcnow
@@ -189,6 +190,7 @@ def _deliver_email(
             to_address,
             subject,
             body,
+            reply_to=current_app.config.get('MAIL_REPLY_TO'),
         )
         return True
     except EmailDeliveryError as exc:
@@ -211,21 +213,39 @@ def _notify_recipient(
     actor=None,
 ):
     document = signature_request.document
+    tenant = db.session.get(Tenant, signature_request.tenant_id)
+    organization_name = (
+        tenant.name
+        if tenant and tenant.name
+        else 'Your organization'
+    )
 
-    title = f'Action required: {signature_request.subject}'
-    body = (
-        f'{recipient.name}, you have a document requiring '
-        f'your review and signature.\n\n'
+    notification_title = (
+        f'{organization_name} assigned you a signature task'
+    )
+    notification_body = (
+        f'{document.title} requires your review and signature. '
+        f'Due: {_due_text(recipient.due_at)}'
+    )
+
+    email_subject = (
+        f'[{organization_name}] Signature required: {document.title}'
+    )
+    email_body = (
+        f'Hi {recipient.name},\n\n'
+        f'{organization_name} has assigned you a signature task '
+        f'in Kinetic.\n\n'
         f'Document: {document.title}\n'
         f'Due: {_due_text(recipient.due_at)}\n\n'
-        f'Open Kinetic to review the task:\n{_task_url(recipient.id)}'
+        f'Open Kinetic to review and sign:\n'
+        f'{_task_url(recipient.id)}'
     )
 
     _create_notification(
         signature_request.tenant_id,
         recipient.user_id,
-        title,
-        body,
+        notification_title,
+        notification_body,
         action_url=f'/signature-tasks/{recipient.id}',
         metadata={
             'signature_request_id': str(signature_request.id),
@@ -237,8 +257,8 @@ def _notify_recipient(
     delivered = _deliver_email(
         signature_request,
         recipient.email,
-        title,
-        body,
+        email_subject,
+        email_body,
         recipient=recipient,
     )
 
