@@ -19,6 +19,9 @@ from app.models import (
 )
 from app.models.base import to_utc_naive, utcnow
 from app.services.audit_service import log_event
+from app.services.document_conversion_service import (
+    is_docx_document,
+)
 from app.services.signature_providers.base import (
     SignatureProviderError,
     SignatureProviderNotConfigured,
@@ -385,10 +388,14 @@ def create_signature_request(
 
     if (
         payload.get('assurance_level', 'standard') == 'standard'
-        and not is_pdf_document(document)
+        and not (
+            is_pdf_document(document)
+            or is_docx_document(document)
+        )
     ):
         raise ValueError(
-            'Standard Kinetic signing currently supports PDF documents only.',
+            'Standard Kinetic signing supports PDF and Word '
+            '(.docx) documents only.',
         )
 
     existing_request = SignatureRequest.query.filter(

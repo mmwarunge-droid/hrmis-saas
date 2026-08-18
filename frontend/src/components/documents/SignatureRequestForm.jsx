@@ -52,6 +52,36 @@ export default function SignatureRequestForm({
 
   const isQes = form.assurance_level === 'qes';
 
+  const documentFilename = (
+    document?.original_filename?.toLowerCase() || ''
+  );
+  const documentMimeType = (
+    document?.mime_type?.toLowerCase() || ''
+  );
+
+  const isPdfDocument = (
+    documentMimeType === 'application/pdf'
+    || documentFilename.endsWith('.pdf')
+  );
+
+  const isDocxDocument = (
+    documentMimeType === (
+      'application/vnd.openxmlformats-officedocument.'
+      + 'wordprocessingml.document'
+    )
+    || documentFilename.endsWith('.docx')
+  );
+
+  const isStandardSigningDocument = (
+    isPdfDocument || isDocxDocument
+  );
+
+  const usesDocumentFields = (
+    !isQes
+    && !isDocxDocument
+    && fieldPlacementMode === 'document'
+  );
+
   const eligibleEmployees = useMemo(
     () => employees.filter((employee) => (
       !document
@@ -129,12 +159,10 @@ export default function SignatureRequestForm({
       return;
     }
 
-    if (
-      !isQes
-      && document.mime_type !== 'application/pdf'
-      && !document.original_filename?.toLowerCase().endsWith('.pdf')
-    ) {
-      setError('Standard Kinetic signing currently supports PDF documents only.');
+    if (!isQes && !isStandardSigningDocument) {
+      setError(
+        'Standard Kinetic signing supports PDF and Word (.docx) documents only.',
+      );
       return;
     }
 
@@ -143,7 +171,7 @@ export default function SignatureRequestForm({
       return;
     }
 
-    if (!isQes && fieldPlacementMode === 'document') {
+    if (usesDocumentFields) {
       const incompleteSigner = recipients.findIndex((recipient) => {
         const fieldTypes = new Set((recipient.fields || []).map((field) => field.field_type));
         return !fieldTypes.has('signature') || !fieldTypes.has('date');
@@ -201,7 +229,7 @@ export default function SignatureRequestForm({
         sequence: signingMode === 'parallel'
           ? 1
           : toInteger(recipient.sequence, index + 1),
-        ...(!isQes && fieldPlacementMode === 'document'
+        ...(usesDocumentFields
           ? { fields: recipient.fields || [] }
           : {}),
       })),
@@ -305,9 +333,24 @@ export default function SignatureRequestForm({
 
       {!isQes && (
         <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-emerald-950">
-          <p className="text-sm font-semibold">Native PDF signing</p>
+          <p className="text-sm font-semibold">
+            Standard Kinetic signing
+          </p>
           <p className="mt-1 text-xs leading-5 text-emerald-800">
-            Kinetic generates each signature from the signatory's official profile name and stamps the signing date from the server. Choose whether to use a clean signing-record page or place the two required fields directly on this PDF.
+            {isDocxDocument
+              ? (
+                'Kinetic converts this Word document once to an '
+                + 'immutable PDF signing snapshot. Word documents '
+                + 'use the signing-record page for signature and '
+                + 'server-controlled signing date fields.'
+              )
+              : (
+                "Kinetic generates each signature from the signatory's "
+                + 'official profile name and stamps the signing date '
+                + 'from the server. Choose whether to use a clean '
+                + 'signing-record page or place the two required '
+                + 'fields directly on this PDF.'
+              )}
           </p>
           <div className="mt-3 grid gap-2 md:grid-cols-2">
             <label className={`cursor-pointer rounded-lg border p-3 ${fieldPlacementMode === 'record' ? 'border-emerald-500 bg-white' : 'border-emerald-200 bg-emerald-50'}`}>
@@ -316,7 +359,10 @@ export default function SignatureRequestForm({
                   type="radio"
                   name="field-placement-mode"
                   value="record"
-                  checked={fieldPlacementMode === 'record'}
+                  checked={
+                    isDocxDocument
+                    || fieldPlacementMode === 'record'
+                  }
                   onChange={() => setFieldPlacementMode('record')}
                   className="mt-0.5"
                 />
@@ -326,19 +372,27 @@ export default function SignatureRequestForm({
                 </span>
               </span>
             </label>
-            <label className={`cursor-pointer rounded-lg border p-3 ${fieldPlacementMode === 'document' ? 'border-emerald-500 bg-white' : 'border-emerald-200 bg-emerald-50'}`}>
+            <label className={`${isDocxDocument ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'} rounded-lg border p-3 ${fieldPlacementMode === 'document' && !isDocxDocument ? 'border-emerald-500 bg-white' : 'border-emerald-200 bg-emerald-50'}`}>
               <span className="flex items-start gap-2">
                 <input
                   type="radio"
                   name="field-placement-mode"
                   value="document"
-                  checked={fieldPlacementMode === 'document'}
+                  checked={
+                    !isDocxDocument
+                    && fieldPlacementMode === 'document'
+                  }
+                  disabled={isDocxDocument}
                   onChange={() => setFieldPlacementMode('document')}
                   className="mt-0.5"
                 />
                 <span>
                   <strong className="block text-xs">Place fields on PDF</strong>
-                  <span className="mt-0.5 block text-[11px] leading-4 text-emerald-800">Use existing signature/date areas in a contract or form.</span>
+                  <span className="mt-0.5 block text-[11px] leading-4 text-emerald-800">
+                    {isDocxDocument
+                      ? 'Available for PDF source documents only.'
+                      : 'Use existing signature/date areas in a contract or form.'}
+                  </span>
                 </span>
               </span>
             </label>
@@ -522,7 +576,7 @@ export default function SignatureRequestForm({
         ))}
       </section>
 
-      {!isQes && fieldPlacementMode === 'document' && (
+      {usesDocumentFields && (
         <SignatureFieldPlacement
           documentId={document.id}
           recipients={recipients}

@@ -173,4 +173,123 @@ describe('SignatureRequestForm', () => {
       (recipient) => recipient.sequence === 1,
     )).toBe(true);
   });
+
+  it('accepts Word DOCX documents for standard Kinetic signing', () => {
+    const onSubmit = vi.fn();
+    const deadline = futureLocalDate();
+
+    const wordDocument = {
+      ...document,
+      id: 'document-docx',
+      title: 'Word employment contract',
+      original_filename: 'employment-contract.docx',
+      mime_type: (
+        'application/vnd.openxmlformats-officedocument.'
+        + 'wordprocessingml.document'
+      ),
+    };
+
+    render(
+      <SignatureRequestForm
+        document={wordDocument}
+        employees={employees}
+        isSuperAdmin
+        onSubmit={onSubmit}
+      />,
+    );
+
+    expect(
+      screen.getByText(
+        /converts this Word document once to an immutable PDF signing snapshot/i,
+      ),
+    ).toBeInTheDocument();
+
+    expect(
+      screen.getByRole(
+        'radio',
+        { name: /Signing record page/i },
+      ),
+    ).toBeChecked();
+
+    expect(
+      screen.getByRole(
+        'radio',
+        { name: /Place fields on PDF/i },
+      ),
+    ).toBeDisabled();
+
+    fireEvent.change(
+      screen.getByLabelText('Completion deadline'),
+      { target: { value: deadline } },
+    );
+    fireEvent.change(
+      screen.getByLabelText('Signatory 1'),
+      { target: { value: 'employee-1' } },
+    );
+
+    fireEvent.submit(
+      screen.getByRole(
+        'button',
+        { name: 'Send for signature' },
+      ).closest('form'),
+    );
+
+    expect(onSubmit).toHaveBeenCalledTimes(1);
+
+    const payload = onSubmit.mock.calls[0][0];
+    expect(payload.document_id).toBe('document-docx');
+    expect(payload.assurance_level).toBe('standard');
+
+    expect(
+      screen.queryByText(
+        'Standard Kinetic signing supports PDF and Word (.docx) documents only.',
+      ),
+    ).not.toBeInTheDocument();
+  });
+
+  it('rejects unsupported documents for standard Kinetic signing', () => {
+    const onSubmit = vi.fn();
+    const deadline = futureLocalDate();
+
+    const unsupportedDocument = {
+      ...document,
+      id: 'document-text',
+      original_filename: 'notes.txt',
+      mime_type: 'text/plain',
+    };
+
+    render(
+      <SignatureRequestForm
+        document={unsupportedDocument}
+        employees={employees}
+        isSuperAdmin
+        onSubmit={onSubmit}
+      />,
+    );
+
+    fireEvent.change(
+      screen.getByLabelText('Completion deadline'),
+      { target: { value: deadline } },
+    );
+    fireEvent.change(
+      screen.getByLabelText('Signatory 1'),
+      { target: { value: 'employee-1' } },
+    );
+
+    fireEvent.submit(
+      screen.getByRole(
+        'button',
+        { name: 'Send for signature' },
+      ).closest('form'),
+    );
+
+    expect(onSubmit).not.toHaveBeenCalled();
+
+    expect(
+      screen.getByText(
+        'Standard Kinetic signing supports PDF and Word (.docx) documents only.',
+      ),
+    ).toBeInTheDocument();
+  });
+
 });

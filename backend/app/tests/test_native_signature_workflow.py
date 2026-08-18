@@ -1,4 +1,6 @@
 import hashlib
+
+import pytest
 from datetime import datetime, timedelta
 from io import BytesIO
 
@@ -456,3 +458,359 @@ def test_parallel_signers_fill_only_their_assigned_pdf_fields(
         assert jane_values['signature'] == 'J.Doe'
         assert mark_values['date']
         assert jane_values['date']
+
+
+def test_standard_docx_signing_uses_immutable_converted_pdf_snapshot(
+    client,
+    app,
+    tenant,
+    admin_user,
+    auth_headers,
+    tmp_path,
+    monkeypatch,
+):
+    from app.services.document_conversion_service import ConvertedPdf
+
+    app.config['SIGNATURE_EVIDENCE_STORAGE'] = 'local'
+    app.config['SIGNATURE_EVIDENCE_FOLDER'] = str(
+        tmp_path / 'signature-evidence-docx',
+    )
+
+    source_path = tmp_path / 'employment-agreement.docx'
+    source_bytes = (
+        b'PK\x03\x04'
+        b'kinetic-test-docx-source-content'
+    )
+    source_path.write_bytes(source_bytes)
+
+    converted_path = tmp_path / 'converted.pdf'
+    converted_bytes = _make_pdf(converted_path)
+
+    conversion_calls = []
+
+    def fake_convert_docx_to_pdf(content):
+        conversion_calls.append(content)
+        return ConvertedPdf(
+            content=converted_bytes,
+            page_count=1,
+            engine='libreoffice',
+            engine_version='LibreOffice Test 24.2',
+        )
+
+    monkeypatch.setattr(
+        'app.services.signature_evidence_service.convert_docx_to_pdf',
+        fake_convert_docx_to_pdf,
+    )
+
+    with app.app_context():
+        signer_user = register_user({
+            'tenant_id': tenant.id,
+            'email': 'word.signer@acme.test',
+            'first_name': 'Word',
+            'last_name': 'Signer',
+            'password': 'StrongWordSignerPass123!',
+            'roles': ['EMPLOYEE'],
+            'email_verified_at': utcnow(),
+        })
+        signer_user_id = inspect(signer_user).identity[0]
+
+        signer = Employee(
+            tenant_id=tenant.id,
+            user_id=signer_user_id,
+            employee_number='SIGN-DOCX-001',
+            first_name='Word',
+            last_name='Signer',
+            email='word.signer@acme.test',
+            hire_date=datetime.utcnow().date(),
+            employment_status='active',
+            employment_type='full_time',
+        )
+        db.session.add(signer)
+        db.session.flush()
+
+        document = Document(
+            tenant_id=tenant.id,
+            uploaded_by_id=inspect(admin_user).identity[0],
+            title='Employment Agreement Word Source',
+            document_type='contract',
+            original_filename='employment-agreement.docx',
+            stored_filename='employment-agreement.docx',
+            file_path=str(source_path),
+            mime_type=(
+                'application/vnd.openxmlformats-officedocument.'
+                'wordprocessingml.document'
+            ),
+            size_bytes=len(source_bytes),
+            checksum_sha256=hashlib.sha256(
+                source_bytes,
+            ).hexdigest(),
+            signature_status='not_required',
+            access_level='employee',
+            status='active',
+        )
+        db.session.add(document)
+        db.session.commit()
+
+        employee_id = signer.id
+        document_id = document.id
+
+    due_at = (datetime.utcnow() + timedelta(days=7)).replace(
+        microsecond=0,
+    )
+
+    create_response = client.post(
+        '/api/signature-requests',
+        headers=auth_headers,
+        json={
+            'document_id': str(document_id),
+            'subject': 'Please sign the Word employment agreement',
+            'signing_mode': 'sequential',
+            'assurance_level': 'standard',
+            'due_at': due_at.isoformat(),
+            'recipients': [{
+                'employee_id': str(employee_id),
+                'role_label': 'Employee',
+                'sequence': 1,
+            }],
+        },
+    )
+
+    assert create_response.status_code == 201
+
+    created = create_response.get_json()['data']
+    recipient_id = created['recipients'][0]['id']
+
+    assert conversion_calls == [source_bytes]
+    assert len(created['fields']) == 2
+    assert {
+        field['page_number']
+        for field in created['fields']
+    } == {2}
+
+    with app.app_context():
+        artifact = SignatureArtifact.query.filter_by(
+            signature_request_id=created['id'],
+            artifact_type='original_document',
+        ).one()
+
+        assert artifact.mime_type == 'application/pdf'
+        assert artifact.original_filename.endswith('Signing.pdf')
+        assert artifact.original_filename.lower().endswith('.pdf')
+        assert artifact.checksum_sha256 == hashlib.sha256(
+            converted_bytes,
+        ).hexdigest()
+
+        metadata = artifact.metadata_json
+
+        assert (
+            metadata['source_original_filename']
+            == 'employment-agreement.docx'
+        )
+        assert metadata['converted_for_signing'] is True
+        assert metadata['conversion_engine'] == 'libreoffice'
+        assert (
+            metadata['conversion_engine_version']
+            == 'LibreOffice Test 24.2'
+        )
+        assert metadata['conversion_page_count'] == 1
+        assert (
+            metadata['source_checksum_sha256']
+            == hashlib.sha256(source_bytes).hexdigest()
+        )
+        assert metadata['source_size_bytes'] == len(source_bytes)
+        assert (
+            metadata['signing_snapshot_sha256']
+            == artifact.checksum_sha256
+        )
+
+    _login(
+        client,
+        'word.signer@acme.test',
+        'StrongWordSignerPass123!',
+    )
+
+    preview_response = client.get(
+        f'/api/signature-requests/recipients/'
+        f'{recipient_id}/document',
+    )
+
+    assert preview_response.status_code == 200
+    assert preview_response.data.startswith(b'%PDF-')
+
+    preview_pdf = PdfReader(BytesIO(preview_response.data))
+    assert len(preview_pdf.pages) == 2
+
+
+def test_standard_signing_rejects_unsupported_document_format(
+    app,
+    tenant,
+    admin_user,
+    tmp_path,
+):
+    from app.services.signature_service import create_signature_request
+
+    source_path = tmp_path / 'unsupported.txt'
+    source_bytes = b'not a supported signing document'
+    source_path.write_bytes(source_bytes)
+
+    with app.app_context():
+        document = Document(
+            tenant_id=tenant.id,
+            uploaded_by_id=inspect(admin_user).identity[0],
+            title='Unsupported signing source',
+            document_type='other',
+            original_filename='unsupported.txt',
+            stored_filename='unsupported.txt',
+            file_path=str(source_path),
+            mime_type='text/plain',
+            size_bytes=len(source_bytes),
+            checksum_sha256=hashlib.sha256(
+                source_bytes,
+            ).hexdigest(),
+            signature_status='not_required',
+            access_level='employee',
+            status='active',
+        )
+        db.session.add(document)
+        db.session.commit()
+
+        with pytest.raises(
+            ValueError,
+            match=r'PDF and Word \(\.docx\)',
+        ):
+            create_signature_request(
+                {
+                    'document_id': str(document.id),
+                    'assurance_level': 'standard',
+                },
+                tenant.id,
+                admin_user,
+            )
+
+
+def test_docx_conversion_failure_rolls_back_signature_request(
+    client,
+    app,
+    tenant,
+    admin_user,
+    auth_headers,
+    tmp_path,
+    monkeypatch,
+):
+    from app.services.document_conversion_service import (
+        DocumentConversionError,
+    )
+
+    app.config['SIGNATURE_EVIDENCE_STORAGE'] = 'local'
+    app.config['SIGNATURE_EVIDENCE_FOLDER'] = str(
+        tmp_path / 'signature-evidence-docx-failure',
+    )
+
+    source_path = tmp_path / 'conversion-failure.docx'
+    source_bytes = b'PK\x03\x04conversion-failure-test-source'
+    source_path.write_bytes(source_bytes)
+
+    def fail_conversion(_content):
+        raise DocumentConversionError(
+            'Deliberate DOCX conversion failure.',
+        )
+
+    monkeypatch.setattr(
+        'app.services.signature_evidence_service.convert_docx_to_pdf',
+        fail_conversion,
+    )
+
+    with app.app_context():
+        signer_user = register_user({
+            'tenant_id': tenant.id,
+            'email': 'word.failure@acme.test',
+            'first_name': 'Word',
+            'last_name': 'Failure',
+            'password': 'StrongWordFailurePass123!',
+            'roles': ['EMPLOYEE'],
+            'email_verified_at': utcnow(),
+        })
+
+        signer = Employee(
+            tenant_id=tenant.id,
+            user_id=inspect(signer_user).identity[0],
+            employee_number='SIGN-DOCX-FAIL-001',
+            first_name='Word',
+            last_name='Failure',
+            email='word.failure@acme.test',
+            hire_date=datetime.utcnow().date(),
+            employment_status='active',
+            employment_type='full_time',
+        )
+        db.session.add(signer)
+        db.session.flush()
+
+        document = Document(
+            tenant_id=tenant.id,
+            uploaded_by_id=inspect(admin_user).identity[0],
+            title='DOCX Conversion Failure',
+            document_type='contract',
+            original_filename='conversion-failure.docx',
+            stored_filename='conversion-failure.docx',
+            file_path=str(source_path),
+            mime_type=(
+                'application/vnd.openxmlformats-officedocument.'
+                'wordprocessingml.document'
+            ),
+            size_bytes=len(source_bytes),
+            checksum_sha256=hashlib.sha256(
+                source_bytes,
+            ).hexdigest(),
+            signature_status='not_required',
+            access_level='employee',
+            status='active',
+        )
+        db.session.add(document)
+        db.session.commit()
+
+        employee_id = signer.id
+        document_id = document.id
+
+    due_at = (datetime.utcnow() + timedelta(days=7)).replace(
+        microsecond=0,
+    )
+
+    response = client.post(
+        '/api/signature-requests',
+        headers=auth_headers,
+        json={
+            'document_id': str(document_id),
+            'subject': 'Conversion failure test',
+            'signing_mode': 'sequential',
+            'assurance_level': 'standard',
+            'due_at': due_at.isoformat(),
+            'recipients': [{
+                'employee_id': str(employee_id),
+                'role_label': 'Employee',
+                'sequence': 1,
+            }],
+        },
+    )
+
+    assert response.status_code == 400
+    payload = response.get_json()
+    assert 'Deliberate DOCX conversion failure.' in str(payload)
+
+    with app.app_context():
+        request_count = SignatureRequest.query.filter_by(
+            document_id=document_id,
+        ).count()
+
+        artifact_count = SignatureArtifact.query.join(
+            SignatureRequest,
+            SignatureArtifact.signature_request_id
+            == SignatureRequest.id,
+        ).filter(
+            SignatureRequest.document_id == document_id,
+        ).count()
+
+        document = db.session.get(Document, document_id)
+
+        assert request_count == 0
+        assert artifact_count == 0
+        assert document.signature_status == 'not_required'
