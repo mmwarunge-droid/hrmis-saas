@@ -20,3 +20,7 @@ PyOTP==2.10.0
 qrcode==8.2
 dropbox-sign==1.11.0
 boto3==1.43.51
+
+pypdf==5.9.0
+
+reportlab==4.4.9

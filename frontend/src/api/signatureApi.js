@@ -22,6 +22,26 @@ export const signatureApi = {
     `/signature-requests/recipients/${recipientId}/viewed`,
   ),
 
+  signingDocument: (recipientId) => apiClient.get(
+    `/signature-requests/recipients/${recipientId}/document`,
+    { responseType: 'blob' },
+  ),
+
+  signedDocument: (recipientId) => apiClient.get(
+    `/signature-requests/recipients/${recipientId}/signed-document`,
+    { responseType: 'blob' },
+  ),
+
+  signedDocumentUrl: (recipientId) => {
+    const base = apiClient.defaults.baseURL || '/api';
+    return `${base}/signature-requests/recipients/${recipientId}/signed-document`;
+  },
+
+  submit: (recipientId, payload) => apiClient.post(
+    `/signature-requests/recipients/${recipientId}/submit`,
+    payload,
+  ),
+
   sign: (recipientId, signatureName) => apiClient.patch(
     `/signature-requests/recipients/${recipientId}/sign`,
     { signature_name: signatureName },

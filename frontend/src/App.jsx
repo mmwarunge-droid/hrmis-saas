@@ -49,6 +49,7 @@ export default function App() {
         <Route path="/verify-email" element={<VerifyEmail />} />
       </Route>
       <Route element={<ProtectedRoute />}>
+        <Route path="/signature-tasks/:recipientId" element={<SignatureTask />} />
         <Route element={<DashboardLayout />}>
           <Route path="/" element={<Navigate to="/dashboard" replace />} />
           <Route path="/dashboard" element={<HomeRouter />} />
@@ -80,7 +81,6 @@ export default function App() {
             <Route path="/goals" element={<Goals />} />
           </Route>
           <Route path="/tasks" element={<Tasks />} />
-          <Route path="/signature-tasks/:recipientId" element={<SignatureTask />} />
           <Route path="/onboarding" element={<Onboarding />} />
           <Route element={<PermissionRoute permission="user:read" />}>
             <Route path="/users" element={<Users />} />

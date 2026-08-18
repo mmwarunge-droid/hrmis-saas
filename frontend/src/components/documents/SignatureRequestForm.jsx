@@ -5,6 +5,7 @@ import {
   Trash2,
 } from 'lucide-react';
 
+import SignatureFieldPlacement from './SignatureFieldPlacement.jsx';
 import Button from '../ui/Button.jsx';
 import Input from '../ui/Input.jsx';
 
@@ -15,6 +16,7 @@ function newRecipient() {
     employee_id: '',
     role_label: 'Signatory',
     sequence: 1,
+    fields: [],
   };
 }
 
@@ -46,6 +48,7 @@ export default function SignatureRequestForm({
     newRecipient(),
   ]);
   const [error, setError] = useState('');
+  const [fieldPlacementMode, setFieldPlacementMode] = useState('record');
 
   const isQes = form.assurance_level === 'qes';
 
@@ -126,9 +129,29 @@ export default function SignatureRequestForm({
       return;
     }
 
+    if (
+      !isQes
+      && document.mime_type !== 'application/pdf'
+      && !document.original_filename?.toLowerCase().endsWith('.pdf')
+    ) {
+      setError('Standard Kinetic signing currently supports PDF documents only.');
+      return;
+    }
+
     if (isQes && recipients.length !== 1) {
       setError('Qualified eID signing requires one signatory.');
       return;
+    }
+
+    if (!isQes && fieldPlacementMode === 'document') {
+      const incompleteSigner = recipients.findIndex((recipient) => {
+        const fieldTypes = new Set((recipient.fields || []).map((field) => field.field_type));
+        return !fieldTypes.has('signature') || !fieldTypes.has('date');
+      });
+      if (incompleteSigner >= 0) {
+        setError(`Place both a signature and date field for signatory ${incompleteSigner + 1}.`);
+        return;
+      }
     }
 
     const dueAt = new Date(form.due_at);
@@ -178,6 +201,9 @@ export default function SignatureRequestForm({
         sequence: signingMode === 'parallel'
           ? 1
           : toInteger(recipient.sequence, index + 1),
+        ...(!isQes && fieldPlacementMode === 'document'
+          ? { fields: recipient.fields || [] }
+          : {}),
       })),
       reminder: {
         first_reminder_after_days: toInteger(
@@ -273,6 +299,49 @@ export default function SignatureRequestForm({
                 provider.
               </p>
             </div>
+          </div>
+        </div>
+      )}
+
+      {!isQes && (
+        <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-emerald-950">
+          <p className="text-sm font-semibold">Native PDF signing</p>
+          <p className="mt-1 text-xs leading-5 text-emerald-800">
+            Kinetic generates each signature from the signatory's official profile name and stamps the signing date from the server. Choose whether to use a clean signing-record page or place the two required fields directly on this PDF.
+          </p>
+          <div className="mt-3 grid gap-2 md:grid-cols-2">
+            <label className={`cursor-pointer rounded-lg border p-3 ${fieldPlacementMode === 'record' ? 'border-emerald-500 bg-white' : 'border-emerald-200 bg-emerald-50'}`}>
+              <span className="flex items-start gap-2">
+                <input
+                  type="radio"
+                  name="field-placement-mode"
+                  value="record"
+                  checked={fieldPlacementMode === 'record'}
+                  onChange={() => setFieldPlacementMode('record')}
+                  className="mt-0.5"
+                />
+                <span>
+                  <strong className="block text-xs">Signing record page</strong>
+                  <span className="mt-0.5 block text-[11px] leading-4 text-emerald-800">Recommended. Two signers appear side by side; larger groups use a two-column layout.</span>
+                </span>
+              </span>
+            </label>
+            <label className={`cursor-pointer rounded-lg border p-3 ${fieldPlacementMode === 'document' ? 'border-emerald-500 bg-white' : 'border-emerald-200 bg-emerald-50'}`}>
+              <span className="flex items-start gap-2">
+                <input
+                  type="radio"
+                  name="field-placement-mode"
+                  value="document"
+                  checked={fieldPlacementMode === 'document'}
+                  onChange={() => setFieldPlacementMode('document')}
+                  className="mt-0.5"
+                />
+                <span>
+                  <strong className="block text-xs">Place fields on PDF</strong>
+                  <span className="mt-0.5 block text-[11px] leading-4 text-emerald-800">Use existing signature/date areas in a contract or form.</span>
+                </span>
+              </span>
+            </label>
           </div>
         </div>
       )}
@@ -452,6 +521,15 @@ export default function SignatureRequestForm({
           </div>
         ))}
       </section>
+
+      {!isQes && fieldPlacementMode === 'document' && (
+        <SignatureFieldPlacement
+          documentId={document.id}
+          recipients={recipients}
+          employees={eligibleEmployees}
+          onFieldsChange={(index, fields) => updateRecipient(index, { fields })}
+        />
+      )}
 
       <section className="space-y-3">
         <div>

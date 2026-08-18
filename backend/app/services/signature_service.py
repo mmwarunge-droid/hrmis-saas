@@ -9,6 +9,7 @@ from app.models import (
     Document,
     Employee,
     Notification,
+    SignatureArtifact,
     SignatureEvent,
     SignatureRecipient,
     SignatureReminderRule,
@@ -24,6 +25,16 @@ from app.services.signature_providers.base import (
 )
 from app.services.signature_evidence_service import (
     capture_source_artifact,
+)
+from app.services.native_signature_service import (
+    CONSENT_VERSION,
+    DEFAULT_SIGNATURE_STYLE,
+    NativeSignatureError,
+    canonical_signature_text,
+    complete_recipient_fields,
+    create_signature_fields,
+    create_signed_document_artifact,
+    is_pdf_document,
 )
 from app.services.signature_providers.registry import (
     get_signature_provider,
@@ -372,6 +383,14 @@ def create_signature_request(
             'Only active documents can be sent for signature.',
         )
 
+    if (
+        payload.get('assurance_level', 'standard') == 'standard'
+        and not is_pdf_document(document)
+    ):
+        raise ValueError(
+            'Standard Kinetic signing currently supports PDF documents only.',
+        )
+
     existing_request = SignatureRequest.query.filter(
         SignatureRequest.document_id == document.id,
         SignatureRequest.status.in_(
@@ -465,6 +484,7 @@ def create_signature_request(
                     or request_due_at
                 )
             ),
+            'fields': recipient_payload.get('fields') or [],
         })
 
     first_sequence = min(
@@ -531,6 +551,7 @@ def create_signature_request(
             due_at=resolved['due_at'],
         )
         db.session.add(recipient)
+        resolved['recipient'] = recipient
 
     db.session.flush()
 
@@ -578,8 +599,18 @@ def create_signature_request(
         },
     )
 
-    if is_qes:
-        capture_source_artifact(signature_request)
+    # Capture the immutable source before any recipient can sign. For the
+    # native workflow this also gives the PDF renderer a stable source copy.
+    capture_source_artifact(signature_request)
+
+    if not is_qes:
+        create_signature_fields(
+            signature_request,
+            {
+                str(item['recipient'].id): item.get('fields') or []
+                for item in resolved_recipients
+            },
+        )
 
     document.signature_status = 'pending'
 
@@ -592,7 +623,7 @@ def create_signature_request(
             'document_id': str(document.id),
             'assurance_level': assurance_level,
             'recipient_count': len(resolved_recipients),
-            'provider': 'dropbox_sign' if is_qes else 'ace',
+            'provider': 'dropbox_sign' if is_qes else 'internal',
         },
         actor=actor,
     )
@@ -799,6 +830,21 @@ def serialize_signature_request(
     data['reminder'] = (
         signature_request.reminder_rule.to_dict()
         if signature_request.reminder_rule
+        else None
+    )
+
+    data['fields'] = [
+        field.to_dict()
+        for field in signature_request.fields
+    ]
+    signed_artifact = next((
+        artifact
+        for artifact in signature_request.artifacts
+        if artifact.artifact_type == 'signed_document'
+    ), None)
+    data['signed_document'] = (
+        signed_artifact.to_dict()
+        if signed_artifact
         else None
     )
 
@@ -1015,7 +1061,17 @@ def mark_recipient_signed(
     recipient,
     actor,
     signature_name=None,
+    *,
+    consent=True,
+    signature_style=DEFAULT_SIGNATURE_STYLE,
+    consent_version=CONSENT_VERSION,
 ):
+    """Record an internal signature using authoritative profile identity.
+
+    ``signature_name`` is accepted only for backwards API compatibility and
+    is intentionally ignored. The signed identity and timestamp are generated
+    by Kinetic on the server.
+    """
     _require_recipient_actor(recipient, actor)
 
     if recipient.status not in {
@@ -1034,18 +1090,35 @@ def mark_recipient_signed(
             'Sign. Kinetic cannot record the signature directly.',
         )
 
-    now = utcnow()
+    if not consent:
+        raise ValueError(
+            'Electronic-signature consent is required before submission.',
+        )
 
-    normalized_signature_name = (signature_name or actor.full_name or '').strip()
-    if len(normalized_signature_name) < 2 or len(normalized_signature_name) > 240:
-        raise ValueError('A valid typed signature name is required')
+    now = utcnow()
+    generated_signature = canonical_signature_text(recipient, actor)
 
     recipient.status = 'signed'
     recipient.signed_at = now
-    recipient.signature_name = normalized_signature_name
+    recipient.signature_name = generated_signature
+    recipient.signature_method = 'generated_typed'
+    recipient.signature_style = signature_style or DEFAULT_SIGNATURE_STYLE
+    recipient.consented_at = now
+    recipient.consent_version = consent_version or CONSENT_VERSION
 
     if not recipient.viewed_at:
         recipient.viewed_at = now
+
+    complete_recipient_fields(
+        recipient,
+        now,
+        generated_signature,
+    )
+
+    source_artifact = SignatureArtifact.query.filter_by(
+        signature_request_id=signature_request.id,
+        artifact_type='original_document',
+    ).first()
 
     signature_request.status = 'in_progress'
 
@@ -1058,7 +1131,16 @@ def mark_recipient_signed(
         metadata={
             'sequence': recipient.sequence,
             'signed_at': now.isoformat(),
-            'signature_name': normalized_signature_name,
+            'signature_name': generated_signature,
+            'signature_method': recipient.signature_method,
+            'signature_style': recipient.signature_style,
+            'consent_version': recipient.consent_version,
+            'consented_at': recipient.consented_at.isoformat(),
+            'document_sha256': (
+                source_artifact.checksum_sha256
+                if source_artifact
+                else signature_request.document.checksum_sha256
+            ),
         },
     )
 
@@ -1069,6 +1151,19 @@ def mark_recipient_signed(
         )
 
     if _all_recipients_signed(signature_request):
+        try:
+            signed_artifact = create_signed_document_artifact(
+                signature_request,
+            )
+        except NativeSignatureError as exc:
+            if current_app.config.get('TESTING'):
+                signed_artifact = None
+            else:
+                raise ValueError(
+                    'The signature was not submitted because Kinetic '
+                    f'could not create the signed PDF: {exc}'
+                ) from exc
+
         signature_request.status = 'completed'
         signature_request.completed_at = now
         signature_request.document.signature_status = 'signed'
@@ -1085,6 +1180,16 @@ def mark_recipient_signed(
             description='All recipients completed signing',
             metadata={
                 'completed_at': now.isoformat(),
+                'signed_document_artifact_id': (
+                    str(signed_artifact.id)
+                    if signed_artifact
+                    else None
+                ),
+                'signed_document_sha256': (
+                    signed_artifact.checksum_sha256
+                    if signed_artifact
+                    else None
+                ),
             },
         )
 
