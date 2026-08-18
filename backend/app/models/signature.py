@@ -161,6 +161,12 @@ class SignatureRequest(
         passive_deletes=True,
         order_by='SignatureProviderEvent.received_at',
     )
+    fields = db.relationship(
+        'SignatureField',
+        back_populates='signature_request',
+        cascade='all, delete-orphan',
+        order_by='SignatureField.page_number',
+    )
 
     __table_args__ = (
         db.CheckConstraint(
@@ -380,6 +386,10 @@ class SignatureRecipient(
 
     decline_reason = db.Column(db.Text, nullable=True)
     signature_name = db.Column(db.String(240), nullable=True)
+    signature_method = db.Column(db.String(40), nullable=True)
+    signature_style = db.Column(db.String(40), nullable=True)
+    consented_at = db.Column(db.DateTime, nullable=True)
+    consent_version = db.Column(db.String(40), nullable=True)
     provider_recipient_id = db.Column(
         db.String(255),
         nullable=True,
@@ -409,6 +419,12 @@ class SignatureRecipient(
         'SignatureEvent',
         back_populates='recipient',
         passive_deletes=True,
+    )
+    fields = db.relationship(
+        'SignatureField',
+        back_populates='recipient',
+        cascade='all, delete-orphan',
+        order_by='SignatureField.page_number',
     )
 
     __table_args__ = (
@@ -485,12 +501,114 @@ class SignatureRecipient(
             ),
             'decline_reason': self.decline_reason,
             'signature_name': self.signature_name,
+            'signature_method': self.signature_method,
+            'signature_style': self.signature_style,
+            'consented_at': (
+                self.consented_at.isoformat()
+                if self.consented_at
+                else None
+            ),
+            'consent_version': self.consent_version,
             'provider_recipient_id': (
                 self.provider_recipient_id
             ),
             'provider_status': self.provider_status,
             'provider_metadata_json': (
                 self.provider_metadata_json
+            ),
+        }
+
+
+class SignatureField(
+    db.Model,
+    TenantMixin,
+    TimestampMixin,
+    ReprMixin,
+):
+    """A recipient-owned field positioned on a PDF page.
+
+    Coordinates are normalized to the page using a top-left origin so the
+    same values can be used by the React overlay and translated to PDF points
+    by the server-side renderer.
+    """
+
+    __tablename__ = 'signature_fields'
+
+    id = db.Column(GUID(), primary_key=True, default=uuid_pk)
+    signature_request_id = db.Column(
+        GUID(),
+        db.ForeignKey('signature_requests.id', ondelete='CASCADE'),
+        nullable=False,
+        index=True,
+    )
+    recipient_id = db.Column(
+        GUID(),
+        db.ForeignKey('signature_recipients.id', ondelete='CASCADE'),
+        nullable=False,
+        index=True,
+    )
+    field_type = db.Column(db.String(30), nullable=False, index=True)
+    label = db.Column(db.String(160), nullable=True)
+    page_number = db.Column(db.Integer, nullable=False, default=1)
+    x = db.Column(db.Float, nullable=False)
+    y = db.Column(db.Float, nullable=False)
+    width = db.Column(db.Float, nullable=False)
+    height = db.Column(db.Float, nullable=False)
+    required = db.Column(db.Boolean, nullable=False, default=True)
+    value = db.Column(db.Text, nullable=True)
+    completed_at = db.Column(db.DateTime, nullable=True)
+
+    signature_request = db.relationship(
+        'SignatureRequest',
+        back_populates='fields',
+    )
+    recipient = db.relationship(
+        'SignatureRecipient',
+        back_populates='fields',
+    )
+
+    __table_args__ = (
+        db.CheckConstraint(
+            "field_type IN ('signature','date')",
+            name='ck_signature_fields_type',
+        ),
+        db.CheckConstraint(
+            'page_number >= 1',
+            name='ck_signature_fields_page_number',
+        ),
+        db.CheckConstraint(
+            'x >= 0 AND x <= 1 AND y >= 0 AND y <= 1',
+            name='ck_signature_fields_origin',
+        ),
+        db.CheckConstraint(
+            'width > 0 AND width <= 1 AND height > 0 AND height <= 1',
+            name='ck_signature_fields_dimensions',
+        ),
+        db.CheckConstraint(
+            'x + width <= 1 AND y + height <= 1',
+            name='ck_signature_fields_page_bounds',
+        ),
+    )
+
+    def to_dict(self):
+        return {
+            'id': str(self.id),
+            'tenant_id': str(self.tenant_id),
+            'signature_request_id': str(self.signature_request_id),
+            'recipient_id': str(self.recipient_id),
+            'field_type': self.field_type,
+            'label': self.label,
+            'page_number': self.page_number,
+            'x': self.x,
+            'y': self.y,
+            'width': self.width,
+            'height': self.height,
+            'required': self.required,
+            'value': self.value,
+            'completed_at': (
+                self.completed_at.isoformat()
+                if self.completed_at
+                else None
             ),
         }
 

@@ -15,6 +15,11 @@ from app.models import (
     SignatureRequest,
 )
 from app.models.base import utcnow
+from app.services.document_conversion_service import (
+    DocumentConversionError,
+    convert_docx_to_pdf,
+    is_docx_document,
+)
 from app.services.signature_providers.base import (
     SignatureArtifactsNotReady,
     SignatureProviderError,
@@ -134,13 +139,57 @@ def capture_source_artifact(signature_request):
             'the uploaded document record.',
         )
 
+    artifact_content = content
+    artifact_filename = document.original_filename
+    artifact_mime_type = document.mime_type or 'application/pdf'
+
+    metadata = {
+        'document_id': str(document.id),
+        'capture_stage': 'before_provider_submission',
+        'source_original_filename': document.original_filename,
+        'source_mime_type': document.mime_type,
+        'source_checksum_sha256': checksum,
+        'source_size_bytes': len(content),
+        'converted_for_signing': False,
+    }
+
+    if (
+        signature_request.assurance_level == 'standard'
+        and is_docx_document(document)
+    ):
+        try:
+            converted = convert_docx_to_pdf(content)
+        except DocumentConversionError as exc:
+            raise SignatureEvidenceValidationError(
+                str(exc),
+            ) from exc
+
+        artifact_content = converted.content
+        artifact_filename = (
+            f'{Path(document.original_filename).stem}'
+            ' - Signing.pdf'
+        )
+        artifact_mime_type = 'application/pdf'
+
+        metadata.update({
+            'converted_for_signing': True,
+            'conversion_engine': converted.engine,
+            'conversion_engine_version': converted.engine_version,
+            'conversion_page_count': converted.page_count,
+        })
+
     stored = save_signature_artifact(
-        content,
+        artifact_content,
         tenant_id=signature_request.tenant_id,
         signature_request_id=signature_request.id,
-        filename=document.original_filename,
-        mime_type=document.mime_type or 'application/pdf',
+        filename=artifact_filename,
+        mime_type=artifact_mime_type,
     )
+
+    metadata['signing_snapshot_sha256'] = stored[
+        'checksum_sha256'
+    ]
+
     artifact = SignatureArtifact(
         tenant_id=signature_request.tenant_id,
         signature_request_id=signature_request.id,
@@ -149,18 +198,14 @@ def capture_source_artifact(signature_request):
         original_filename=stored['original_filename'],
         stored_filename=stored['stored_filename'],
         file_path=stored['file_path'],
-        mime_type=document.mime_type or 'application/pdf',
+        mime_type=artifact_mime_type,
         size_bytes=stored['size_bytes'],
         checksum_sha256=stored['checksum_sha256'],
-        metadata_json={
-            'document_id': str(document.id),
-            'capture_stage': 'before_provider_submission',
-        },
+        metadata_json=metadata,
     )
     db.session.add(artifact)
     db.session.flush()
     return artifact
-
 
 def queue_signature_evidence(
     signature_request,

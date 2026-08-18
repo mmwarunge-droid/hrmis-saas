@@ -15,6 +15,50 @@ def _utc_naive(value):
     return value.astimezone(timezone.utc).replace(tzinfo=None)
 
 
+class SignatureFieldCreateSchema(Schema):
+    field_type = fields.Str(
+        required=True,
+        validate=validate.OneOf(['signature', 'date']),
+    )
+    label = fields.Str(
+        required=False,
+        allow_none=True,
+        validate=validate.Length(max=160),
+    )
+    page_number = fields.Int(
+        required=True,
+        validate=validate.Range(min=1, max=5000),
+    )
+    x = fields.Float(
+        required=True,
+        validate=validate.Range(min=0, max=1),
+    )
+    y = fields.Float(
+        required=True,
+        validate=validate.Range(min=0, max=1),
+    )
+    width = fields.Float(
+        required=True,
+        validate=validate.Range(min=0.01, max=1),
+    )
+    height = fields.Float(
+        required=True,
+        validate=validate.Range(min=0.01, max=1),
+    )
+    required = fields.Bool(required=False, load_default=True)
+
+    @validates_schema
+    def validate_page_bounds(self, data, **kwargs):
+        if data.get('x', 0) + data.get('width', 0) > 1:
+            raise ValidationError({
+                'width': ['The field extends beyond the PDF page width.'],
+            })
+        if data.get('y', 0) + data.get('height', 0) > 1:
+            raise ValidationError({
+                'height': ['The field extends beyond the PDF page height.'],
+            })
+
+
 class SignatureRecipientCreateSchema(Schema):
     employee_id = fields.UUID(required=True)
     role_label = fields.Str(
@@ -28,6 +72,26 @@ class SignatureRecipientCreateSchema(Schema):
         validate=validate.Range(min=1),
     )
     due_at = fields.DateTime(required=False, allow_none=True)
+    fields = fields.List(
+        fields.Nested(SignatureFieldCreateSchema),
+        required=False,
+        load_default=list,
+        validate=validate.Length(max=20),
+    )
+
+    @validates_schema
+    def validate_signing_fields(self, data, **kwargs):
+        signing_fields = data.get('fields') or []
+        if not signing_fields:
+            return
+        types = [field['field_type'] for field in signing_fields]
+        if len(signing_fields) != 2 or sorted(types) != ['date', 'signature']:
+            raise ValidationError({
+                'fields': [
+                    'Custom placement requires exactly one signature field '
+                    'and one date field.',
+                ],
+            })
 
 
 class SignatureReminderCreateSchema(Schema):
@@ -171,6 +235,27 @@ class SignatureSignSchema(Schema):
         load_default=None,
         validate=validate.Length(min=2, max=240),
     )
+
+
+class SignatureSubmitSchema(Schema):
+    consent = fields.Bool(required=True)
+    signature_style = fields.Str(
+        required=False,
+        load_default='calligraphy_1',
+        validate=validate.OneOf([
+            'calligraphy_1',
+            'calligraphy_2',
+        ]),
+    )
+
+    @validates_schema
+    def validate_consent(self, data, **kwargs):
+        if data.get('consent') is not True:
+            raise ValidationError({
+                'consent': [
+                    'You must consent to use the generated electronic signature.',
+                ],
+            })
 
 
 class SignatureDiscussionCommentSchema(Schema):

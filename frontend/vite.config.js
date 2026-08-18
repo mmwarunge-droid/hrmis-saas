@@ -22,6 +22,12 @@ export default defineConfig(({ mode }) => {
       environment: 'jsdom',
       globals: true,
       setupFiles: './src/tests/setup.js',
+      alias: [
+        {
+          find: /^pdfjs-dist$/,
+          replacement: 'pdfjs-dist/legacy/build/pdf.mjs',
+        },
+      ],
     },
   };
 });

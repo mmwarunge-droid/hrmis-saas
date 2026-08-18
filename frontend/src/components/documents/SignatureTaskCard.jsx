@@ -25,7 +25,6 @@ function formatDeadline(value) {
 export default function SignatureTaskCard({
   task,
   loading = false,
-  onViewed,
   onDecline,
 }) {
   const [showDecline, setShowDecline] = useState(false);
@@ -113,9 +112,6 @@ export default function SignatureTaskCard({
             href={`/signature-tasks/${task.id}`}
             target="_blank"
             rel="noreferrer"
-            onClick={externalQes
-              ? undefined
-              : () => onViewed(task.id)}
             className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-800 transition hover:bg-slate-50"
           >
             <ExternalLink size={14} />
