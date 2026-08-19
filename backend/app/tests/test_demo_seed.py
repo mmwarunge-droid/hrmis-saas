@@ -40,6 +40,15 @@ def test_demo_seed_is_idempotent_and_presentation_ready(app, tmp_path):
         first_counts = dict(first['counts'])
         first_tenant_id = first['tenant_id']
 
+        security_policy = db.session.get(
+            Document,
+            demo_id('document:information-security'),
+        )
+        first_security_checksum = security_policy.checksum_sha256
+        assert security_policy.original_filename == 'information-security.pdf'
+        assert security_policy.mime_type == 'application/pdf'
+        assert Path(security_policy.file_path).read_bytes().startswith(b'%PDF-')
+
         second = seed_demo_data(
             reference=REFERENCE_DATE,
             password=DEMO_PASSWORD,
@@ -87,6 +96,15 @@ def test_demo_seed_is_idempotent_and_presentation_ready(app, tmp_path):
         assert len(files) == 40
         assert all(Path(document.file_path).is_file() for document in files)
         assert sum(document.signature_status == 'pending' for document in files) == 5
+
+        security_policy = db.session.get(
+            Document,
+            demo_id('document:information-security'),
+        )
+        assert security_policy.checksum_sha256 == first_security_checksum
+        assert security_policy.original_filename == 'information-security.pdf'
+        assert security_policy.mime_type == 'application/pdf'
+        assert Path(security_policy.file_path).read_bytes().startswith(b'%PDF-')
 
 
 def test_demo_reset_removes_mutations_and_restores_baseline(app, tmp_path):
