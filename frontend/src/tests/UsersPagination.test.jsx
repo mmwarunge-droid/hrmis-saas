@@ -26,6 +26,7 @@ vi.mock('../api/userApi.js', () => ({
     create: vi.fn(),
     update: vi.fn(),
     updateRoles: vi.fn(),
+    shareAccessLink: vi.fn(),
   },
 }));
 
@@ -109,6 +110,16 @@ beforeEach(() => {
     data: { ...account(1), is_active: false, revoked_sessions: 2 },
   });
   userApi.updateRoles.mockResolvedValue({ data: account(1) });
+  userApi.shareAccessLink.mockImplementation((userId) => (
+    Promise.resolve({
+      data: {
+        link_type: userId === 'user-invited'
+          ? 'invitation'
+          : 'password_reset',
+        delivery: 'sent',
+      },
+    })
+  ));
 });
 
 test('uses complete user totals and server-side directory controls', async () => {
@@ -199,5 +210,105 @@ test('updates account lifecycle status and roles from the management dialog', as
 
   expect(
     await screen.findByText('Account updated and 2 active sessions revoked.'),
+  ).toBeInTheDocument();
+});
+
+
+test('shares invite and reset links from platform user management', async () => {
+  userApi.list.mockResolvedValue({
+    data: {
+      items: [
+        {
+          ...account(1),
+          id: 'user-invited',
+          full_name: 'Invited Account',
+          email: 'invited-account@example.test',
+          account_status: 'invited',
+          is_active: true,
+        },
+        {
+          ...account(2),
+          id: 'user-active',
+          full_name: 'Active Account',
+          email: 'active-account@example.test',
+          account_status: 'active',
+          is_active: true,
+        },
+        {
+          ...account(3),
+          id: 'user-suspended',
+          full_name: 'Suspended Account',
+          email: 'suspended-account@example.test',
+          account_status: 'suspended',
+          is_active: false,
+        },
+      ],
+      meta: {
+        page: 1,
+        per_page: 15,
+        total: 3,
+        pages: 1,
+      },
+    },
+  });
+
+  render(
+    <MemoryRouter>
+      <Users />
+    </MemoryRouter>,
+  );
+
+  await screen.findByText('Invited Account');
+
+  const inviteButton = screen.getByRole(
+    'button',
+    { name: 'Share invite link with Invited Account' },
+  );
+  const resetButton = screen.getByRole(
+    'button',
+    { name: 'Share reset link with Active Account' },
+  );
+
+  expect(inviteButton).toHaveTextContent('Share Invite Link');
+  expect(resetButton).toHaveTextContent('Share Reset Link');
+
+  expect(
+    screen.queryByRole(
+      'button',
+      { name: /share .* link with suspended account/i },
+    ),
+  ).not.toBeInTheDocument();
+
+  fireEvent.click(inviteButton);
+
+  await waitFor(() => {
+    expect(userApi.shareAccessLink).toHaveBeenCalledWith(
+      'user-invited',
+    );
+  });
+
+  expect(
+    await screen.findByText(
+      'A new activation invitation was sent to invited-account@example.test.',
+    ),
+  ).toBeInTheDocument();
+
+  fireEvent.click(
+    screen.getByRole(
+      'button',
+      { name: 'Share reset link with Active Account' },
+    ),
+  );
+
+  await waitFor(() => {
+    expect(userApi.shareAccessLink).toHaveBeenCalledWith(
+      'user-active',
+    );
+  });
+
+  expect(
+    await screen.findByText(
+      'A password reset link was sent to active-account@example.test.',
+    ),
   ).toBeInTheDocument();
 });

@@ -394,7 +394,7 @@ def provision_organization():
         if delivery == 'sent'
         else (
             'Organization provisioned, but the administrator invitation '
-            'could not be delivered. Resend it from Access & users.'
+            'could not be delivered. Use Share Invite Link from Access & users.'
         )
     )
     return success(
