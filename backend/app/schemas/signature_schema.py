@@ -263,6 +263,11 @@ class SignatureDiscussionCommentSchema(Schema):
         required=True,
         validate=validate.Length(min=2, max=5000),
     )
+    mentioned_user_ids = fields.List(
+        fields.UUID(),
+        required=False,
+        load_default=list,
+    )
 
 
 class SignatureDeclineSchema(Schema):

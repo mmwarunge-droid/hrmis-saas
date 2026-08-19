@@ -7,7 +7,6 @@ import {
   Clock3,
   ExternalLink,
   FileCheck2,
-  MessageSquare,
   Send,
   ShieldCheck,
   UserRoundCheck,
@@ -18,9 +17,23 @@ import { Link, useParams } from 'react-router-dom';
 import { documentApi } from '../api/documentApi.js';
 import { signatureApi } from '../api/signatureApi.js';
 import PdfSigningViewer from '../components/documents/PdfSigningViewer.jsx';
+import SignatureDiscussionPanel from '../components/signatures/SignatureDiscussionPanel.jsx';
 import Alert from '../components/ui/Alert.jsx';
 import Badge from '../components/ui/Badge.jsx';
 import Button from '../components/ui/Button.jsx';
+
+const HANDWRITTEN_SIGNATURE_STYLE = {
+  fontFamily: [
+    '"Palace Script MT"',
+    '"Brush Script MT"',
+    '"URW Chancery L"',
+    '"Apple Chancery"',
+    'cursive',
+  ].join(', '),
+  fontWeight: 400,
+  letterSpacing: 0,
+};
+
 
 function formatDate(value) {
   if (!value) return 'Not set';
@@ -62,10 +75,8 @@ function Step({ complete, active, number, title, description }) {
 export default function SignatureTask() {
   const { recipientId } = useParams();
   const [task, setTask] = useState(null);
-  const [discussion, setDiscussion] = useState(null);
   const [documentUrl, setDocumentUrl] = useState('');
   const [documentRefreshKey, setDocumentRefreshKey] = useState(0);
-  const [comment, setComment] = useState('');
   const [declineReason, setDeclineReason] = useState('');
   const [showDecline, setShowDecline] = useState(false);
   const [consent, setConsent] = useState(false);
@@ -87,12 +98,8 @@ export default function SignatureTask() {
   );
 
   const load = useCallback(async () => {
-    const [taskResponse, discussionResponse] = await Promise.all([
-      signatureApi.recipient(recipientId),
-      signatureApi.discussion(recipientId),
-    ]);
+    const taskResponse = await signatureApi.recipient(recipientId);
     setTask(taskResponse.data);
-    setDiscussion(discussionResponse.data);
   }, [recipientId]);
 
   useEffect(() => {
@@ -192,32 +199,7 @@ export default function SignatureTask() {
     }
   };
 
-  const addComment = async () => {
-    setBusy(true);
-    setError('');
-    try {
-      await signatureApi.comment(recipientId, comment.trim());
-      setComment('');
-      await load();
-    } catch (err) {
-      setError(err.error?.message || 'Unable to add comment.');
-    } finally {
-      setBusy(false);
-    }
-  };
 
-  const resolve = async () => {
-    setBusy(true);
-    setError('');
-    try {
-      await signatureApi.resolveDiscussion(recipientId);
-      await load();
-    } catch (err) {
-      setError(err.error?.message || 'Unable to resolve discussion.');
-    } finally {
-      setBusy(false);
-    }
-  };
 
   if (!task) {
     return (
@@ -324,7 +306,18 @@ export default function SignatureTask() {
 
                 <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4">
                   <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Signature</p>
-                  <p className={`mt-2 text-4xl text-slate-950 ${signatureStyle === 'calligraphy_2' ? 'font-serif italic tracking-wide' : 'font-serif italic'}`}>
+                  <p
+                    className={`mt-2 text-4xl leading-tight text-slate-950 ${
+                      signatureStyle === 'calligraphy_2'
+                        ? ''
+                        : 'font-serif italic'
+                    }`}
+                    style={
+                      signatureStyle === 'calligraphy_2'
+                        ? HANDWRITTEN_SIGNATURE_STYLE
+                        : undefined
+                    }
+                  >
                     {generatedSignature}
                   </p>
                   <p className="mt-3 text-xs text-slate-500">Official signer: {task.name}</p>
@@ -336,16 +329,27 @@ export default function SignatureTask() {
                     onClick={() => setSignatureStyle('calligraphy_1')}
                     className={`rounded-xl border p-3 text-left ${signatureStyle === 'calligraphy_1' ? 'border-blue-500 bg-blue-50' : 'border-slate-200 bg-white'}`}
                   >
-                    <span className="text-[10px] font-bold uppercase tracking-wide text-slate-500">Style 1</span>
-                    <span className="mt-1 block font-serif text-xl italic">{generatedSignature}</span>
+                    <span className="text-[10px] font-bold uppercase tracking-wide text-slate-500">
+                      Classic
+                    </span>
+                    <span className="mt-1 block font-serif text-xl italic">
+                      {generatedSignature}
+                    </span>
                   </button>
                   <button
                     type="button"
                     onClick={() => setSignatureStyle('calligraphy_2')}
                     className={`rounded-xl border p-3 text-left ${signatureStyle === 'calligraphy_2' ? 'border-blue-500 bg-blue-50' : 'border-slate-200 bg-white'}`}
                   >
-                    <span className="text-[10px] font-bold uppercase tracking-wide text-slate-500">Style 2</span>
-                    <span className="mt-1 block font-serif text-xl italic tracking-wide">{generatedSignature}</span>
+                    <span className="text-[10px] font-bold uppercase tracking-wide text-slate-500">
+                      Handwritten
+                    </span>
+                    <span
+                      className="mt-1 block text-2xl leading-tight"
+                      style={HANDWRITTEN_SIGNATURE_STYLE}
+                    >
+                      {generatedSignature}
+                    </span>
                   </button>
                 </div>
 
@@ -417,7 +421,20 @@ export default function SignatureTask() {
                   <CheckCircle2 className="mt-0.5 shrink-0 text-emerald-700" size={21} />
                   <div>
                     <h2 className="font-bold text-emerald-950">Your signature is complete</h2>
-                    <p className="mt-1 font-serif text-3xl italic text-slate-950">{task.signature_name}</p>
+                    <p
+                      className={`mt-1 text-3xl text-slate-950 ${
+                        task.signature_style === 'calligraphy_2'
+                          ? ''
+                          : 'font-serif italic'
+                      }`}
+                      style={
+                        task.signature_style === 'calligraphy_2'
+                          ? HANDWRITTEN_SIGNATURE_STYLE
+                          : undefined
+                      }
+                    >
+                      {task.signature_name}
+                    </p>
                     <p className="mt-2 text-xs leading-5 text-emerald-900">Signed {formatDate(task.signed_at)}. Kinetic retained the consent event and server timestamp.</p>
                   </div>
                 </div>
@@ -472,38 +489,10 @@ export default function SignatureTask() {
               </div>
             </section>
 
-            <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <p className="flex items-center gap-2 font-bold text-slate-950"><MessageSquare size={16} /> Discussion</p>
-                  <p className="mt-1 text-xs text-slate-500">Ask HR a question without leaving the signing workspace.</p>
-                </div>
-                {discussion?.status === 'open' ? (
-                  <Button size="xs" variant="secondary" disabled={busy} onClick={resolve}>Mark resolved</Button>
-                ) : <Badge tone="green">Resolved</Badge>}
-              </div>
-              <div className="mt-4 max-h-48 space-y-2 overflow-auto">
-                {(discussion?.comments || []).map((item) => (
-                  <div key={item.id} className="rounded-lg bg-slate-50 p-3">
-                    <div className="flex justify-between gap-2 text-[10px] text-slate-500">
-                      <strong className="text-slate-700">{item.author_name}</strong>
-                      <span>{formatDay(item.created_at)}</span>
-                    </div>
-                    <p className="mt-1 whitespace-pre-wrap text-xs leading-5 text-slate-700">{item.body}</p>
-                  </div>
-                ))}
-                {!(discussion?.comments || []).length && <p className="text-xs text-slate-500">No comments yet.</p>}
-              </div>
-              <textarea
-                aria-label="Discussion comment"
-                rows={3}
-                className="mt-3 w-full rounded-lg border border-slate-300 p-3 text-xs"
-                value={comment}
-                onChange={(event) => setComment(event.target.value)}
-                placeholder="Add a question or comment"
-              />
-              <Button className="mt-2 w-full" size="sm" variant="secondary" disabled={busy || comment.trim().length < 2} onClick={addComment}>Reply</Button>
-            </section>
+            <SignatureDiscussionPanel
+              recipientId={recipientId}
+              allowResolve
+            />
           </aside>
         </div>
       </main>

@@ -30,6 +30,7 @@ import OrganizationEventDetails from './pages/OrganizationEventDetails.jsx';
 import OrgChart from './pages/OrgChart.jsx';
 import ResetPassword from './pages/ResetPassword.jsx';
 import Settings from './pages/Settings.jsx';
+import SignatureDiscussion from './pages/SignatureDiscussion.jsx';
 import SignatureRequests from './pages/SignatureRequests.jsx';
 import SignatureTask from './pages/SignatureTask.jsx';
 import Tasks from './pages/Tasks.jsx';
@@ -50,6 +51,10 @@ export default function App() {
       </Route>
       <Route element={<ProtectedRoute />}>
         <Route path="/signature-tasks/:recipientId" element={<SignatureTask />} />
+        <Route
+          path="/signature-discussions/:recipientId"
+          element={<SignatureDiscussion />}
+        />
         <Route element={<DashboardLayout />}>
           <Route path="/" element={<Navigate to="/dashboard" replace />} />
           <Route path="/dashboard" element={<HomeRouter />} />

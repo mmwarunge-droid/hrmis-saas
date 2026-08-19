@@ -12,6 +12,7 @@ RUN apt-get update \
         libreoffice-writer \
         fonts-dejavu-core \
         fonts-liberation \
+        fonts-urw-base35 \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt .
