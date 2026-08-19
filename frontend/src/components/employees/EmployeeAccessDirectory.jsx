@@ -129,7 +129,21 @@ export default function EmployeeAccessDirectory() {
   const [manageEmployee, setManageEmployee] = useState(null);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
-  const { hasPermission } = usePermissions();
+  const { hasPermission, hasRole } = usePermissions();
+  const isSuperAdmin = hasRole('SUPER_ADMIN');
+  const privilegedRoles = new Set([
+    'SUPER_ADMIN',
+    'CLIENT_ADMIN',
+    'ORGANIZATION_OWNER',
+    'HR_CONSULTANT',
+  ]);
+
+  const canManageAccount = (employee) => (
+    isSuperAdmin
+    || !(employee.access?.roles || []).some(
+      (roleName) => privilegedRoles.has(roleName),
+    )
+  );
 
   const canGrant = (
     hasPermission('user:create')
@@ -215,19 +229,26 @@ export default function EmployeeAccessDirectory() {
     }
   };
 
-  const resendInvitation = async (employee) => {
+  const shareAccessLink = async (employee) => {
     if (!employee.access?.user_id) return;
     setResendingId(employee.id);
     setError('');
     setSuccess('');
     try {
-      await userApi.resendInvitation(employee.access.user_id);
-      setSuccess(
-        `A new activation invitation was sent to ${employee.email}.`,
+      const response = await userApi.shareAccessLink(
+        employee.access.user_id,
       );
+      const linkType = response.data?.link_type;
+
+      setSuccess(
+        linkType === 'invitation'
+          ? `A new activation invitation was sent to ${employee.email}.`
+          : `A password reset link was sent to ${employee.email}.`,
+      );
+
       await loadDirectory();
     } catch (err) {
-      setError(err.error?.message || 'Invitation could not be resent');
+      setError(err.error?.message || 'Access link could not be shared');
     } finally {
       setResendingId(null);
     }
@@ -320,18 +341,26 @@ export default function EmployeeAccessDirectory() {
           ) : null;
         }
 
-        return canUpdate ? (
+        return canUpdate && canManageAccount(employee) ? (
           <div className="flex flex-wrap justify-end gap-1">
-            {employee.access.status === 'invited' && (
+            {['invited', 'active'].includes(employee.access.status) && (
               <Button
                 size="xs"
                 variant="secondary"
                 disabled={resendingId === employee.id}
-                onClick={() => resendInvitation(employee)}
-                aria-label={`Resend invitation to ${employee.full_name}`}
+                onClick={() => shareAccessLink(employee)}
+                aria-label={
+                  employee.access.status === 'invited'
+                    ? `Share invite link with ${employee.full_name}`
+                    : `Share reset link with ${employee.full_name}`
+                }
               >
                 <Send size={14} />
-                {resendingId === employee.id ? 'Sending...' : 'Resend'}
+                {resendingId === employee.id
+                  ? 'Sending...'
+                  : employee.access.status === 'invited'
+                    ? 'Share Invite Link'
+                    : 'Share Reset Link'}
               </Button>
             )}
             <Button

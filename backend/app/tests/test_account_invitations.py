@@ -317,3 +317,396 @@ def test_email_failure_preserves_invited_account_for_resend(
             consumed_at=None,
         ).count()
         assert active_invites == 1
+
+
+def test_admin_shares_fresh_invitation_link_for_invited_user(
+    client,
+    app,
+    admin_user,
+):
+    headers = _login_admin(client)
+
+    created = client.post(
+        '/api/users',
+        headers=headers,
+        json={
+            'email': 'share-invite@acme.test',
+            'first_name': 'Share',
+            'last_name': 'Invite',
+            'roles': ['EMPLOYEE'],
+        },
+    )
+    assert created.status_code == 201
+
+    user_id = created.get_json()['data']['id']
+    original_token = _invitation_token(
+        app.extensions['mail_outbox'][-1]
+    )
+
+    shared = client.post(
+        f'/api/users/{user_id}/access-link/share',
+        headers=headers,
+    )
+
+    assert shared.status_code == 200
+    data = shared.get_json()['data']
+    assert data['link_type'] == 'invitation'
+    assert data['delivery'] == 'sent'
+    assert 'token' not in data
+    assert 'url' not in data
+
+    message = app.extensions['mail_outbox'][-1]
+    assert message['subject'] == "You've been invited to Kinetic"
+
+    replacement_token = _invitation_token(message)
+    assert replacement_token != original_token
+
+    old_link = app.test_client().post(
+        '/api/auth/invitations/validate',
+        json={'token': original_token},
+    )
+    new_link = app.test_client().post(
+        '/api/auth/invitations/validate',
+        json={'token': replacement_token},
+    )
+
+    assert old_link.status_code == 400
+    assert new_link.status_code == 200
+
+    with app.app_context():
+        user = User.query.filter_by(
+            email='share-invite@acme.test'
+        ).one()
+
+        tokens = AccountToken.query.filter_by(
+            user_id=user.id,
+            purpose=AccountToken.PURPOSE_ACCOUNT_INVITE,
+        ).order_by(AccountToken.created_at.asc()).all()
+
+        assert len(tokens) == 2
+        assert tokens[0].consumed_at is not None
+        assert tokens[1].consumed_at is None
+        assert user.invitation_sent_at is not None
+
+        assert AuditLog.query.filter_by(
+            action='user.access_link_shared',
+        ).count() == 1
+
+
+def test_admin_shares_password_reset_link_for_active_user(
+    client,
+    app,
+    admin_user,
+):
+    headers = _login_admin(client)
+
+    created = client.post(
+        '/api/users',
+        headers=headers,
+        json={
+            'email': 'share-reset@acme.test',
+            'first_name': 'Share',
+            'last_name': 'Reset',
+            'roles': ['EMPLOYEE'],
+        },
+    )
+    assert created.status_code == 201
+
+    user_id = created.get_json()['data']['id']
+    invitation_token = _invitation_token(
+        app.extensions['mail_outbox'][-1]
+    )
+
+    activation = app.test_client().post(
+        '/api/auth/invitations/accept',
+        json={
+            'token': invitation_token,
+            'password': 'InitialPrivatePass456!',
+        },
+    )
+    assert activation.status_code == 200
+
+    mail_count = len(app.extensions['mail_outbox'])
+
+    shared = client.post(
+        f'/api/users/{user_id}/access-link/share',
+        headers=headers,
+    )
+
+    assert shared.status_code == 200
+    data = shared.get_json()['data']
+    assert data['link_type'] == 'password_reset'
+    assert data['delivery'] == 'sent'
+    assert 'token' not in data
+    assert 'url' not in data
+
+    assert len(app.extensions['mail_outbox']) == mail_count + 1
+
+    message = app.extensions['mail_outbox'][-1]
+    assert message['subject'] == 'Reset your Kinetic password'
+
+    reset_token = _invitation_token(message)
+
+    reset = app.test_client().post(
+        '/api/auth/password/reset',
+        json={
+            'token': reset_token,
+            'password': 'RecoveredPrivatePass789!',
+        },
+    )
+    assert reset.status_code == 200
+
+    login = app.test_client().post(
+        '/api/auth/login',
+        json={
+            'email': 'share-reset@acme.test',
+            'password': 'RecoveredPrivatePass789!',
+        },
+    )
+    assert login.status_code == 200
+
+    with app.app_context():
+        user = User.query.filter_by(
+            email='share-reset@acme.test'
+        ).one()
+
+        reset_tokens = AccountToken.query.filter_by(
+            user_id=user.id,
+            purpose=AccountToken.PURPOSE_PASSWORD_RESET,
+        ).all()
+
+        assert len(reset_tokens) == 1
+        assert reset_tokens[0].consumed_at is not None
+
+
+def test_admin_cannot_share_access_link_for_suspended_user(
+    client,
+    app,
+    admin_user,
+):
+    headers = _login_admin(client)
+
+    created = client.post(
+        '/api/users',
+        headers=headers,
+        json={
+            'email': 'share-suspended@acme.test',
+            'first_name': 'Share',
+            'last_name': 'Suspended',
+            'roles': ['EMPLOYEE'],
+        },
+    )
+    assert created.status_code == 201
+
+    user_id = created.get_json()['data']['id']
+
+    with app.app_context():
+        user = User.query.filter_by(
+            email='share-suspended@acme.test'
+        ).one()
+        user.is_active = False
+        db.session.commit()
+
+        token_count = AccountToken.query.filter_by(
+            user_id=user.id,
+        ).count()
+
+    mail_count = len(app.extensions['mail_outbox'])
+
+    shared = client.post(
+        f'/api/users/{user_id}/access-link/share',
+        headers=headers,
+    )
+
+    assert shared.status_code == 409
+    assert (
+        shared.get_json()['error']['code']
+        == 'ACCESS_LINK_NOT_AVAILABLE'
+    )
+    assert len(app.extensions['mail_outbox']) == mail_count
+
+    with app.app_context():
+        assert AccountToken.query.filter_by(
+            user_id=user_id,
+        ).count() == token_count
+
+
+def test_access_link_delivery_failure_preserves_previous_valid_invitation(
+    client,
+    app,
+    admin_user,
+    monkeypatch,
+):
+    headers = _login_admin(client)
+
+    created = client.post(
+        '/api/users',
+        headers=headers,
+        json={
+            'email': 'share-delivery-failure@acme.test',
+            'first_name': 'Share',
+            'last_name': 'Failure',
+            'roles': ['EMPLOYEE'],
+        },
+    )
+    assert created.status_code == 201
+
+    user_id = created.get_json()['data']['id']
+    original_token = _invitation_token(
+        app.extensions['mail_outbox'][-1]
+    )
+
+    def fail_delivery(*_args, **_kwargs):
+        raise EmailDeliveryError('test delivery failure')
+
+    monkeypatch.setattr(
+        'app.routes.user_routes.send_account_invitation_email',
+        fail_delivery,
+    )
+
+    shared = client.post(
+        f'/api/users/{user_id}/access-link/share',
+        headers=headers,
+    )
+
+    assert shared.status_code == 503
+    assert (
+        shared.get_json()['error']['code']
+        == 'EMAIL_DELIVERY_FAILED'
+    )
+
+    original_link = app.test_client().post(
+        '/api/auth/invitations/validate',
+        json={'token': original_token},
+    )
+    assert original_link.status_code == 200
+
+    with app.app_context():
+        user = User.query.filter_by(
+            email='share-delivery-failure@acme.test'
+        ).one()
+
+        tokens = AccountToken.query.filter_by(
+            user_id=user.id,
+            purpose=AccountToken.PURPOSE_ACCOUNT_INVITE,
+        ).all()
+
+        assert len(tokens) == 1
+        assert tokens[0].consumed_at is None
+
+        assert AuditLog.query.filter_by(
+            action='user.access_link_delivery_failed',
+        ).count() == 1
+
+        assert AuditLog.query.filter_by(
+            action='user.access_link_shared',
+        ).count() == 0
+
+
+def test_access_link_delivery_failure_preserves_previous_valid_reset_link(
+    client,
+    app,
+    admin_user,
+    monkeypatch,
+):
+    headers = _login_admin(client)
+
+    created = client.post(
+        '/api/users',
+        headers=headers,
+        json={
+            'email': 'reset-delivery-failure@acme.test',
+            'first_name': 'Reset',
+            'last_name': 'Failure',
+            'roles': ['EMPLOYEE'],
+        },
+    )
+    assert created.status_code == 201
+
+    user_id = created.get_json()['data']['id']
+    invitation_token = _invitation_token(
+        app.extensions['mail_outbox'][-1]
+    )
+
+    activation = app.test_client().post(
+        '/api/auth/invitations/accept',
+        json={
+            'token': invitation_token,
+            'password': 'InitialPrivatePass456!',
+        },
+    )
+    assert activation.status_code == 200
+
+    forgot = app.test_client().post(
+        '/api/auth/password/forgot',
+        json={
+            'email': 'reset-delivery-failure@acme.test',
+        },
+    )
+    assert forgot.status_code == 202
+
+    original_reset_token = _invitation_token(
+        app.extensions['mail_outbox'][-1]
+    )
+
+    def fail_delivery(*_args, **_kwargs):
+        raise EmailDeliveryError('test delivery failure')
+
+    monkeypatch.setattr(
+        'app.routes.user_routes.send_password_reset_email',
+        fail_delivery,
+    )
+
+    shared = client.post(
+        f'/api/users/{user_id}/access-link/share',
+        headers=headers,
+    )
+
+    assert shared.status_code == 503
+    assert (
+        shared.get_json()['error']['code']
+        == 'EMAIL_DELIVERY_FAILED'
+    )
+
+    # The reset token that existed before the failed admin re-share
+    # must still be usable.
+    reset = app.test_client().post(
+        '/api/auth/password/reset',
+        json={
+            'token': original_reset_token,
+            'password': 'RecoveredPrivatePass789!',
+        },
+    )
+    assert reset.status_code == 200
+
+    login = app.test_client().post(
+        '/api/auth/login',
+        json={
+            'email': 'reset-delivery-failure@acme.test',
+            'password': 'RecoveredPrivatePass789!',
+        },
+    )
+    assert login.status_code == 200
+
+    with app.app_context():
+        user = User.query.filter_by(
+            email='reset-delivery-failure@acme.test'
+        ).one()
+
+        tokens = AccountToken.query.filter_by(
+            user_id=user.id,
+            purpose=AccountToken.PURPOSE_PASSWORD_RESET,
+        ).all()
+
+        # Failed replacement was rolled back, leaving only the original
+        # token, which was consumed by the successful reset above.
+        assert len(tokens) == 1
+        assert tokens[0].consumed_at is not None
+
+        assert AuditLog.query.filter_by(
+            action='user.access_link_delivery_failed',
+        ).count() == 1
+
+        assert AuditLog.query.filter_by(
+            action='user.access_link_shared',
+        ).count() == 0

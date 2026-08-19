@@ -182,7 +182,7 @@ function PlatformUsers() {
       setSuccess(
         response.data.invitation?.delivery === 'sent'
           ? `${response.data.full_name} was created${profileText}. A secure activation invitation was sent to ${response.data.email}.`
-          : `${response.data.full_name} was created${profileText}, but the activation email could not be delivered. Use Resend invitation from the user row.`,
+          : `${response.data.full_name} was created${profileText}, but the activation email could not be delivered. Use Share Invite Link from the user row.`,
       );
       await refresh();
     } catch (err) {
@@ -192,16 +192,23 @@ function PlatformUsers() {
     }
   };
 
-  const resendInvitation = async (account) => {
+  const shareAccessLink = async (account) => {
     setResendingId(account.id);
     setError('');
     setSuccess('');
     try {
-      await userApi.resendInvitation(account.id);
-      setSuccess(`A new activation invitation was sent to ${account.email}.`);
+      const response = await userApi.shareAccessLink(account.id);
+      const linkType = response.data?.link_type;
+
+      setSuccess(
+        linkType === 'invitation'
+          ? `A new activation invitation was sent to ${account.email}.`
+          : `A password reset link was sent to ${account.email}.`,
+      );
+
       await refresh();
     } catch (err) {
-      setError(err.error?.message || 'Invitation could not be resent');
+      setError(err.error?.message || 'Access link could not be shared');
     } finally {
       setResendingId(null);
     }
@@ -350,16 +357,24 @@ function PlatformUsers() {
       render: (row) => (
         canManageAccount(row) ? (
           <div className="flex flex-wrap justify-end gap-1">
-            {row.account_status === 'invited' && (
+            {['invited', 'active'].includes(row.account_status) && (
               <Button
                 size="xs"
                 variant="secondary"
                 disabled={resendingId === row.id}
-                onClick={() => resendInvitation(row)}
-                aria-label={`Resend invitation to ${row.full_name}`}
+                onClick={() => shareAccessLink(row)}
+                aria-label={
+                  row.account_status === 'invited'
+                    ? `Share invite link with ${row.full_name}`
+                    : `Share reset link with ${row.full_name}`
+                }
               >
                 <Send size={14} />
-                {resendingId === row.id ? 'Sending...' : 'Resend'}
+                {resendingId === row.id
+                  ? 'Sending...'
+                  : row.account_status === 'invited'
+                    ? 'Share Invite Link'
+                    : 'Share Reset Link'}
               </Button>
             )}
             <Button

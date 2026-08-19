@@ -29,6 +29,7 @@ vi.mock('../api/userApi.js', () => ({
     update: vi.fn(),
     updateRoles: vi.fn(),
     resendInvitation: vi.fn(),
+    shareAccessLink: vi.fn(),
   },
 }));
 
@@ -76,6 +77,22 @@ const employeeRows = [
       roles: ['MANAGER'],
       invitation_sent_at: null,
       last_login_at: '2026-08-13T09:00:00',
+    },
+  },
+  {
+    id: 'emp-privileged',
+    tenant_id: 'tenant-1',
+    employee_number: 'EMP-PRIV',
+    full_name: 'Privileged Administrator',
+    email: 'privileged@example.test',
+    employment_status: 'active',
+    access: {
+      user_id: 'user-privileged',
+      status: 'active',
+      is_active: true,
+      roles: ['CLIENT_ADMIN'],
+      invitation_sent_at: null,
+      last_login_at: '2026-08-13T10:00:00',
     },
   },
   {
@@ -158,6 +175,16 @@ beforeEach(() => {
     },
   });
   userApi.resendInvitation.mockResolvedValue({ data: {} });
+  userApi.shareAccessLink.mockImplementation((userId) => (
+    Promise.resolve({
+      data: {
+        link_type: userId === 'user-invited'
+          ? 'invitation'
+          : 'password_reset',
+        delivery: 'sent',
+      },
+    })
+  ));
 });
 
 test('client admin manages platform access from the existing employee directory', async () => {
@@ -266,4 +293,87 @@ test('super admin retains the platform-user provisioning workflow', async () => 
   ).toBeInTheDocument();
   expect(userApi.list).toHaveBeenCalled();
   expect(employeeApi.accessDirectory).not.toHaveBeenCalled();
+});
+
+
+test('shares invite and reset links according to account state', async () => {
+  render(<MemoryRouter><Users /></MemoryRouter>);
+
+  const invitedRow = (
+    await screen.findByText('Invited Employee')
+  ).closest('tr');
+  const activeRow = screen.getByText('Active Manager').closest('tr');
+  const inactiveRow = screen.getByText('Inactive Employee').closest('tr');
+
+  const inviteButton = within(invitedRow).getByRole(
+    'button',
+    { name: 'Share invite link with Invited Employee' },
+  );
+  const resetButton = within(activeRow).getByRole(
+    'button',
+    { name: 'Share reset link with Active Manager' },
+  );
+
+  expect(inviteButton).toHaveTextContent('Share Invite Link');
+  expect(resetButton).toHaveTextContent('Share Reset Link');
+
+  expect(
+    within(inactiveRow).queryByRole(
+      'button',
+      { name: /share .* link/i },
+    ),
+  ).not.toBeInTheDocument();
+
+  const privilegedRow = screen
+    .getByText('Privileged Administrator')
+    .closest('tr');
+
+  expect(
+    within(privilegedRow).queryByRole(
+      'button',
+      { name: /share .* link/i },
+    ),
+  ).not.toBeInTheDocument();
+
+  expect(
+    within(privilegedRow).queryByRole(
+      'button',
+      { name: /manage access/i },
+    ),
+  ).not.toBeInTheDocument();
+
+  fireEvent.click(inviteButton);
+
+  await waitFor(() => {
+    expect(userApi.shareAccessLink).toHaveBeenCalledWith(
+      'user-invited',
+    );
+  });
+
+  expect(
+    await screen.findByText(
+      'A new activation invitation was sent to invited@example.test.',
+    ),
+  ).toBeInTheDocument();
+
+  fireEvent.click(
+    within(
+      screen.getByText('Active Manager').closest('tr'),
+    ).getByRole(
+      'button',
+      { name: 'Share reset link with Active Manager' },
+    ),
+  );
+
+  await waitFor(() => {
+    expect(userApi.shareAccessLink).toHaveBeenCalledWith(
+      'user-active',
+    );
+  });
+
+  expect(
+    await screen.findByText(
+      'A password reset link was sent to active@example.test.',
+    ),
+  ).toBeInTheDocument();
 });

@@ -133,7 +133,7 @@ export default function Organizations() {
       setSuccess(
         response.data.invitation?.delivery === 'sent'
           ? `${response.data.organization.name} is ready. A secure activation invitation was sent to ${response.data.admin.email}.`
-          : `${response.data.organization.name} is ready, but the administrator invitation could not be delivered. Resend it from Access & users.`,
+          : `${response.data.organization.name} is ready, but the administrator invitation could not be delivered. Use Share Invite Link from Access & users.`,
       );
       await refresh();
     } catch (err) {

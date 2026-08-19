@@ -17,6 +17,7 @@ from app.schemas.user_schema import (
 from app.services.account_recovery_service import (
     issue_account_token,
     send_account_invitation_email,
+    send_password_reset_email,
 )
 from app.services.auth_service import register_invited_user
 from app.services.audit_service import log_event
@@ -416,6 +417,98 @@ def resend_user_invitation(user_id):
             ),
         },
         'Invitation sent',
+    )
+
+
+@user_bp.post('/<user_id>/access-link/share')
+@jwt_required()
+@permission_required('user:update')
+def share_user_access_link(user_id):
+    user = _user_scope_query().filter_by(id=user_id).first_or_404()
+
+    if not _can_manage_user(user):
+        return fail(
+            'PRIVILEGED_USER_PROTECTED',
+            'Only a platform administrator can manage this account',
+            403,
+        )
+
+    if not user.is_active:
+        return fail(
+            'ACCESS_LINK_NOT_AVAILABLE',
+            'Restore platform access before sharing an access link',
+            409,
+        )
+
+    if user.activation_required:
+        link_type = 'invitation'
+        purpose = AccountToken.PURPOSE_ACCOUNT_INVITE
+        send_link_email = send_account_invitation_email
+        success_message = 'Invitation link sent'
+    else:
+        link_type = 'password_reset'
+        purpose = AccountToken.PURPOSE_PASSWORD_RESET
+        send_link_email = send_password_reset_email
+        success_message = 'Password reset link sent'
+
+    user_id_value = user.id
+    tenant_id = user.tenant_id
+
+    account_token, raw_token = issue_account_token(
+        user,
+        purpose,
+    )
+
+    try:
+        send_link_email(user, raw_token)
+    except EmailDeliveryError:
+        # Roll back token replacement so a previously valid link is not
+        # invalidated when the replacement email could not be delivered.
+        db.session.rollback()
+
+        log_event(
+            'user.access_link_delivery_failed',
+            'User',
+            user_id_value,
+            tenant_id=tenant_id,
+            actor=current_user,
+            metadata={
+                'link_type': link_type,
+            },
+        )
+        db.session.commit()
+
+        return fail(
+            'EMAIL_DELIVERY_FAILED',
+            'The access link could not be delivered. Try again later.',
+            503,
+        )
+
+    if link_type == 'invitation':
+        user.invitation_sent_at = utcnow()
+
+    log_event(
+        'user.access_link_shared',
+        'AccountToken',
+        account_token.id,
+        tenant_id=tenant_id,
+        actor=current_user,
+        metadata={
+            'user_id': str(user.id),
+            'link_type': link_type,
+        },
+    )
+
+    db.session.commit()
+
+    return success(
+        {
+            'user': user.to_dict(),
+            'link_type': link_type,
+            'delivery': 'sent',
+            'expires_at': account_token.expires_at.isoformat(),
+        },
+        success_message,
     )
 
 
