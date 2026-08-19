@@ -466,7 +466,12 @@ def recipient_discussion_comment(recipient_id):
     recipient = _recipient_for_active_tenant(recipient_id)
     try:
         payload = SignatureDiscussionCommentSchema().load(request.get_json() or {})
-        discussion, comment = add_comment(recipient, current_user, payload['body'])
+        discussion, comment = add_comment(
+            recipient,
+            current_user,
+            payload['body'],
+            payload.get('mentioned_user_ids'),
+        )
     except ValidationError as err:
         return fail('VALIDATION_ERROR', err.messages, 422)
     except PermissionError as exc:
@@ -474,6 +479,100 @@ def recipient_discussion_comment(recipient_id):
     except ValueError as exc:
         return fail('DISCUSSION_COMMENT_FAILED', str(exc), 400)
     return success({'discussion': discussion.to_dict(), 'comment': comment.to_dict()}, 'Comment added', 201)
+
+
+
+@signature_bp.get('/recipients/<recipient_id>/discussion/mentions')
+@jwt_required()
+def recipient_discussion_mentions(recipient_id):
+    from app.services.signature_discussion_service import mention_candidates
+
+    recipient = _recipient_for_active_tenant(recipient_id)
+    try:
+        items = mention_candidates(
+            recipient,
+            current_user,
+            request.args.get('q', ''),
+        )
+    except PermissionError as exc:
+        return fail('FORBIDDEN', str(exc), 403)
+
+    return success(items)
+
+
+@signature_bp.patch(
+    '/recipients/<recipient_id>/discussion/comments/<comment_id>'
+)
+@jwt_required()
+def recipient_discussion_comment_update(
+    recipient_id,
+    comment_id,
+):
+    from app.services.signature_discussion_service import edit_comment
+
+    recipient = _recipient_for_active_tenant(recipient_id)
+    try:
+        payload = SignatureDiscussionCommentSchema().load(
+            request.get_json() or {}
+        )
+        discussion, comment = edit_comment(
+            recipient,
+            current_user,
+            comment_id,
+            payload['body'],
+            payload.get('mentioned_user_ids'),
+        )
+    except ValidationError as err:
+        return fail('VALIDATION_ERROR', err.messages, 422)
+    except PermissionError as exc:
+        return fail('FORBIDDEN', str(exc), 403)
+    except LookupError as exc:
+        return fail('DISCUSSION_COMMENT_NOT_FOUND', str(exc), 404)
+    except ValueError as exc:
+        return fail(
+            'DISCUSSION_COMMENT_UPDATE_FAILED',
+            str(exc),
+            400,
+        )
+
+    return success(
+        {
+            'discussion': discussion.to_dict(),
+            'comment': comment.to_dict(),
+        },
+        'Comment updated',
+    )
+
+
+@signature_bp.delete(
+    '/recipients/<recipient_id>/discussion/comments/<comment_id>'
+)
+@jwt_required()
+def recipient_discussion_comment_delete(
+    recipient_id,
+    comment_id,
+):
+    from app.services.signature_discussion_service import delete_comment
+
+    recipient = _recipient_for_active_tenant(recipient_id)
+    try:
+        discussion, comment = delete_comment(
+            recipient,
+            current_user,
+            comment_id,
+        )
+    except PermissionError as exc:
+        return fail('FORBIDDEN', str(exc), 403)
+    except LookupError as exc:
+        return fail('DISCUSSION_COMMENT_NOT_FOUND', str(exc), 404)
+
+    return success(
+        {
+            'discussion': discussion.to_dict(),
+            'comment': comment.to_dict(),
+        },
+        'Comment deleted',
+    )
 
 
 @signature_bp.patch('/recipients/<recipient_id>/discussion/resolve')

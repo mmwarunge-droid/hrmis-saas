@@ -51,9 +51,34 @@ export const signatureApi = {
     `/signature-requests/recipients/${recipientId}/discussion`,
   ),
 
-  comment: (recipientId, body) => apiClient.post(
+  comment: (recipientId, body, mentionedUserIds = []) => apiClient.post(
     `/signature-requests/recipients/${recipientId}/discussion/comments`,
-    { body },
+    {
+      body,
+      mentioned_user_ids: mentionedUserIds,
+    },
+  ),
+
+  discussionMentions: (recipientId, q) => apiClient.get(
+    `/signature-requests/recipients/${recipientId}/discussion/mentions`,
+    { params: { q } },
+  ),
+
+  updateComment: (
+    recipientId,
+    commentId,
+    body,
+    mentionedUserIds = [],
+  ) => apiClient.patch(
+    `/signature-requests/recipients/${recipientId}/discussion/comments/${commentId}`,
+    {
+      body,
+      mentioned_user_ids: mentionedUserIds,
+    },
+  ),
+
+  deleteComment: (recipientId, commentId) => apiClient.delete(
+    `/signature-requests/recipients/${recipientId}/discussion/comments/${commentId}`,
   ),
 
   resolveDiscussion: (recipientId) => apiClient.patch(

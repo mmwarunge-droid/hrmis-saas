@@ -5,11 +5,14 @@ full document editor. It owns recipient field placement, server-generated
 signature text, PDF overlays and immutable signed-document artifacts.
 """
 
+from functools import lru_cache
 from io import BytesIO
 from pathlib import Path
 
 from flask import current_app
 from pypdf import PdfReader, PdfWriter
+from reportlab.pdfbase import pdfmetrics
+from reportlab.pdfbase.pdfmetrics import EmbeddedType1Face, Font
 from reportlab.pdfgen import canvas
 
 from app.extensions import db
@@ -23,6 +26,20 @@ from app.utils.signature_evidence_storage import (
 
 DEFAULT_SIGNATURE_STYLE = 'calligraphy_1'
 CONSENT_VERSION = 'kinetic-esign-v1'
+
+HANDWRITTEN_FONT_NAME = 'KineticHandwritten'
+HANDWRITTEN_FONT_FILES = (
+    (
+        Path(
+            '/usr/share/fonts/type1/urw-base35/'
+            'Z003-MediumItalic.afm'
+        ),
+        Path(
+            '/usr/share/fonts/X11/Type1/'
+            'Z003-MediumItalic.pfb'
+        ),
+    ),
+)
 
 
 class NativeSignatureError(ValueError):
@@ -288,9 +305,58 @@ def _draw_signing_record_header(pdf_canvas, signature_request, width, height):
     )
 
 
+@lru_cache(maxsize=1)
+def _handwritten_font_name():
+    """Register the server-side handwritten signature font once.
+
+    Debian's URW Z003 is a Chancery-style Type 1 face. ReportLab cannot
+    register its CFF/OpenType file through TTFont, so the AFM/PFB pair is
+    intentionally used here.
+    """
+    for afm_path, pfb_path in HANDWRITTEN_FONT_FILES:
+        if not afm_path.is_file() or not pfb_path.is_file():
+            continue
+
+        try:
+            face = EmbeddedType1Face(
+                str(afm_path),
+                str(pfb_path),
+            )
+            pdfmetrics.registerTypeFace(face)
+
+            try:
+                pdfmetrics.getFont(HANDWRITTEN_FONT_NAME)
+            except KeyError:
+                pdfmetrics.registerFont(
+                    Font(
+                        HANDWRITTEN_FONT_NAME,
+                        face.name,
+                        face.requiredEncoding
+                        or 'WinAnsiEncoding',
+                    )
+                )
+
+            return HANDWRITTEN_FONT_NAME
+        except Exception:
+            # Signing must remain available if an incorrectly built
+            # environment is missing or cannot load the optional face.
+            # Production Docker installs fonts-urw-base35 below.
+            continue
+
+    return 'Helvetica-Oblique'
+
+
 def _signature_font(field):
-    style = getattr(field.recipient, 'signature_style', None)
-    return 'Helvetica-Oblique' if style == 'calligraphy_2' else 'Times-Italic'
+    style = getattr(
+        field.recipient,
+        'signature_style',
+        None,
+    )
+
+    if style == 'calligraphy_2':
+        return _handwritten_font_name()
+
+    return 'Times-Italic'
 
 
 def _draw_field(pdf_canvas, field, page_width, page_height):

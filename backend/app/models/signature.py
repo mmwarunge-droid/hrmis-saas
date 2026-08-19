@@ -838,6 +838,12 @@ class SignatureDiscussion(
         cascade='all, delete-orphan',
         order_by='SignatureDiscussionComment.created_at',
     )
+    participants = db.relationship(
+        'SignatureDiscussionParticipant',
+        back_populates='discussion',
+        passive_deletes=True,
+        order_by='SignatureDiscussionParticipant.created_at',
+    )
 
     __table_args__ = (
         db.CheckConstraint(
@@ -856,6 +862,16 @@ class SignatureDiscussion(
             'id': str(self.id),
             'signature_request_id': str(self.signature_request_id),
             'recipient_id': str(self.recipient_id) if self.recipient_id else None,
+            'subject': (
+                self.signature_request.subject
+                if self.signature_request
+                else 'Document discussion'
+            ),
+            'signer_name': (
+                self.recipient.name
+                if self.recipient
+                else None
+            ),
             'status': self.status,
             'resolved_at': self.resolved_at.isoformat() if self.resolved_at else None,
             'resolved_by_user_id': (
@@ -878,26 +894,258 @@ class SignatureDiscussionComment(
     id = db.Column(GUID(), primary_key=True, default=uuid_pk)
     discussion_id = db.Column(
         GUID(),
-        db.ForeignKey('signature_discussions.id', ondelete='CASCADE'),
+        db.ForeignKey(
+            'signature_discussions.id',
+            ondelete='CASCADE',
+        ),
         nullable=False,
         index=True,
     )
     author_user_id = db.Column(
-        GUID(), db.ForeignKey('users.id', ondelete='SET NULL'), nullable=True, index=True
+        GUID(),
+        db.ForeignKey('users.id', ondelete='SET NULL'),
+        nullable=True,
+        index=True,
     )
     body = db.Column(db.Text, nullable=False)
-    mentioned_user_ids_json = db.Column(db.JSON, nullable=False, default=list)
+    mentioned_user_ids_json = db.Column(
+        db.JSON,
+        nullable=False,
+        default=list,
+    )
+    edited_at = db.Column(
+        db.DateTime,
+        nullable=True,
+    )
+    deleted_at = db.Column(
+        db.DateTime,
+        nullable=True,
+        index=True,
+    )
+    deleted_by_user_id = db.Column(
+        GUID(),
+        db.ForeignKey('users.id', ondelete='SET NULL'),
+        nullable=True,
+    )
 
-    discussion = db.relationship('SignatureDiscussion', back_populates='comments')
-    author = db.relationship('User', foreign_keys=[author_user_id])
+    discussion = db.relationship(
+        'SignatureDiscussion',
+        back_populates='comments',
+    )
+    author = db.relationship(
+        'User',
+        foreign_keys=[author_user_id],
+    )
+    deleted_by = db.relationship(
+        'User',
+        foreign_keys=[deleted_by_user_id],
+    )
+    revisions = db.relationship(
+        'SignatureDiscussionCommentRevision',
+        back_populates='comment',
+        passive_deletes=True,
+        order_by='SignatureDiscussionCommentRevision.occurred_at',
+    )
+
+    def to_dict(self):
+        deleted = self.deleted_at is not None
+        return {
+            'id': str(self.id),
+            'discussion_id': str(self.discussion_id),
+            'author_user_id': (
+                str(self.author_user_id)
+                if self.author_user_id
+                else None
+            ),
+            'author_name': (
+                self.author.full_name
+                if self.author
+                else 'Former user'
+            ),
+            'body': None if deleted else self.body,
+            'mentioned_user_ids': (
+                []
+                if deleted
+                else list(self.mentioned_user_ids_json or [])
+            ),
+            'is_deleted': deleted,
+            'edited_at': (
+                self.edited_at.isoformat()
+                if self.edited_at
+                else None
+            ),
+            'deleted_at': (
+                self.deleted_at.isoformat()
+                if self.deleted_at
+                else None
+            ),
+            'created_at': (
+                self.created_at.isoformat()
+                if self.created_at
+                else None
+            ),
+        }
+
+
+class SignatureDiscussionParticipant(
+    db.Model,
+    TenantMixin,
+    TimestampMixin,
+    ReprMixin,
+):
+    __tablename__ = 'signature_discussion_participants'
+
+    id = db.Column(GUID(), primary_key=True, default=uuid_pk)
+    discussion_id = db.Column(
+        GUID(),
+        db.ForeignKey(
+            'signature_discussions.id',
+            ondelete='CASCADE',
+        ),
+        nullable=False,
+        index=True,
+    )
+    user_id = db.Column(
+        GUID(),
+        db.ForeignKey('users.id', ondelete='SET NULL'),
+        nullable=True,
+        index=True,
+    )
+    added_by_user_id = db.Column(
+        GUID(),
+        db.ForeignKey('users.id', ondelete='SET NULL'),
+        nullable=True,
+    )
+    source = db.Column(
+        db.String(30),
+        nullable=False,
+        default='mention',
+    )
+
+    discussion = db.relationship(
+        'SignatureDiscussion',
+        back_populates='participants',
+    )
+    user = db.relationship(
+        'User',
+        foreign_keys=[user_id],
+    )
+    added_by = db.relationship(
+        'User',
+        foreign_keys=[added_by_user_id],
+    )
+
+    __table_args__ = (
+        db.CheckConstraint(
+            "source IN ('mention','manual')",
+            name='ck_signature_discussion_participants_source',
+        ),
+        db.UniqueConstraint(
+            'discussion_id',
+            'user_id',
+            name='uq_signature_discussion_participant_user',
+        ),
+    )
 
     def to_dict(self):
         return {
             'id': str(self.id),
             'discussion_id': str(self.discussion_id),
-            'author_user_id': str(self.author_user_id) if self.author_user_id else None,
-            'author_name': self.author.full_name if self.author else 'Former user',
+            'user_id': (
+                str(self.user_id)
+                if self.user_id
+                else None
+            ),
+            'name': (
+                self.user.full_name
+                if self.user
+                else 'Former user'
+            ),
+            'source': self.source,
+            'created_at': (
+                self.created_at.isoformat()
+                if self.created_at
+                else None
+            ),
+        }
+
+
+class SignatureDiscussionCommentRevision(
+    db.Model,
+    TenantMixin,
+    ReprMixin,
+):
+    __tablename__ = 'signature_discussion_comment_revisions'
+
+    id = db.Column(GUID(), primary_key=True, default=uuid_pk)
+    comment_id = db.Column(
+        GUID(),
+        db.ForeignKey(
+            'signature_discussion_comments.id',
+            ondelete='CASCADE',
+        ),
+        nullable=False,
+        index=True,
+    )
+    actor_user_id = db.Column(
+        GUID(),
+        db.ForeignKey('users.id', ondelete='SET NULL'),
+        nullable=True,
+        index=True,
+    )
+    revision_type = db.Column(
+        db.String(20),
+        nullable=False,
+    )
+    body = db.Column(
+        db.Text,
+        nullable=False,
+    )
+    mentioned_user_ids_json = db.Column(
+        db.JSON,
+        nullable=False,
+        default=list,
+    )
+    occurred_at = db.Column(
+        db.DateTime,
+        nullable=False,
+        default=utcnow,
+        index=True,
+    )
+
+    comment = db.relationship(
+        'SignatureDiscussionComment',
+        back_populates='revisions',
+    )
+    actor = db.relationship(
+        'User',
+        foreign_keys=[actor_user_id],
+    )
+
+    __table_args__ = (
+        db.CheckConstraint(
+            "revision_type IN ('created','edited','deleted')",
+            name='ck_signature_discussion_revision_type',
+        ),
+    )
+
+    def to_dict(self):
+        return {
+            'id': str(self.id),
+            'comment_id': str(self.comment_id),
+            'actor_user_id': (
+                str(self.actor_user_id)
+                if self.actor_user_id
+                else None
+            ),
+            'revision_type': self.revision_type,
             'body': self.body,
-            'mentioned_user_ids': list(self.mentioned_user_ids_json or []),
-            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'mentioned_user_ids': list(
+                self.mentioned_user_ids_json or []
+            ),
+            'occurred_at': (
+                self.occurred_at.isoformat()
+                if self.occurred_at
+                else None
+            ),
         }
