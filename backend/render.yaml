@@ -1,17 +1,16 @@
 services:
   - type: web
     name: hrmis-saas-api
-    runtime: python
+    runtime: docker
     plan: starter
     region: frankfurt
     rootDir: backend
-    buildCommand: pip install -r requirements.txt
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    dockerCommand: gunicorn wsgi:app --bind 0.0.0.0:$PORT --workers 3 --timeout 120
     preDeployCommand: flask --app run.py db upgrade
-    startCommand: gunicorn wsgi:app --bind 0.0.0.0:$PORT --workers 3 --timeout 120
     healthCheckPath: /ready
     envVars:
-      - key: PYTHON_VERSION
-        value: 3.12.3
       - key: APP_ENV
         value: production
       - key: FLASK_ENV
