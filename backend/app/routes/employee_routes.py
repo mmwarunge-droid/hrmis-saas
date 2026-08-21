@@ -389,6 +389,7 @@ def org_chart():
         return {
             'id': employee_id,
             'full_name': employee.full_name,
+            'profile_photo_url': employee.profile_photo_url,
             'job_title': employee.job_title,
             'department_name': employee.department.name if employee.department else None,
             'manager_id': str(employee.manager_id) if employee.manager_id else None,

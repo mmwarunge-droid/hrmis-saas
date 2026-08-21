@@ -20,6 +20,7 @@ beforeEach(() => {
         {
           id: 'employee-1',
           full_name: 'Amina Otieno',
+          profile_photo_url: '/api/employee-home/profile-images/employee-1/photo.jpg',
           job_title: 'Chief People Officer',
           department_name: 'People',
           work_location: 'Nairobi',
@@ -152,4 +153,22 @@ test('fits a wider organization chart into the viewport', async () => {
   expect(tree).toHaveStyle({
     transform: 'scale(0.5)',
   });
+});
+
+
+test('renders employee profile photos supplied by the organization chart API', async () => {
+  render(
+    <MemoryRouter>
+      <OrgChart />
+    </MemoryRouter>,
+  );
+
+  const photo = await screen.findByRole('img', {
+    name: 'Amina Otieno',
+  });
+
+  expect(photo).toHaveAttribute(
+    'src',
+    '/api/employee-home/profile-images/employee-1/photo.jpg',
+  );
 });

@@ -97,6 +97,7 @@ def test_org_chart_returns_nested_reporting_hierarchy(client, auth_headers):
     second_level = next(item for item in first_level['children'] if item['id'] == report['id'])
 
     assert root['direct_report_count'] == 1
+    assert 'profile_photo_url' in root
     assert first_level['manager_id'] == leader['id']
     assert second_level['manager_id'] == manager['id']
     assert data['meta']['total'] == 3
