@@ -278,3 +278,40 @@ test('retains a successful banner upload when a later logo upload fails', async 
     screen.queryByText('Employee homepage settings saved.'),
   ).not.toBeInTheDocument();
 });
+
+
+test('renders structured homepage validation errors without crashing', async () => {
+  const user = userEvent.setup();
+
+  employeeHomeApi.updateSettings.mockRejectedValueOnce({
+    error: {
+      code: 'VALIDATION_ERROR',
+      message: {
+        banner_url: ['Not a valid URL.'],
+        logo_url: ['Not a valid URL.'],
+      },
+    },
+  });
+
+  render(
+    <MemoryRouter>
+      <EmployeeExperienceSettings />
+    </MemoryRouter>,
+  );
+
+  await screen.findByText('Branding and welcome');
+
+  await user.click(
+    screen.getByRole('button', { name: 'Save homepage' }),
+  );
+
+  expect(
+    await screen.findByText(
+      'banner url: Not a valid URL. logo url: Not a valid URL.',
+    ),
+  ).toBeInTheDocument();
+
+  expect(
+    screen.queryByText('Employee homepage settings saved.'),
+  ).not.toBeInTheDocument();
+});

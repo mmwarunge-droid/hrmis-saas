@@ -56,6 +56,30 @@ function toPayloadDate(value) {
   return value ? new Date(value).toISOString() : null;
 }
 
+function apiErrorMessage(err, fallback) {
+  const message = err?.error?.message;
+
+  if (typeof message === 'string' && message.trim()) {
+    return message;
+  }
+
+  if (message && typeof message === 'object') {
+    const details = Object.entries(message).flatMap(([field, value]) => {
+      const messages = Array.isArray(value) ? value : [value];
+
+      return messages
+        .filter((item) => item !== null && item !== undefined)
+        .map((item) => `${field.replaceAll('_', ' ')}: ${String(item)}`);
+    });
+
+    if (details.length) {
+      return details.join(' ');
+    }
+  }
+
+  return fallback;
+}
+
 export default function EmployeeExperienceSettings() {
   const { tenantId } = useTenant();
   const [settings, setSettings] = useState(null);
@@ -162,7 +186,10 @@ export default function EmployeeExperienceSettings() {
       setSettings(response.data);
       setMessage('Employee homepage settings saved.');
     } catch (err) {
-      setError(err.error?.message || 'Employee homepage settings could not be saved.');
+      setError(apiErrorMessage(
+        err,
+        'Employee homepage settings could not be saved.',
+      ));
     } finally {
       setBrandingUpload('');
       setSaving(false);
@@ -189,7 +216,10 @@ export default function EmployeeExperienceSettings() {
       else setLogoFile(null);
       setMessage(`${asset === 'banner' ? 'Company banner' : 'Company logo'} uploaded.`);
     } catch (err) {
-      setError(err.error?.message || 'The branding image could not be uploaded.');
+      setError(apiErrorMessage(
+        err,
+        'The branding image could not be uploaded.',
+      ));
     } finally {
       setBrandingUpload('');
     }

@@ -179,6 +179,32 @@ def test_client_admin_manages_homepage_settings(
     assert asset.status_code == 200
     assert asset.data == image
 
+    # A managed URL produced by Kinetic must be valid when the
+    # homepage settings are subsequently saved.
+    managed_update = client.patch(
+        f'/api/tenants/{tenant.id}/homepage-settings',
+        json={'logo_url': logo_url},
+        headers=auth_headers,
+    )
+    assert managed_update.status_code == 200
+    assert managed_update.get_json()['data']['logo_url'] == logo_url
+
+    # Arbitrary relative paths must not be accepted.
+    invalid_managed_path = client.patch(
+        f'/api/tenants/{tenant.id}/homepage-settings',
+        json={'logo_url': '/uploads/unmanaged-logo.png'},
+        headers=auth_headers,
+    )
+    assert invalid_managed_path.status_code == 422
+
+    # External branding must use HTTPS.
+    insecure_external_url = client.patch(
+        f'/api/tenants/{tenant.id}/homepage-settings',
+        json={'logo_url': 'http://cdn.example.test/logo.png'},
+        headers=auth_headers,
+    )
+    assert insecure_external_url.status_code == 422
+
 
 def test_employee_uploads_own_profile_image(
     client,
