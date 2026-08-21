@@ -1,4 +1,5 @@
 from datetime import date
+from urllib.parse import urlparse
 
 from marshmallow import Schema, ValidationError, fields, validate, validates_schema
 
@@ -7,10 +8,33 @@ from app.models.employee_home import DEFAULT_HOME_SECTIONS
 
 SECTION_CHOICES = set(DEFAULT_HOME_SECTIONS)
 
+MANAGED_BRANDING_PREFIX = '/api/employee-home/branding/'
+
+
+def validate_branding_url(value):
+    if value.startswith(MANAGED_BRANDING_PREFIX):
+        return
+
+    parsed = urlparse(value)
+    if parsed.scheme == 'https' and parsed.netloc:
+        return
+
+    raise ValidationError(
+        'Must be an HTTPS URL or a Kinetic-managed branding image.'
+    )
+
 
 class HomepageSettingsUpdateSchema(Schema):
-    banner_url = fields.Url(required=False, allow_none=True)
-    logo_url = fields.Url(required=False, allow_none=True)
+    banner_url = fields.Str(
+        required=False,
+        allow_none=True,
+        validate=validate_branding_url,
+    )
+    logo_url = fields.Str(
+        required=False,
+        allow_none=True,
+        validate=validate_branding_url,
+    )
     welcome_message = fields.Str(
         required=False,
         validate=validate.Length(min=1, max=240),
