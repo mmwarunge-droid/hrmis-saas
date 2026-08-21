@@ -35,7 +35,11 @@ function PersonCard({ employee, collapsed, onToggle }) {
   return (
     <div className="relative z-10 inline-block min-w-64 rounded-xl border border-slate-200 bg-white p-4 text-left shadow-sm">
       <div className="flex items-start gap-3">
-        <Avatar name={employee.full_name} />
+        <Avatar
+          name={employee.full_name}
+          src={employee.profile_photo_url}
+          alt={employee.full_name}
+        />
         <div className="min-w-0 flex-1">
           <Link to={`/employees/${employee.id}`} className="block truncate font-bold text-slate-950 hover:text-blue-700">
             {employee.full_name}

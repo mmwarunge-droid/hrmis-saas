@@ -111,10 +111,44 @@ export default function EmployeeExperienceSettings() {
     setSaving(true);
     setError('');
     setMessage('');
+
+    let bannerUrl = settings.banner_url || null;
+    let logoUrl = settings.logo_url || null;
+
     try {
+      if (bannerFile) {
+        setBrandingUpload('banner');
+        const bannerResponse = await employeeHomeApi.uploadBranding(
+          tenantId,
+          'banner',
+          bannerFile,
+        );
+        bannerUrl = bannerResponse.data.banner_url || null;
+        setSettings((current) => ({
+          ...current,
+          banner_url: bannerUrl,
+        }));
+        setBannerFile(null);
+      }
+
+      if (logoFile) {
+        setBrandingUpload('logo');
+        const logoResponse = await employeeHomeApi.uploadBranding(
+          tenantId,
+          'logo',
+          logoFile,
+        );
+        logoUrl = logoResponse.data.logo_url || null;
+        setSettings((current) => ({
+          ...current,
+          logo_url: logoUrl,
+        }));
+        setLogoFile(null);
+      }
+
       const response = await employeeHomeApi.updateSettings(tenantId, {
-        banner_url: settings.banner_url || null,
-        logo_url: settings.logo_url || null,
+        banner_url: bannerUrl,
+        logo_url: logoUrl,
         welcome_message: settings.welcome_message,
         enabled_sections: settings.enabled_sections,
         section_order: settings.section_order,
@@ -130,6 +164,7 @@ export default function EmployeeExperienceSettings() {
     } catch (err) {
       setError(err.error?.message || 'Employee homepage settings could not be saved.');
     } finally {
+      setBrandingUpload('');
       setSaving(false);
     }
   };
@@ -145,7 +180,11 @@ export default function EmployeeExperienceSettings() {
         asset,
         file,
       );
-      setSettings(response.data);
+      const urlKey = `${asset}_url`;
+      setSettings((current) => ({
+        ...current,
+        [urlKey]: response.data[urlKey],
+      }));
       if (asset === 'banner') setBannerFile(null);
       else setLogoFile(null);
       setMessage(`${asset === 'banner' ? 'Company banner' : 'Company logo'} uploaded.`);
@@ -305,7 +344,7 @@ export default function EmployeeExperienceSettings() {
                 <Eye size={17} /> Preview employee home
               </Button>
             </Link>
-            <Button variant="accent" onClick={saveSettings} disabled={saving}>
+            <Button variant="accent" onClick={saveSettings} disabled={saving || Boolean(brandingUpload)}>
               <Save size={17} /> {saving ? 'Saving…' : 'Save homepage'}
             </Button>
           </>
@@ -339,7 +378,7 @@ export default function EmployeeExperienceSettings() {
               className="mt-3"
               size="sm"
               variant="secondary"
-              disabled={!bannerFile || brandingUpload === 'banner'}
+              disabled={!bannerFile || saving || Boolean(brandingUpload)}
               onClick={() => uploadBranding('banner', bannerFile)}
             >
               <Image size={15} />
@@ -361,7 +400,7 @@ export default function EmployeeExperienceSettings() {
               className="mt-3"
               size="sm"
               variant="secondary"
-              disabled={!logoFile || brandingUpload === 'logo'}
+              disabled={!logoFile || saving || Boolean(brandingUpload)}
               onClick={() => uploadBranding('logo', logoFile)}
             >
               <Image size={15} />
