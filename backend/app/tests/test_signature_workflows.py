@@ -177,6 +177,12 @@ def test_client_admin_sends_and_employee_completes_signature_request(
     assert tenant_name in message['text']
     assert f'/signature-tasks/{recipient_id}' in message['text']
 
+    assert message['html']
+    assert 'Signature required' in message['html']
+    assert 'Review &amp; Sign Document' in message['html']
+    assert tenant_name in message['html']
+    assert f'/signature-tasks/{recipient_id}' in message['html']
+
     employee_headers = _login(
         client,
         signer['email'],

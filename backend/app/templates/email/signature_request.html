@@ -1,0 +1,451 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="x-apple-disable-message-reformatting">
+  <title>Signature required</title>
+</head>
+
+<body
+  style="
+    margin:0;
+    padding:0;
+    background:#f4f7fb;
+    color:#0f172a;
+    font-family:Arial,Helvetica,sans-serif;
+    -webkit-text-size-adjust:100%;
+    -ms-text-size-adjust:100%;
+  "
+>
+  <!-- Hidden inbox preview text -->
+  <div
+    style="
+      display:none;
+      max-height:0;
+      overflow:hidden;
+      opacity:0;
+      color:transparent;
+      line-height:1px;
+      font-size:1px;
+    "
+  >
+    {{ organization_name }} has sent you {{ document_title }} to review and sign.
+  </div>
+
+  <table
+    role="presentation"
+    width="100%"
+    cellspacing="0"
+    cellpadding="0"
+    border="0"
+    style="width:100%;background:#f4f7fb;"
+  >
+    <tr>
+      <td align="center" style="padding:32px 12px;">
+
+        <table
+          role="presentation"
+          width="600"
+          cellspacing="0"
+          cellpadding="0"
+          border="0"
+          style="
+            width:100%;
+            max-width:600px;
+            background:#ffffff;
+            border:1px solid #dbe4f0;
+            border-radius:18px;
+            overflow:hidden;
+          "
+        >
+
+          <!-- Header -->
+          <tr>
+            <td
+              style="
+                background:#071a45;
+                padding:27px 32px;
+                color:#ffffff;
+              "
+            >
+              <table
+                role="presentation"
+                width="100%"
+                cellspacing="0"
+                cellpadding="0"
+                border="0"
+              >
+                <tr>
+                  <td
+                    valign="middle"
+                    style="
+                      font-size:21px;
+                      font-weight:700;
+                      line-height:1.15;
+                      color:#ffffff;
+                    "
+                  >
+                    Career<br>Disrupters
+                  </td>
+
+                  <td
+                    align="right"
+                    valign="middle"
+                    style="
+                      font-size:12px;
+                      line-height:1.45;
+                      color:#bfdbfe;
+                    "
+                  >
+                    On behalf of<br>
+                    <strong
+                      style="
+                        font-size:14px;
+                        color:#ffffff;
+                      "
+                    >
+                      {{ organization_name }}
+                    </strong>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- Hero -->
+          <tr>
+            <td
+              align="center"
+              style="
+                padding:42px 32px 30px;
+                border-bottom:1px solid #e2e8f0;
+              "
+            >
+              <table
+                role="presentation"
+                cellspacing="0"
+                cellpadding="0"
+                border="0"
+              >
+                <tr>
+                  <td
+                    align="center"
+                    style="
+                      width:64px;
+                      height:64px;
+                      background:#eef2ff;
+                      border-radius:32px;
+                      font-size:30px;
+                      color:#3157e8;
+                    "
+                  >
+                    &#9998;
+                  </td>
+                </tr>
+              </table>
+
+              <h1
+                style="
+                  margin:22px 0 8px;
+                  font-size:32px;
+                  line-height:1.2;
+                  font-weight:700;
+                  letter-spacing:-0.02em;
+                  color:#0b1739;
+                "
+              >
+                Signature required
+              </h1>
+
+              <p
+                style="
+                  margin:0;
+                  font-size:16px;
+                  line-height:1.6;
+                  color:#64748b;
+                "
+              >
+                You have a document to review and sign in Kinetic.
+              </p>
+            </td>
+          </tr>
+
+          <!-- Main content -->
+          <tr>
+            <td style="padding:32px;">
+
+              <p
+                style="
+                  margin:0 0 18px;
+                  font-size:16px;
+                  line-height:1.6;
+                  color:#0f172a;
+                "
+              >
+                Hi {{ recipient_name }},
+              </p>
+
+              <p
+                style="
+                  margin:0 0 26px;
+                  font-size:16px;
+                  line-height:1.65;
+                  color:#334155;
+                "
+              >
+                <strong>{{ organization_name }}</strong>
+                has assigned you a signature task in Kinetic.
+              </p>
+
+              <!-- Document details -->
+              <table
+                role="presentation"
+                width="100%"
+                cellspacing="0"
+                cellpadding="0"
+                border="0"
+                style="
+                  width:100%;
+                  background:#f8fafc;
+                  border:1px solid #dbe4f0;
+                  border-radius:14px;
+                "
+              >
+                <tr>
+                  <td style="padding:22px 24px 14px;">
+
+                    <div
+                      style="
+                        margin-bottom:5px;
+                        font-size:11px;
+                        font-weight:700;
+                        letter-spacing:0.13em;
+                        text-transform:uppercase;
+                        color:#64748b;
+                      "
+                    >
+                      Document
+                    </div>
+
+                    <div
+                      style="
+                        font-size:17px;
+                        line-height:1.45;
+                        font-weight:700;
+                        color:#0f172a;
+                      "
+                    >
+                      {{ document_title }}
+                    </div>
+
+                  </td>
+                </tr>
+
+                <tr>
+                  <td style="padding:14px 24px 22px;">
+
+                    <div
+                      style="
+                        margin-bottom:5px;
+                        font-size:11px;
+                        font-weight:700;
+                        letter-spacing:0.13em;
+                        text-transform:uppercase;
+                        color:#64748b;
+                      "
+                    >
+                      Due date
+                    </div>
+
+                    <div
+                      style="
+                        font-size:16px;
+                        line-height:1.45;
+                        font-weight:700;
+                        color:#0f172a;
+                      "
+                    >
+                      {{ due_text }}
+                    </div>
+
+                  </td>
+                </tr>
+              </table>
+
+              <!-- CTA -->
+              <table
+                role="presentation"
+                width="100%"
+                cellspacing="0"
+                cellpadding="0"
+                border="0"
+                style="margin-top:30px;"
+              >
+                <tr>
+                  <td align="center">
+
+                    <table
+                      role="presentation"
+                      cellspacing="0"
+                      cellpadding="0"
+                      border="0"
+                    >
+                      <tr>
+                        <td
+                          bgcolor="#3157e8"
+                          style="
+                            border-radius:10px;
+                            background:#3157e8;
+                          "
+                        >
+                          <a
+                            href="{{ action_url }}"
+                            style="
+                              display:inline-block;
+                              padding:15px 28px;
+                              font-size:16px;
+                              line-height:1;
+                              font-weight:700;
+                              text-decoration:none;
+                              color:#ffffff;
+                              border-radius:10px;
+                            "
+                          >
+                            Review &amp; Sign Document
+                          </a>
+                        </td>
+                      </tr>
+                    </table>
+
+                  </td>
+                </tr>
+              </table>
+
+              <!-- Fallback URL -->
+              <table
+                role="presentation"
+                width="100%"
+                cellspacing="0"
+                cellpadding="0"
+                border="0"
+                style="margin-top:30px;"
+              >
+                <tr>
+                  <td
+                    style="
+                      padding-top:24px;
+                      border-top:1px solid #e2e8f0;
+                    "
+                  >
+                    <p
+                      style="
+                        margin:0 0 7px;
+                        font-size:13px;
+                        line-height:1.5;
+                        font-weight:700;
+                        color:#334155;
+                      "
+                    >
+                      Or use this secure link
+                    </p>
+
+                    <p
+                      style="
+                        margin:0;
+                        font-size:12px;
+                        line-height:1.6;
+                        word-break:break-all;
+                      "
+                    >
+                      <a
+                        href="{{ action_url }}"
+                        style="
+                          color:#3157e8;
+                          text-decoration:underline;
+                        "
+                      >
+                        {{ action_url }}
+                      </a>
+                    </p>
+                  </td>
+                </tr>
+              </table>
+
+              <!-- Security notice -->
+              <table
+                role="presentation"
+                width="100%"
+                cellspacing="0"
+                cellpadding="0"
+                border="0"
+                style="
+                  margin-top:25px;
+                  background:#f4f6ff;
+                  border:1px solid #d9e0ff;
+                  border-radius:12px;
+                "
+              >
+                <tr>
+                  <td
+                    style="
+                      padding:17px 19px;
+                      font-size:13px;
+                      line-height:1.6;
+                      color:#475569;
+                    "
+                  >
+                    <strong style="color:#0f172a;">
+                      Your security is our priority.
+                    </strong>
+                    <br>
+                    This link is intended for you. Please do not share
+                    signing access with others.
+                  </td>
+                </tr>
+              </table>
+
+            </td>
+          </tr>
+
+          <!-- Footer -->
+          <tr>
+            <td
+              align="center"
+              style="
+                padding:24px 28px;
+                background:#f7f8ff;
+                border-top:1px solid #e2e8f0;
+              "
+            >
+              <div
+                style="
+                  font-size:15px;
+                  font-weight:700;
+                  color:#172554;
+                "
+              >
+                Career Disrupters
+              </div>
+
+              <div
+                style="
+                  margin-top:7px;
+                  font-size:12px;
+                  line-height:1.6;
+                  color:#94a3b8;
+                "
+              >
+                This email was sent by Career Disrupters via Kinetic.<br>
+                careerdisrupters.com
+              </div>
+            </td>
+          </tr>
+
+        </table>
+
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
