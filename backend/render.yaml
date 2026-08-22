@@ -176,6 +176,17 @@ services:
       - key: API_PREFIX
         value: /api
 
+      - key: FRONTEND_URL
+        fromService:
+          type: web
+          name: hrmis-saas-api
+          envVarKey: FRONTEND_URL
+      - key: CORS_ORIGINS
+        fromService:
+          type: web
+          name: hrmis-saas-api
+          envVarKey: CORS_ORIGINS
+
       - key: DATABASE_URL
         fromDatabase:
           name: hrmis-saas-db
@@ -347,6 +358,17 @@ services:
         value: production
       - key: API_PREFIX
         value: /api
+
+      - key: FRONTEND_URL
+        fromService:
+          type: web
+          name: hrmis-saas-api
+          envVarKey: FRONTEND_URL
+      - key: CORS_ORIGINS
+        fromService:
+          type: web
+          name: hrmis-saas-api
+          envVarKey: CORS_ORIGINS
 
       - key: DATABASE_URL
         fromDatabase:
