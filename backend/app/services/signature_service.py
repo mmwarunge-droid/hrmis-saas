@@ -1,6 +1,6 @@
 from datetime import timedelta
 
-from flask import current_app
+from flask import current_app, render_template
 
 from sqlalchemy.exc import IntegrityError
 
@@ -196,6 +196,7 @@ def _deliver_email(
     subject,
     body,
     *,
+    html_body=None,
     recipient=None,
     failure_event='signature.email_delivery_failed',
 ):
@@ -204,6 +205,7 @@ def _deliver_email(
             to_address,
             subject,
             body,
+            html_body=html_body,
             reply_to=current_app.config.get('MAIL_REPLY_TO'),
         )
         return True
@@ -245,14 +247,21 @@ def _notify_recipient(
     email_subject = (
         f'[{organization_name}] Signature required: {document.title}'
     )
-    email_body = (
-        f'Hi {recipient.name},\n\n'
-        f'{organization_name} has assigned you a signature task '
-        f'in Kinetic.\n\n'
-        f'Document: {document.title}\n'
-        f'Due: {_due_text(recipient.due_at)}\n\n'
-        f'Open Kinetic to review and sign:\n'
-        f'{_task_url(recipient.id)}'
+    action_url = _task_url(recipient.id)
+    template_context = {
+        'recipient_name': recipient.name,
+        'organization_name': organization_name,
+        'document_title': document.title,
+        'due_text': _due_text(recipient.due_at),
+        'action_url': action_url,
+    }
+    email_body = render_template(
+        'email/signature_request.txt',
+        **template_context,
+    ).strip()
+    email_html = render_template(
+        'email/signature_request.html',
+        **template_context,
     )
 
     _create_notification(
@@ -273,6 +282,7 @@ def _notify_recipient(
         recipient.email,
         email_subject,
         email_body,
+        html_body=email_html,
         recipient=recipient,
     )
 

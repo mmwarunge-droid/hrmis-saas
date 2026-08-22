@@ -1,0 +1,16 @@
+Hi {{ recipient_name }},
+
+{{ organization_name }} has assigned you a signature task in Kinetic.
+
+Document: {{ document_title }}
+Due: {{ due_text }}
+
+Review and sign your document:
+{{ action_url }}
+
+For your security, this signing link is unique to your account.
+Please do not share it with others.
+
+Career Disrupters
+Powered by Kinetic
+careerdisrupters.com
