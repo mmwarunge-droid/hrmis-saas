@@ -87,6 +87,9 @@ function PlatformUsers() {
   const [selectedUser, setSelectedUser] = useState(null);
   const [saving, setSaving] = useState(false);
   const [resendingId, setResendingId] = useState(null);
+  const [selectedResetIds, setSelectedResetIds] = useState([]);
+  const [bulkResetRequest, setBulkResetRequest] = useState(null);
+  const [bulkResetting, setBulkResetting] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const { user } = useAuth();
@@ -133,6 +136,7 @@ function PlatformUsers() {
         direction: sort?.direction || undefined,
       });
       setUsers(response.data.items || []);
+      setSelectedResetIds([]);
       setMeta(response.data.meta || {
         page,
         per_page: 15,
@@ -262,12 +266,152 @@ function PlatformUsers() {
       )
     )
   );
+  const canReceivePasswordReset = (account) => (
+    Boolean(account.tenant_id)
+    && Boolean(account.is_active)
+    && account.account_status !== 'invited'
+    && !account.activation_required
+  );
+
+  const resetEligibleIds = users
+    .filter(canReceivePasswordReset)
+    .map((account) => String(account.id));
+
+  const allResetEligibleSelected = (
+    resetEligibleIds.length > 0
+    && resetEligibleIds.every(
+      (id) => selectedResetIds.includes(id),
+    )
+  );
+
+  const toggleResetSelection = (accountId) => {
+    const id = String(accountId);
+    setSelectedResetIds((current) => (
+      current.includes(id)
+        ? current.filter((item) => item !== id)
+        : [...current, id]
+    ));
+  };
+
+  const togglePageResetSelection = () => {
+    setSelectedResetIds((current) => {
+      if (
+        resetEligibleIds.length > 0
+        && resetEligibleIds.every((id) => current.includes(id))
+      ) {
+        return current.filter(
+          (id) => !resetEligibleIds.includes(id),
+        );
+      }
+
+      return Array.from(new Set([
+        ...current,
+        ...resetEligibleIds,
+      ]));
+    });
+  };
+
+  const requestSelectedPasswordResets = () => {
+    if (!selectedResetIds.length) return;
+
+    const count = selectedResetIds.length;
+    setBulkResetRequest({
+      payload: {
+        user_ids: selectedResetIds,
+      },
+      message: `Send password reset links to ${count} selected active user${count === 1 ? '' : 's'}?`,
+    });
+  };
+
+  const requestOrganizationPasswordResets = () => {
+    if (!organization) return;
+
+    const organizationName = tenantNames[organization]
+      || 'this organization';
+
+    setBulkResetRequest({
+      payload: {
+        tenant_id: organization,
+      },
+      message: `Send password reset links to all eligible active users in ${organizationName}? Invited and inactive accounts will be skipped.`,
+    });
+  };
+
+  const confirmBulkPasswordReset = async () => {
+    if (!bulkResetRequest) return;
+
+    setBulkResetting(true);
+    setError('');
+    setSuccess('');
+
+    try {
+      const response = await userApi.sharePasswordResetBulk(
+        bulkResetRequest.payload,
+      );
+      const result = response.data;
+
+      const parts = [
+        `${result.sent} password reset link${result.sent === 1 ? '' : 's'} sent`,
+      ];
+
+      if (result.skipped) {
+        parts.push(`${result.skipped} skipped`);
+      }
+      if (result.failed) {
+        parts.push(`${result.failed} failed`);
+      }
+
+      setSuccess(`${parts.join(' · ')}.`);
+      setBulkResetRequest(null);
+      setSelectedResetIds([]);
+      await refresh();
+    } catch (err) {
+      setError(
+        err.error?.message
+        || 'Password reset links could not be sent',
+      );
+    } finally {
+      setBulkResetting(false);
+    }
+  };
+
   const updateSort = (value) => {
     setSort(value);
     setPage(1);
   };
 
   const columns = [
+    ...(isSuperAdmin && canUpdateUsers ? [{
+      key: 'reset_selection',
+      label: (
+        <input
+          type="checkbox"
+          aria-label="Select all reset-eligible users on this page"
+          checked={allResetEligibleSelected}
+          disabled={resetEligibleIds.length === 0}
+          onChange={togglePageResetSelection}
+          className="h-4 w-4 rounded border-slate-300"
+        />
+      ),
+      className: 'w-12',
+      cellClassName: 'w-12',
+      render: (row) => {
+        const eligible = canReceivePasswordReset(row);
+        const checked = selectedResetIds.includes(String(row.id));
+
+        return (
+          <input
+            type="checkbox"
+            aria-label={`Select ${row.full_name} for password reset`}
+            checked={checked}
+            disabled={!eligible}
+            onClick={(event) => event.stopPropagation()}
+            onChange={() => toggleResetSelection(row.id)}
+            className="h-4 w-4 rounded border-slate-300"
+          />
+        );
+      },
+    }] : []),
     {
       key: 'full_name',
       label: 'Person',
@@ -522,6 +666,40 @@ function PlatformUsers() {
         </div>
       </Card>
 
+      {isSuperAdmin && canUpdateUsers && (
+        <div className="flex flex-col gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-[0_1px_2px_rgba(15,23,42,0.04)] sm:flex-row sm:items-center sm:justify-between">
+          <div className="text-sm text-slate-600">
+            {selectedResetIds.length > 0
+              ? `${selectedResetIds.length} active user${selectedResetIds.length === 1 ? '' : 's'} selected`
+              : 'Select active users to send secure password reset links.'}
+          </div>
+
+          <div className="flex flex-wrap gap-2">
+            {selectedResetIds.length > 0 && (
+              <Button
+                variant="secondary"
+                onClick={requestSelectedPasswordResets}
+                disabled={bulkResetting}
+              >
+                <Send size={15} />
+                Send reset links ({selectedResetIds.length})
+              </Button>
+            )}
+
+            {organization && (
+              <Button
+                variant="secondary"
+                onClick={requestOrganizationPasswordResets}
+                disabled={bulkResetting}
+              >
+                <Send size={15} />
+                Send reset links to {tenantNames[organization] || 'organization'}
+              </Button>
+            )}
+          </div>
+        </div>
+      )}
+
       <Table
         caption="User accounts"
         columns={columns}
@@ -539,6 +717,39 @@ function PlatformUsers() {
           label: 'user accounts',
         }}
       />
+
+      <Modal
+        open={Boolean(bulkResetRequest)}
+        onClose={() => {
+          if (!bulkResetting) setBulkResetRequest(null);
+        }}
+        title="Confirm password reset emails"
+        description="Each recipient will receive a private, single-use reset link at their registered email address."
+      >
+        <div className="space-y-5">
+          <p className="text-sm leading-6 text-slate-700">
+            {bulkResetRequest?.message}
+          </p>
+
+          <div className="flex justify-end gap-2">
+            <Button
+              variant="ghost"
+              disabled={bulkResetting}
+              onClick={() => setBulkResetRequest(null)}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="accent"
+              disabled={bulkResetting}
+              onClick={confirmBulkPasswordReset}
+            >
+              <Send size={15} />
+              {bulkResetting ? 'Sending...' : 'Confirm reset links'}
+            </Button>
+          </div>
+        </div>
+      </Modal>
 
       <Modal
         open={open}

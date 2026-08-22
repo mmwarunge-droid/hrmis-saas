@@ -11,4 +11,5 @@ export const userApi = {
   resetMfa: (id, payload) => apiClient.post(`/users/${id}/mfa/reset`, payload),
   resendInvitation: (id) => apiClient.post(`/users/${id}/invitation/resend`),
   shareAccessLink: (id) => apiClient.post(`/users/${id}/access-link/share`),
+  sharePasswordResetBulk: (payload) => apiClient.post('/users/password-reset/share-bulk', payload),
 };
