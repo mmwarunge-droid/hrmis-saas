@@ -1,4 +1,4 @@
-from marshmallow import Schema, fields, validate
+from marshmallow import Schema, ValidationError, fields, validate, validates_schema
 
 
 class TenantCreateSchema(Schema):
@@ -78,6 +78,29 @@ class UserUpdateSchema(Schema):
 
 class UserRoleUpdateSchema(Schema):
     roles = fields.List(fields.Str(), required=True, validate=validate.Length(min=1))
+
+class UserPasswordResetBulkSchema(Schema):
+    user_ids = fields.List(
+        fields.UUID(),
+        required=False,
+        load_default=list,
+        validate=validate.Length(max=100),
+    )
+    tenant_id = fields.UUID(
+        required=False,
+        allow_none=True,
+    )
+
+    @validates_schema
+    def validate_scope(self, data, **kwargs):
+        user_ids = data.get('user_ids') or []
+        tenant_id = data.get('tenant_id')
+
+        if bool(user_ids) == bool(tenant_id):
+            raise ValidationError(
+                'Provide either user_ids or tenant_id, but not both.'
+            )
+
 
 class TenantMfaPolicySchema(Schema):
     mode = fields.Str(

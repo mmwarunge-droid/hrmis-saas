@@ -11,6 +11,7 @@ from app.schemas.user_schema import (
     MfaAdminResetSchema,
     UserCreateSchema,
     UserEmployeeLinkSchema,
+    UserPasswordResetBulkSchema,
     UserRoleUpdateSchema,
     UserUpdateSchema,
 )
@@ -48,6 +49,13 @@ PRIVILEGED_ROLES = {
 
 
 def _user_scope_query():
+    if current_user.has_role('SUPER_ADMIN'):
+        query = User.query.filter(User.deleted_at.is_(None))
+        tenant_id = request.args.get('tenant_id')
+        if tenant_id:
+            query = query.filter(User.tenant_id == tenant_id)
+        return query
+
     return tenant_query(User).filter(User.deleted_at.is_(None))
 
 
@@ -420,26 +428,7 @@ def resend_user_invitation(user_id):
     )
 
 
-@user_bp.post('/<user_id>/access-link/share')
-@jwt_required()
-@permission_required('user:update')
-def share_user_access_link(user_id):
-    user = _user_scope_query().filter_by(id=user_id).first_or_404()
-
-    if not _can_manage_user(user):
-        return fail(
-            'PRIVILEGED_USER_PROTECTED',
-            'Only a platform administrator can manage this account',
-            403,
-        )
-
-    if not user.is_active:
-        return fail(
-            'ACCESS_LINK_NOT_AVAILABLE',
-            'Restore platform access before sharing an access link',
-            409,
-        )
-
+def _deliver_user_access_link(user):
     if user.activation_required:
         link_type = 'invitation'
         purpose = AccountToken.PURPOSE_ACCOUNT_INVITE
@@ -462,8 +451,8 @@ def share_user_access_link(user_id):
     try:
         send_link_email(user, raw_token)
     except EmailDeliveryError:
-        # Roll back token replacement so a previously valid link is not
-        # invalidated when the replacement email could not be delivered.
+        # Preserve any previously valid access link if delivery of
+        # its replacement fails.
         db.session.rollback()
 
         log_event(
@@ -477,12 +466,7 @@ def share_user_access_link(user_id):
             },
         )
         db.session.commit()
-
-        return fail(
-            'EMAIL_DELIVERY_FAILED',
-            'The access link could not be delivered. Try again later.',
-            503,
-        )
+        raise
 
     if link_type == 'invitation':
         user.invitation_sent_at = utcnow()
@@ -501,7 +485,7 @@ def share_user_access_link(user_id):
 
     db.session.commit()
 
-    return success(
+    return (
         {
             'user': user.to_dict(),
             'link_type': link_type,
@@ -509,6 +493,161 @@ def share_user_access_link(user_id):
             'expires_at': account_token.expires_at.isoformat(),
         },
         success_message,
+    )
+
+
+@user_bp.post('/<user_id>/access-link/share')
+@jwt_required()
+@permission_required('user:update')
+def share_user_access_link(user_id):
+    user = _user_scope_query().filter_by(id=user_id).first_or_404()
+
+    if not _can_manage_user(user):
+        return fail(
+            'PRIVILEGED_USER_PROTECTED',
+            'Only a platform administrator can manage this account',
+            403,
+        )
+
+    if not user.is_active:
+        return fail(
+            'ACCESS_LINK_NOT_AVAILABLE',
+            'Restore platform access before sharing an access link',
+            409,
+        )
+
+    try:
+        data, success_message = _deliver_user_access_link(user)
+    except EmailDeliveryError:
+        return fail(
+            'EMAIL_DELIVERY_FAILED',
+            'The access link could not be delivered. Try again later.',
+            503,
+        )
+
+    return success(data, success_message)
+
+
+@user_bp.post('/password-reset/share-bulk')
+@jwt_required()
+@permission_required('user:update')
+def share_password_reset_links_bulk():
+    if not current_user.has_role('SUPER_ADMIN'):
+        return fail(
+            'FORBIDDEN',
+            'Only a platform administrator can send bulk password resets',
+            403,
+        )
+
+    try:
+        payload = UserPasswordResetBulkSchema().load(
+            request.get_json() or {}
+        )
+    except ValidationError as err:
+        return fail('VALIDATION_ERROR', err.messages, 422)
+
+    requested_ids = list(dict.fromkeys(payload.get('user_ids') or []))
+    tenant_id = payload.get('tenant_id')
+
+    if requested_ids:
+        users = (
+            User.query
+            .filter(
+                User.id.in_(requested_ids),
+                User.deleted_at.is_(None),
+            )
+            .order_by(User.first_name.asc(), User.last_name.asc())
+            .all()
+        )
+        requested = len(requested_ids)
+        found_ids = {str(user.id) for user in users}
+        not_found = sum(
+            1
+            for user_id in requested_ids
+            if str(user_id) not in found_ids
+        )
+    else:
+        users = (
+            User.query
+            .filter(
+                User.tenant_id == tenant_id,
+                User.deleted_at.is_(None),
+            )
+            .order_by(User.first_name.asc(), User.last_name.asc())
+            .all()
+        )
+
+        # Keep synchronous bulk email delivery bounded. Larger
+        # organizations should be handled by a background job rather
+        # than holding a web request open for hundreds of SMTP sends.
+        if len(users) > 100:
+            return fail(
+                'BULK_RESET_LIMIT_EXCEEDED',
+                (
+                    'This organization has more than 100 user accounts. '
+                    'Use a narrower selection for this operation.'
+                ),
+                409,
+            )
+
+        requested = len(users)
+        not_found = 0
+
+    sent = 0
+    failed = 0
+    skipped_inactive = 0
+    skipped_invited = 0
+    skipped_platform_account = 0
+
+    for user in users:
+        # Bulk recovery is deliberately limited to organization-bound
+        # accounts. Platform administrator recovery remains an explicit
+        # single-account operation.
+        if not user.tenant_id:
+            skipped_platform_account += 1
+            continue
+
+        if not user.is_active:
+            skipped_inactive += 1
+            continue
+
+        # Password reset must never bypass first-time activation.
+        if user.activation_required:
+            skipped_invited += 1
+            continue
+
+        try:
+            data, _ = _deliver_user_access_link(user)
+        except EmailDeliveryError:
+            failed += 1
+            continue
+
+        if data['link_type'] == 'password_reset':
+            sent += 1
+
+    skipped = (
+        not_found
+        + skipped_inactive
+        + skipped_invited
+        + skipped_platform_account
+    )
+
+    return success(
+        {
+            'scope': 'selected' if requested_ids else 'organization',
+            'tenant_id': str(tenant_id) if tenant_id else None,
+            'requested': requested,
+            'sent': sent,
+            'skipped': skipped,
+            'failed': failed,
+            'skipped_reasons': {
+                'not_found': not_found,
+                'inactive': skipped_inactive,
+                'awaiting_activation': skipped_invited,
+                'platform_account': skipped_platform_account,
+            },
+        },
+        f'{sent} password reset link(s) sent',
     )
 
 

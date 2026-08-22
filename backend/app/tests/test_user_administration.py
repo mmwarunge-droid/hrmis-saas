@@ -118,6 +118,334 @@ def test_user_directory_uses_complete_scope_and_server_controls(
     }
 
 
+
+def test_super_admin_user_directory_spans_filters_and_manages_tenants(
+    app,
+    tenant,
+):
+    with app.app_context():
+        register_user({
+            'email': 'platform-directory-admin@example.test',
+            'first_name': 'Platform',
+            'last_name': 'Directory Admin',
+            'password': 'StrongPlatformDirectoryPass123!',
+            'roles': ['SUPER_ADMIN'],
+        })
+
+        other = Tenant(
+            name='Platform Directory Other Tenant',
+            slug='platform-directory-other-tenant',
+        )
+        db.session.add(other)
+        db.session.commit()
+        other_id = other.id
+
+    _create_user(
+        app,
+        tenant.id,
+        701,
+        roles=['EMPLOYEE'],
+    )
+    other_user_id = _create_user(
+        app,
+        other_id,
+        702,
+        roles=['EMPLOYEE'],
+    )
+
+    platform_client = app.test_client()
+    login = platform_client.post(
+        '/api/auth/login',
+        json={
+            'email': 'platform-directory-admin@example.test',
+            'password': 'StrongPlatformDirectoryPass123!',
+        },
+    )
+    assert login.status_code == 200
+    headers = _csrf_header(platform_client)
+
+    # No tenant_id means complete platform scope for SUPER_ADMIN.
+    response = platform_client.get(
+        '/api/users?per_page=100',
+        headers=headers,
+    )
+    assert response.status_code == 200
+
+    data = response.get_json()['data']
+    emails = {item['email'] for item in data['items']}
+
+    assert 'user-701@acme.test' in emails
+    assert 'user-702@acme.test' in emails
+
+    # An explicit organization filter must narrow the platform scope.
+    filtered = platform_client.get(
+        f'/api/users?tenant_id={other_id}&per_page=100',
+        headers=headers,
+    )
+    assert filtered.status_code == 200
+
+    filtered_data = filtered.get_json()['data']
+    assert filtered_data['meta']['total'] == 1
+    assert {
+        item['email']
+        for item in filtered_data['items']
+    } == {'user-702@acme.test'}
+
+    summary = platform_client.get(
+        f'/api/users/summary?tenant_id={other_id}',
+        headers=headers,
+    )
+    assert summary.status_code == 200
+    assert summary.get_json()['data']['total'] == 1
+
+    # SUPER_ADMIN can issue a secure reset email for a user in
+    # another organization without receiving the raw token.
+    shared = platform_client.post(
+        f'/api/users/{other_user_id}/access-link/share',
+        headers=headers,
+    )
+    assert shared.status_code == 200
+
+    shared_data = shared.get_json()['data']
+    assert shared_data['user']['email'] == 'user-702@acme.test'
+    assert shared_data['link_type'] == 'password_reset'
+    assert shared_data['delivery'] == 'sent'
+    assert 'token' not in shared_data
+    assert 'url' not in shared_data
+
+    message = app.extensions['mail_outbox'][-1]
+    assert message['subject'] == 'Reset your Kinetic password'
+
+
+def test_client_admin_cannot_share_access_link_across_tenants(
+    client,
+    app,
+    tenant,
+    auth_headers,
+):
+    with app.app_context():
+        other = Tenant(
+            name='Protected Other Tenant',
+            slug='protected-other-tenant-access-link',
+        )
+        db.session.add(other)
+        db.session.commit()
+        other_id = other.id
+
+    other_user_id = _create_user(
+        app,
+        other_id,
+        703,
+        roles=['EMPLOYEE'],
+    )
+
+    response = client.post(
+        f'/api/users/{other_user_id}/access-link/share',
+        headers=auth_headers,
+    )
+
+    # Tenant-scoped administrators must not be able to resolve
+    # or operate on another organization's account.
+    assert response.status_code == 404
+
+
+
+def test_super_admin_can_send_bulk_password_resets_by_selection(
+    app,
+    tenant,
+):
+    with app.app_context():
+        register_user({
+            'email': 'bulk-reset-platform-admin@example.test',
+            'first_name': 'Bulk',
+            'last_name': 'Platform Admin',
+            'password': 'StrongBulkPlatformPass123!',
+            'roles': ['SUPER_ADMIN'],
+        })
+
+        other = Tenant(
+            name='Bulk Reset Other Tenant',
+            slug='bulk-reset-other-tenant',
+        )
+        db.session.add(other)
+        db.session.commit()
+        other_id = other.id
+
+    with app.app_context():
+        platform_target = register_user({
+            'email': 'bulk-reset-protected-platform@example.test',
+            'first_name': 'Protected',
+            'last_name': 'Platform Account',
+            'password': 'StrongProtectedPlatformPass123!',
+            'roles': ['SUPER_ADMIN'],
+        })
+        platform_target_id = platform_target.id
+
+    first_id = _create_user(
+        app,
+        tenant.id,
+        711,
+        roles=['EMPLOYEE'],
+    )
+    second_id = _create_user(
+        app,
+        other_id,
+        712,
+        roles=['EMPLOYEE'],
+    )
+    inactive_id = _create_user(
+        app,
+        other_id,
+        713,
+        roles=['EMPLOYEE'],
+        is_active=False,
+    )
+
+    platform_client = app.test_client()
+    login = platform_client.post(
+        '/api/auth/login',
+        json={
+            'email': 'bulk-reset-platform-admin@example.test',
+            'password': 'StrongBulkPlatformPass123!',
+        },
+    )
+    assert login.status_code == 200
+    headers = _csrf_header(platform_client)
+
+    before_mail = len(app.extensions.get('mail_outbox', []))
+
+    response = platform_client.post(
+        '/api/users/password-reset/share-bulk',
+        headers=headers,
+        json={
+            'user_ids': [
+                str(first_id),
+                str(second_id),
+                str(inactive_id),
+                str(platform_target_id),
+            ],
+        },
+    )
+
+    assert response.status_code == 200
+    data = response.get_json()['data']
+
+    assert data['scope'] == 'selected'
+    assert data['requested'] == 4
+    assert data['sent'] == 2
+    assert data['skipped'] == 2
+    assert data['failed'] == 0
+    assert data['skipped_reasons']['inactive'] == 1
+    assert data['skipped_reasons']['awaiting_activation'] == 0
+    assert data['skipped_reasons']['platform_account'] == 1
+
+    assert len(app.extensions['mail_outbox']) == before_mail + 2
+    assert all(
+        message['subject'] == 'Reset your Kinetic password'
+        for message in app.extensions['mail_outbox'][-2:]
+    )
+
+
+def test_super_admin_can_send_bulk_password_resets_by_organization(
+    app,
+    tenant,
+):
+    with app.app_context():
+        register_user({
+            'email': 'organization-reset-admin@example.test',
+            'first_name': 'Organization',
+            'last_name': 'Reset Admin',
+            'password': 'StrongOrganizationResetPass123!',
+            'roles': ['SUPER_ADMIN'],
+        })
+
+        other = Tenant(
+            name='Organization Reset Tenant',
+            slug='organization-reset-tenant',
+        )
+        db.session.add(other)
+        db.session.commit()
+        other_id = other.id
+
+    _create_user(
+        app,
+        other_id,
+        721,
+        roles=['EMPLOYEE'],
+    )
+    _create_user(
+        app,
+        other_id,
+        722,
+        roles=['MANAGER'],
+    )
+    _create_user(
+        app,
+        other_id,
+        723,
+        roles=['EMPLOYEE'],
+        is_active=False,
+    )
+
+    # A user from another organization must not be included.
+    _create_user(
+        app,
+        tenant.id,
+        724,
+        roles=['EMPLOYEE'],
+    )
+
+    platform_client = app.test_client()
+    login = platform_client.post(
+        '/api/auth/login',
+        json={
+            'email': 'organization-reset-admin@example.test',
+            'password': 'StrongOrganizationResetPass123!',
+        },
+    )
+    assert login.status_code == 200
+    headers = _csrf_header(platform_client)
+
+    before_mail = len(app.extensions.get('mail_outbox', []))
+
+    response = platform_client.post(
+        '/api/users/password-reset/share-bulk',
+        headers=headers,
+        json={'tenant_id': str(other_id)},
+    )
+
+    assert response.status_code == 200
+    data = response.get_json()['data']
+
+    assert data['scope'] == 'organization'
+    assert data['tenant_id'] == str(other_id)
+    assert data['requested'] == 3
+    assert data['sent'] == 2
+    assert data['skipped'] == 1
+    assert data['failed'] == 0
+    assert data['skipped_reasons']['inactive'] == 1
+
+    assert len(app.extensions['mail_outbox']) == before_mail + 2
+
+
+def test_client_admin_cannot_send_bulk_password_resets(
+    client,
+    auth_headers,
+):
+    response = client.post(
+        '/api/users/password-reset/share-bulk',
+        headers=auth_headers,
+        json={
+            'user_ids': [
+                '11111111-1111-1111-1111-111111111111',
+            ],
+        },
+    )
+
+    assert response.status_code == 403
+    assert response.get_json()['error']['code'] == 'FORBIDDEN'
+
+
 def test_deactivating_user_revokes_sessions_and_blocks_login(
     app,
     tenant,

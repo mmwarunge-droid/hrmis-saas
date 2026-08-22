@@ -27,6 +27,7 @@ vi.mock('../api/userApi.js', () => ({
     update: vi.fn(),
     updateRoles: vi.fn(),
     shareAccessLink: vi.fn(),
+    sharePasswordResetBulk: vi.fn(),
   },
 }));
 
@@ -110,6 +111,21 @@ beforeEach(() => {
     data: { ...account(1), is_active: false, revoked_sessions: 2 },
   });
   userApi.updateRoles.mockResolvedValue({ data: account(1) });
+  userApi.sharePasswordResetBulk.mockResolvedValue({
+    data: {
+      requested: 1,
+      sent: 1,
+      skipped: 0,
+      failed: 0,
+      skipped_reasons: {
+        not_found: 0,
+        inactive: 0,
+        awaiting_activation: 0,
+        platform_account: 0,
+      },
+    },
+  });
+
   userApi.shareAccessLink.mockImplementation((userId) => (
     Promise.resolve({
       data: {
@@ -211,6 +227,160 @@ test('updates account lifecycle status and roles from the management dialog', as
   expect(
     await screen.findByText('Account updated and 2 active sessions revoked.'),
   ).toBeInTheDocument();
+});
+
+
+
+test('super admin sends password resets to selected active users', async () => {
+  userApi.list.mockResolvedValue({
+    data: {
+      items: [
+        {
+          ...account(1),
+          id: 'active-selected',
+          full_name: 'Selected Active User',
+          email: 'selected-active@example.test',
+          account_status: 'active',
+          activation_required: false,
+          is_active: true,
+        },
+        {
+          ...account(2),
+          id: 'invited-not-eligible',
+          full_name: 'Invited Not Eligible',
+          email: 'invited-not-eligible@example.test',
+          account_status: 'invited',
+          activation_required: true,
+          is_active: true,
+        },
+        {
+          ...account(3),
+          id: 'inactive-not-eligible',
+          full_name: 'Inactive Not Eligible',
+          email: 'inactive-not-eligible@example.test',
+          account_status: 'inactive',
+          activation_required: false,
+          is_active: false,
+        },
+      ],
+      meta: {
+        page: 1,
+        per_page: 15,
+        total: 3,
+        pages: 1,
+      },
+    },
+  });
+
+  render(
+    <MemoryRouter>
+      <Users />
+    </MemoryRouter>,
+  );
+
+  await screen.findByText('Selected Active User');
+
+  const activeCheckbox = screen.getByRole('checkbox', {
+    name: 'Select Selected Active User for password reset',
+  });
+  const invitedCheckbox = screen.getByRole('checkbox', {
+    name: 'Select Invited Not Eligible for password reset',
+  });
+  const inactiveCheckbox = screen.getByRole('checkbox', {
+    name: 'Select Inactive Not Eligible for password reset',
+  });
+
+  expect(activeCheckbox).toBeEnabled();
+  expect(invitedCheckbox).toBeDisabled();
+  expect(inactiveCheckbox).toBeDisabled();
+
+  fireEvent.click(activeCheckbox);
+
+  fireEvent.click(
+    screen.getByRole('button', {
+      name: 'Send reset links (1)',
+    }),
+  );
+
+  expect(
+    await screen.findByText(
+      'Send password reset links to 1 selected active user?',
+    ),
+  ).toBeInTheDocument();
+
+  fireEvent.click(
+    screen.getByRole('button', {
+      name: 'Confirm reset links',
+    }),
+  );
+
+  await waitFor(() => {
+    expect(userApi.sharePasswordResetBulk).toHaveBeenCalledWith({
+      user_ids: ['active-selected'],
+    });
+  });
+
+  expect(
+    await screen.findByText('1 password reset link sent.'),
+  ).toBeInTheDocument();
+});
+
+
+test('super admin sends password resets to an explicitly selected organization', async () => {
+  tenantApi.options.mockResolvedValue({
+    data: {
+      items: [
+        {
+          id: 'tenant-1',
+          name: 'Dundaa Labs',
+        },
+      ],
+    },
+  });
+
+  render(
+    <MemoryRouter>
+      <Users />
+    </MemoryRouter>,
+  );
+
+  await screen.findByText('Showing 15 of 35 matching accounts');
+
+  fireEvent.change(
+    screen.getByLabelText('Filter users by organization'),
+    {
+      target: {
+        value: 'tenant-1',
+      },
+    },
+  );
+
+  const organizationButton = await screen.findByRole(
+    'button',
+    {
+      name: 'Send reset links to Dundaa Labs',
+    },
+  );
+
+  fireEvent.click(organizationButton);
+
+  expect(
+    await screen.findByText(
+      'Send password reset links to all eligible active users in Dundaa Labs? Invited and inactive accounts will be skipped.',
+    ),
+  ).toBeInTheDocument();
+
+  fireEvent.click(
+    screen.getByRole('button', {
+      name: 'Confirm reset links',
+    }),
+  );
+
+  await waitFor(() => {
+    expect(userApi.sharePasswordResetBulk).toHaveBeenCalledWith({
+      tenant_id: 'tenant-1',
+    });
+  });
 });
 
 
