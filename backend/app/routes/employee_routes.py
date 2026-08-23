@@ -22,6 +22,10 @@ from app.services.access_provisioning_service import (
     AccessProvisioningError,
     provision_employee_access,
 )
+from app.services.account_recovery_service import (
+    EmailChangeConflictError,
+    normalize_email_address,
+)
 from app.services.audit_service import log_event
 from app.services.department_service import (
     archive_department,
@@ -38,6 +42,7 @@ from app.services.employee_service import (
 from app.services.rbac_service import set_user_roles, validate_role_assignment
 from app.services.session_service import revoke_all_user_sessions
 from app.utils.decorators import permission_required, tenant_query
+from app.utils.email import EmailDeliveryError
 from app.utils.pagination import get_pagination, paginated_response
 from app.utils.response import fail, success
 
@@ -815,16 +820,93 @@ def employee_job_history(employee_id):
 @jwt_required()
 @permission_required('employee:update')
 def patch_employee(employee_id):
-    employee = tenant_query(Employee).filter_by(id=employee_id, deleted_at=None).first_or_404()
+    employee = tenant_query(Employee).filter_by(
+        id=employee_id,
+        deleted_at=None,
+    ).first_or_404()
+
     try:
-        payload = EmployeeUpdateSchema().load(request.get_json() or {})
+        payload = EmployeeUpdateSchema().load(
+            request.get_json() or {}
+        )
+
+        requested_email = payload.get('email')
+        linked_user = employee.user
+        previous_identity_email = (
+            linked_user.email
+            if linked_user
+            else None
+        )
+        was_live_invitation = bool(
+            linked_user
+            and linked_user.is_active
+            and linked_user.activation_required
+        )
+
         employee = update_employee(employee, payload)
+
     except ValidationError as err:
         return fail('VALIDATION_ERROR', err.messages, 422)
+
+    except EmailChangeConflictError as exc:
+        db.session.rollback()
+        return fail(
+            'IDENTITY_EMAIL_CONFLICT',
+            str(exc),
+            409,
+        )
+
+    except IntegrityError:
+        db.session.rollback()
+        return fail(
+            'EMPLOYEE_UPDATE_CONFLICT',
+            'The employee update conflicts with an existing record',
+            409,
+        )
+
+    except EmailDeliveryError:
+        db.session.rollback()
+        return fail(
+            'IDENTITY_EMAIL_DELIVERY_FAILED',
+            (
+                'The email change was not completed because the '
+                'verification or invitation email could not be delivered.'
+            ),
+            503,
+        )
+
     except ValueError as exc:
         db.session.rollback()
-        return fail('EMPLOYEE_UPDATE_FAILED', str(exc), 400)
-    return success(employee.to_dict(), 'Employee updated')
+        return fail(
+            'EMPLOYEE_UPDATE_FAILED',
+            str(exc),
+            400,
+        )
+
+    data = employee.to_dict()
+    message = 'Employee updated'
+
+    if requested_email and linked_user:
+        normalized = normalize_email_address(requested_email)
+        previous_normalized = normalize_email_address(
+            previous_identity_email
+        )
+
+        if normalized != previous_normalized:
+            if was_live_invitation:
+                message = (
+                    'Employee email updated and a new activation '
+                    'invitation was sent'
+                )
+            else:
+                data['pending_email'] = normalized
+                message = (
+                    'Verification was sent to the new email address. '
+                    'The current login email remains active until '
+                    'verification is completed.'
+                )
+
+    return success(data, message)
 
 
 @employee_bp.delete('/<employee_id>')

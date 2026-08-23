@@ -1,7 +1,15 @@
 from datetime import date, timedelta
 
 from app.extensions import db
-from app.models import Department, Employee, JobHistory, User
+from app.models import AccountToken, Department, Employee, JobHistory, User
+from app.models.base import utcnow
+from app.services.account_recovery_service import (
+    ensure_identity_email_available,
+    issue_account_token,
+    normalize_email_address,
+    send_account_invitation_email,
+    send_email_verification_email,
+)
 from app.services.audit_service import log_event
 
 
@@ -132,37 +140,191 @@ def create_employee(payload, tenant_id, commit: bool = True):
     return employee
 
 
+def _consume_active_account_tokens(user):
+    now = utcnow()
+    AccountToken.query.filter(
+        AccountToken.user_id == user.id,
+        AccountToken.consumed_at.is_(None),
+    ).update(
+        {AccountToken.consumed_at: now},
+        synchronize_session=False,
+    )
+    return now
+
+
+def _update_employee_email(employee, requested_email):
+    normalized = normalize_email_address(requested_email)
+    user = employee.user
+
+    if not user:
+        employee.email = normalized
+        return {
+            'mode': 'employee_only',
+            'requested_email': normalized,
+        }
+
+    current_identity_email = normalize_email_address(user.email)
+
+    # No authentication identity change is required. This also repairs a
+    # linked employee record that may already have drifted from User.email.
+    if normalized == current_identity_email:
+        employee.email = normalized
+        return {
+            'mode': 'synchronized',
+            'requested_email': normalized,
+        }
+
+    ensure_identity_email_available(user, normalized)
+
+    # A live invited user cannot authenticate until activation succeeds,
+    # so it is safe to move the identity immediately and issue a fresh
+    # invitation to the replacement address.
+    if user.is_active and user.activation_required:
+        old_email = user.email
+
+        user.email = normalized
+        employee.email = normalized
+        user.email_verified_at = None
+
+        now = _consume_active_account_tokens(user)
+
+        account_token, raw_token = issue_account_token(
+            user,
+            AccountToken.PURPOSE_ACCOUNT_INVITE,
+        )
+        send_account_invitation_email(user, raw_token)
+        user.invitation_sent_at = now
+
+        log_event(
+            'employee.identity_email_changed',
+            'Employee',
+            employee.id,
+            tenant_id=employee.tenant_id,
+            metadata={
+                'user_id': str(user.id),
+                'old_email': old_email,
+                'new_email': normalized,
+                'lifecycle': 'invited',
+                'delivery': 'invitation',
+                'account_token_id': str(account_token.id),
+            },
+        )
+
+        return {
+            'mode': 'invitation_reissued',
+            'requested_email': normalized,
+        }
+
+    # Active/suspended established identities retain their current login
+    # email until ownership of the proposed address is proven.
+    account_token, raw_token = issue_account_token(
+        user,
+        AccountToken.PURPOSE_EMAIL_VERIFICATION,
+        target_email=normalized,
+    )
+    send_email_verification_email(
+        user,
+        raw_token,
+        to_address=normalized,
+    )
+
+    log_event(
+        'employee.identity_email_change_requested',
+        'Employee',
+        employee.id,
+        tenant_id=employee.tenant_id,
+        metadata={
+            'user_id': str(user.id),
+            'current_email': user.email,
+            'requested_email': normalized,
+            'account_token_id': str(account_token.id),
+        },
+    )
+
+    return {
+        'mode': 'verification_pending',
+        'requested_email': normalized,
+    }
+
+
 def update_employee(employee, payload, commit: bool = True):
+    payload = dict(payload)
     tenant_id = employee.tenant_id
     effective_date = payload.pop('change_effective_date', None)
     change_reason = payload.pop('change_reason', None)
+    requested_email = payload.pop('email', None)
 
     if 'user_id' in payload:
         _assert_tenant_fk(User, payload.get('user_id'), tenant_id, 'user_id')
     if 'department_id' in payload:
-        _assert_tenant_fk(Department, payload.get('department_id'), tenant_id, 'department_id')
+        _assert_tenant_fk(
+            Department,
+            payload.get('department_id'),
+            tenant_id,
+            'department_id',
+        )
     if 'manager_id' in payload:
-        _assert_valid_manager(employee, payload.get('manager_id'), tenant_id)
+        _assert_valid_manager(
+            employee,
+            payload.get('manager_id'),
+            tenant_id,
+        )
 
-    old_job = (employee.job_title, employee.department_id, employee.manager_id)
+    old_job = (
+        employee.job_title,
+        employee.department_id,
+        employee.manager_id,
+    )
     old_department_id = employee.department_id
     old_status = employee.employment_status
+
+    email_change = {
+        'mode': 'none',
+        'requested_email': None,
+    }
 
     for key, value in payload.items():
         if key != 'tenant_id':
             setattr(employee, key, value)
 
-    new_job = (employee.job_title, employee.department_id, employee.manager_id)
+    new_job = (
+        employee.job_title,
+        employee.department_id,
+        employee.manager_id,
+    )
     if new_job != old_job:
-        _clear_department_head_if_departing(employee, old_department_id, employee.department_id)
-        _record_job_change(employee, effective_date, change_reason)
+        _clear_department_head_if_departing(
+            employee,
+            old_department_id,
+            employee.department_id,
+        )
+        _record_job_change(
+            employee,
+            effective_date,
+            change_reason,
+        )
 
-    if old_status != 'terminated' and employee.employment_status == 'terminated':
+    if (
+        old_status != 'terminated'
+        and employee.employment_status == 'terminated'
+    ):
         Department.query.filter(
             Department.tenant_id == tenant_id,
             Department.head_employee_id == employee.id,
             Department.deleted_at.is_(None),
-        ).update({'head_employee_id': None}, synchronize_session=False)
+        ).update(
+            {'head_employee_id': None},
+            synchronize_session=False,
+        )
+
+    # Defer outbound identity email until all ordinary employee mutations
+    # and employment-history validation have succeeded. Token issuance
+    # flushes the pending transaction before delivery.
+    if requested_email is not None:
+        email_change = _update_employee_email(
+            employee,
+            requested_email,
+        )
 
     log_event(
         'employee.update',
@@ -172,8 +334,11 @@ def update_employee(employee, payload, commit: bool = True):
         metadata={
             'job_assignment_changed': new_job != old_job,
             'reason': change_reason,
+            'email_change_mode': email_change['mode'],
+            'requested_email': email_change['requested_email'],
         },
     )
+
     if commit:
         db.session.commit()
     return employee

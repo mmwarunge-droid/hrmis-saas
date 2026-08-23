@@ -8,7 +8,7 @@ from flask import current_app
 from sqlalchemy import select
 
 from app.extensions import db
-from app.models import AccountToken, User
+from app.models import AccountToken, Employee, User
 from app.models.base import to_utc_naive, utcnow
 from app.services.session_service import revoke_all_user_sessions
 from app.utils.email import send_email
@@ -21,6 +21,47 @@ class AccountTokenError(ValueError):
 
 class PasswordReuseError(ValueError):
     pass
+
+
+class EmailChangeConflictError(ValueError):
+    public_message = (
+        'This email address is already associated with another '
+        'Kinetic record'
+    )
+
+
+def normalize_email_address(value: str) -> str:
+    return value.strip().lower()
+
+
+def ensure_identity_email_available(
+    user: User,
+    target_email: str,
+) -> str:
+    normalized = normalize_email_address(target_email)
+
+    duplicate_user = User.query.filter(
+        db.func.lower(User.email) == normalized,
+        User.id != user.id,
+    ).first()
+    if duplicate_user:
+        raise EmailChangeConflictError(
+            EmailChangeConflictError.public_message
+        )
+
+    employee = user.employee_profile
+    if employee:
+        duplicate_employee = Employee.query.filter(
+            Employee.tenant_id == employee.tenant_id,
+            db.func.lower(Employee.email) == normalized,
+            Employee.id != employee.id,
+        ).first()
+        if duplicate_employee:
+            raise EmailChangeConflictError(
+                EmailChangeConflictError.public_message
+            )
+
+    return normalized
 
 
 def _hash_token(raw_token: str) -> str:
@@ -66,9 +107,18 @@ def _account_url(config_key: str, raw_token: str) -> str:
 def issue_account_token(
     user: User,
     purpose: str,
+    *,
+    target_email: str | None = None,
 ) -> tuple[AccountToken, str]:
     if purpose not in AccountToken.PURPOSES:
         raise ValueError(f'Unsupported account token purpose: {purpose}')
+    if (
+        target_email is not None
+        and purpose != AccountToken.PURPOSE_EMAIL_VERIFICATION
+    ):
+        raise ValueError(
+            'target_email is only supported for email verification tokens'
+        )
 
     now = utcnow()
     AccountToken.query.filter(
@@ -86,6 +136,11 @@ def issue_account_token(
         user_id=user.id,
         purpose=purpose,
         token_hash=_hash_token(raw_token),
+        target_email=(
+            target_email.strip().lower()
+            if target_email
+            else None
+        ),
         expires_at=now + _token_lifetime(purpose),
     )
     db.session.add(account_token)
@@ -108,10 +163,15 @@ def send_password_reset_email(user: User, raw_token: str) -> None:
     )
 
 
-def send_email_verification_email(user: User, raw_token: str) -> None:
+def send_email_verification_email(
+    user: User,
+    raw_token: str,
+    *,
+    to_address: str | None = None,
+) -> None:
     verification_url = _account_url('EMAIL_VERIFICATION_URL', raw_token)
     send_email(
-        to_address=user.email,
+        to_address=to_address or user.email,
         subject='Verify your Kinetic email address',
         text_body=(
             f'Hello {user.first_name},\n\n'
@@ -346,13 +406,75 @@ def reset_password_with_token(
     return user, revoked_count
 
 
-def verify_email_with_token(raw_token: str) -> User:
+def verify_email_with_token(
+    raw_token: str,
+) -> tuple[User, dict]:
     account_token = _valid_account_token(
         raw_token,
         AccountToken.PURPOSE_EMAIL_VERIFICATION,
     )
     user = account_token.user
     now = utcnow()
+
+    result = {
+        'identity_email_changed': False,
+        'old_email': None,
+        'new_email': user.email,
+        'revoked_sessions': 0,
+    }
+
+    if account_token.target_email:
+        target_email = ensure_identity_email_available(
+            user,
+            account_token.target_email,
+        )
+
+        if target_email != normalize_email_address(user.email):
+            old_email = user.email
+            employee = user.employee_profile
+
+            user.email = target_email
+            if employee:
+                employee.email = target_email
+
+            user.email_verified_at = now
+
+            # Force database uniqueness checks before revoking sessions.
+            db.session.flush()
+
+            # Every outstanding recovery credential was issued for the
+            # previous identity address and must become unusable.
+            AccountToken.query.filter(
+                AccountToken.user_id == user.id,
+                AccountToken.consumed_at.is_(None),
+            ).update(
+                {AccountToken.consumed_at: now},
+                synchronize_session=False,
+            )
+
+            revoked_count = revoke_all_user_sessions(
+                user,
+                'identity_email_changed',
+                commit=False,
+            )
+
+            result.update({
+                'identity_email_changed': True,
+                'old_email': old_email,
+                'new_email': target_email,
+                'revoked_sessions': revoked_count,
+            })
+            return user, result
+
+        # The target already matches the current login identity. Keep the
+        # linked employee record consistent and complete verification.
+        if (
+            user.employee_profile
+            and normalize_email_address(user.employee_profile.email)
+            != target_email
+        ):
+            user.employee_profile.email = target_email
+
     user.email_verified_at = user.email_verified_at or now
     account_token.consumed_at = now
 
@@ -364,4 +486,6 @@ def verify_email_with_token(raw_token: str) -> User:
         {AccountToken.consumed_at: now},
         synchronize_session=False,
     )
-    return user
+
+    result['new_email'] = user.email
+    return user, result
