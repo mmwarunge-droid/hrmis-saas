@@ -8,6 +8,7 @@ from flask_jwt_extended import (
     unset_jwt_cookies,
 )
 from marshmallow import ValidationError
+from sqlalchemy.exc import IntegrityError
 
 from app.extensions import db, limiter
 from app.models import AccountToken, AuthSession, User
@@ -27,6 +28,7 @@ from app.schemas.auth_schema import (
     VerifyEmailSchema,
 )
 from app.services.account_recovery_service import (
+    EmailChangeConflictError,
     AccountTokenError,
     PasswordReuseError,
     accept_account_invitation,
@@ -391,22 +393,75 @@ def request_email_verification():
 @limiter.limit('10 per hour')
 def confirm_email_verification():
     try:
-        payload = VerifyEmailSchema().load(request.get_json(silent=True) or {})
+        payload = VerifyEmailSchema().load(
+            request.get_json(silent=True) or {}
+        )
     except ValidationError as err:
         return fail('VALIDATION_ERROR', err.messages, 422)
 
     try:
-        user = verify_email_with_token(payload['token'])
+        user, verification = verify_email_with_token(
+            payload['token']
+        )
+
+    except EmailChangeConflictError as exc:
+        db.session.rollback()
+        log_event(
+            'auth.email_verification_rejected',
+            'AccountToken',
+            actor=None,
+            metadata={
+                'reason': 'identity_email_conflict',
+                'token_fingerprint': token_fingerprint(
+                    payload.get('token')
+                ),
+            },
+        )
+        db.session.commit()
+        return fail(
+            'IDENTITY_EMAIL_CONFLICT',
+            str(exc),
+            409,
+        )
+
+    except IntegrityError:
+        db.session.rollback()
+        log_event(
+            'auth.email_verification_rejected',
+            'AccountToken',
+            actor=None,
+            metadata={
+                'reason': 'identity_email_conflict',
+                'token_fingerprint': token_fingerprint(
+                    payload.get('token')
+                ),
+            },
+        )
+        db.session.commit()
+        return fail(
+            'IDENTITY_EMAIL_CONFLICT',
+            EmailChangeConflictError.public_message,
+            409,
+        )
+
     except AccountTokenError:
         db.session.rollback()
         log_event(
             'auth.email_verification_rejected',
             'AccountToken',
             actor=None,
-            metadata={'token_fingerprint': token_fingerprint(payload.get('token'))},
+            metadata={
+                'token_fingerprint': token_fingerprint(
+                    payload.get('token')
+                ),
+            },
         )
         db.session.commit()
-        return fail('INVALID_OR_EXPIRED_TOKEN', AccountTokenError.public_message, 400)
+        return fail(
+            'INVALID_OR_EXPIRED_TOKEN',
+            AccountTokenError.public_message,
+            400,
+        )
 
     log_event(
         'auth.email_verified',
@@ -414,9 +469,49 @@ def confirm_email_verification():
         entity_id=user.id,
         tenant_id=user.tenant_id,
         actor=None,
+        metadata={
+            'identity_email_changed': (
+                verification['identity_email_changed']
+            ),
+        },
     )
+
+    if verification['identity_email_changed']:
+        log_event(
+            'auth.identity_email_changed',
+            'User',
+            entity_id=user.id,
+            tenant_id=user.tenant_id,
+            actor=None,
+            metadata={
+                'old_email': verification['old_email'],
+                'new_email': verification['new_email'],
+                'revoked_sessions': (
+                    verification['revoked_sessions']
+                ),
+            },
+        )
+
     db.session.commit()
-    return success({'email_verified': True}, 'Email address verified')
+
+    response, status = success(
+        {
+            'email_verified': True,
+            'email': user.email,
+            'identity_email_changed': (
+                verification['identity_email_changed']
+            ),
+            'revoked_sessions': (
+                verification['revoked_sessions']
+            ),
+        },
+        'Email address verified',
+    )
+
+    if verification['identity_email_changed']:
+        unset_jwt_cookies(response)
+
+    return response, status
 
 
 def _mfa_error_response(exc: MfaError):

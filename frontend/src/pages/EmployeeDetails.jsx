@@ -187,10 +187,10 @@ export default function EmployeeDetails() {
     setError('');
     setSuccess('');
     try {
-      await employeeApi.update(id, payload);
+      const response = await employeeApi.update(id, payload);
       await load();
       setOpen(false);
-      setSuccess('Employment details updated.');
+      setSuccess(response.message || 'Employment details updated.');
     } catch (err) {
       setError(err.error?.message || 'Employee update failed');
     } finally {

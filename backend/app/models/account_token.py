@@ -19,6 +19,7 @@ class AccountToken(db.Model, TimestampMixin, ReprMixin):
     user_id = db.Column(GUID(), db.ForeignKey('users.id', ondelete='CASCADE'), nullable=False, index=True)
     purpose = db.Column(db.String(40), nullable=False, index=True)
     token_hash = db.Column(db.String(64), nullable=False, unique=True)
+    target_email = db.Column(db.String(255), nullable=True)
     expires_at = db.Column(db.DateTime, nullable=False, index=True)
     consumed_at = db.Column(db.DateTime, nullable=True, index=True)
 
