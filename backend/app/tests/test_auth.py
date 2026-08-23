@@ -559,3 +559,32 @@ def test_unverified_privileged_login_sends_verification_and_blocks_enrollment(cl
     assert len(app.extensions['mail_outbox']) == 1
     assert 'Verify your Kinetic email address' in app.extensions['mail_outbox'][0]['subject']
     assert client.get_cookie('access_token_cookie', path='/api/') is None
+
+
+def test_forgot_password_rate_limit_returns_stable_user_safe_error(
+    client,
+    admin_user,
+):
+    payload = {'email': 'missing-rate-limit@example.test'}
+
+    first = client.post('/api/auth/password/forgot', json=payload)
+    second = client.post('/api/auth/password/forgot', json=payload)
+    limited = client.post('/api/auth/password/forgot', json=payload)
+
+    assert first.status_code == 202
+    assert second.status_code == 202
+    assert limited.status_code == 429
+
+    body = limited.get_json()
+    assert body == {
+        'success': False,
+        'error': {
+            'code': 'RATE_LIMIT_EXCEEDED',
+            'message': 'Too many requests. Please wait and try again.',
+        },
+    }
+
+    # Flask-Limiter configuration details must never become user-facing copy.
+    serialized = str(body).lower()
+    assert 'per 1 minute' not in serialized
+    assert 'per minute' not in serialized

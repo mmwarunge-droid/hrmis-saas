@@ -56,3 +56,35 @@ test('requires an explicit action before confirming email verification', async (
   await waitFor(() => expect(authApi.confirmEmailVerification).toHaveBeenCalledWith({ token: 'email-token-value' }));
   expect(screen.getByText(/email address verified/i)).toBeInTheDocument();
 });
+
+
+test('shows a user-safe message when password reset requests are rate limited', async () => {
+  authApi.forgotPassword.mockRejectedValue({
+    success: false,
+    error: {
+      code: 'RATE_LIMIT_EXCEEDED',
+      message: 'Too many requests. Please wait and try again.',
+    },
+  });
+
+  const user = userEvent.setup();
+  render(<MemoryRouter><ForgotPassword /></MemoryRouter>);
+
+  await user.type(
+    screen.getByLabelText(/email/i),
+    'employee@example.com',
+  );
+  await user.click(
+    screen.getByRole('button', { name: /send reset link/i }),
+  );
+
+  expect(
+    await screen.findByText(
+      'Too many requests. Please wait and try again.',
+    ),
+  ).toBeInTheDocument();
+
+  expect(
+    screen.queryByText(/2 per 1 minute/i),
+  ).not.toBeInTheDocument();
+});

@@ -175,6 +175,13 @@ def _register_error_handlers(app: Flask) -> None:
 
     @app.errorhandler(HTTPException)
     def handle_http_error(error):
+        if error.code == 429:
+            return fail(
+                'RATE_LIMIT_EXCEEDED',
+                'Too many requests. Please wait and try again.',
+                429,
+            )
+
         code = error.name.upper().replace(' ', '_')
         return fail(code, error.description, error.code or 500)
 
