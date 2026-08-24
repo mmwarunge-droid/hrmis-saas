@@ -8,6 +8,12 @@ export const tenantApi = {
   create: (payload) => apiClient.post('/tenants', payload),
   provision: (payload) => apiClient.post('/tenants/provision', payload),
   update: (id, payload) => apiClient.patch(`/tenants/${id}`, payload),
+  employmentGovernance: (id) => (
+    apiClient.get(`/tenants/${id}/employment-governance`)
+  ),
+  updateEmploymentGovernance: (id, payload) => (
+    apiClient.patch(`/tenants/${id}/employment-governance`, payload)
+  ),
   mfaPolicy: (id) => apiClient.get(`/tenants/${id}/mfa-policy`),
   updateMfaPolicy: (id, payload) => apiClient.patch(`/tenants/${id}/mfa-policy`, payload),
   mfaCompliance: (id) => apiClient.get(`/tenants/${id}/mfa-compliance`),

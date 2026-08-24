@@ -45,6 +45,11 @@ class Tenant(db.Model, TimestampMixin, SoftDeleteMixin, ReprMixin):
         nullable=True,
         index=True,
     )
+    duplicate_job_title_warning_titles = db.Column(
+        db.JSON,
+        nullable=False,
+        default=list,
+    )
 
     users = db.relationship(
         'User',
@@ -136,6 +141,9 @@ class Tenant(db.Model, TimestampMixin, SoftDeleteMixin, ReprMixin):
                 str(self.mfa_policy_updated_by_id)
                 if self.mfa_policy_updated_by_id
                 else None
+            ),
+            'duplicate_job_title_warning_titles': list(
+                self.duplicate_job_title_warning_titles or []
             ),
             'created_at': (
                 self.created_at.isoformat()

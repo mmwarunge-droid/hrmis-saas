@@ -140,3 +140,152 @@ test('uses server totals, pagination, filters and sorting for the people directo
     );
   });
 });
+
+test('keeps create form values when duplicate job title warning returns to editing', async () => {
+  usePermissions.mockReturnValue({
+    hasPermission: (permission) => permission === 'employee:create',
+  });
+
+  employeeApi.create.mockRejectedValue({
+    error: {
+      code: 'DUPLICATE_JOB_TITLE_CONFIRMATION_REQUIRED',
+      message: (
+        'This organization already has an employee assigned '
+        + 'to the job title CEO.'
+      ),
+    },
+  });
+
+  render(
+    <MemoryRouter>
+      <Employees />
+    </MemoryRouter>,
+  );
+
+  await screen.findByText('Showing 15 of 35 matching people');
+
+  fireEvent.click(
+    screen.getByRole('button', { name: /add employee/i }),
+  );
+
+  fireEvent.change(screen.getByLabelText('Employee number'), {
+    target: { value: 'EMP-900' },
+  });
+  fireEvent.change(screen.getByLabelText('Email'), {
+    target: { value: 'amina@example.test' },
+  });
+  fireEvent.change(screen.getByLabelText('First name'), {
+    target: { value: 'Amina' },
+  });
+  fireEvent.change(screen.getByLabelText('Last name'), {
+    target: { value: 'Kamau' },
+  });
+  fireEvent.change(screen.getByLabelText('Hire date'), {
+    target: { value: '2026-08-01' },
+  });
+  fireEvent.change(screen.getByLabelText('Job title'), {
+    target: { value: 'CEO' },
+  });
+
+  fireEvent.click(
+    screen.getByRole('button', { name: /save employee/i }),
+  );
+
+  const goBack = await screen.findByRole('button', {
+    name: /no, go back to editing/i,
+  });
+
+  expect(screen.getAllByRole('dialog')).toHaveLength(1);
+
+  fireEvent.click(goBack);
+
+  expect(screen.getByLabelText('Job title')).toHaveValue('CEO');
+  expect(screen.getByLabelText('Email')).toHaveValue(
+    'amina@example.test',
+  );
+  expect(
+    screen.getByRole('heading', { name: /create employee/i }),
+  ).toBeInTheDocument();
+});
+
+
+test('retries employee creation with explicit duplicate-title confirmation', async () => {
+  usePermissions.mockReturnValue({
+    hasPermission: (permission) => permission === 'employee:create',
+  });
+
+  employeeApi.create
+    .mockRejectedValueOnce({
+      error: {
+        code: 'DUPLICATE_JOB_TITLE_CONFIRMATION_REQUIRED',
+        message: (
+          'This organization already has an employee assigned '
+          + 'to the job title CEO.'
+        ),
+      },
+    })
+    .mockResolvedValueOnce({
+      data: {
+        id: 'employee-900',
+        full_name: 'Amina Kamau',
+        job_title: 'CEO',
+      },
+      message: 'Employee created',
+    });
+
+  render(
+    <MemoryRouter>
+      <Employees />
+    </MemoryRouter>,
+  );
+
+  await screen.findByText('Showing 15 of 35 matching people');
+
+  fireEvent.click(
+    screen.getByRole('button', { name: /add employee/i }),
+  );
+
+  fireEvent.change(screen.getByLabelText('Employee number'), {
+    target: { value: 'EMP-900' },
+  });
+  fireEvent.change(screen.getByLabelText('Email'), {
+    target: { value: 'amina@example.test' },
+  });
+  fireEvent.change(screen.getByLabelText('First name'), {
+    target: { value: 'Amina' },
+  });
+  fireEvent.change(screen.getByLabelText('Last name'), {
+    target: { value: 'Kamau' },
+  });
+  fireEvent.change(screen.getByLabelText('Hire date'), {
+    target: { value: '2026-08-01' },
+  });
+  fireEvent.change(screen.getByLabelText('Job title'), {
+    target: { value: 'CEO' },
+  });
+
+  fireEvent.click(
+    screen.getByRole('button', { name: /save employee/i }),
+  );
+
+  const continueButton = await screen.findByRole('button', {
+    name: /yes, continue\. this role is independent/i,
+  });
+
+  fireEvent.click(continueButton);
+
+  await waitFor(() => {
+    expect(employeeApi.create).toHaveBeenCalledTimes(2);
+  });
+
+  const firstPayload = employeeApi.create.mock.calls[0][0];
+  const confirmedPayload = employeeApi.create.mock.calls[1][0];
+
+  expect(firstPayload).not.toHaveProperty(
+    'confirm_duplicate_job_title',
+  );
+  expect(confirmedPayload).toEqual({
+    ...firstPayload,
+    confirm_duplicate_job_title: true,
+  });
+});

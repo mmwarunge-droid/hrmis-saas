@@ -51,6 +51,7 @@ export default function Employees() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [open, setOpen] = useState(false);
+  const [duplicateJobTitleConfirmation, setDuplicateJobTitleConfirmation] = useState(null);
   const [transferOpen, setTransferOpen] = useState(false);
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
@@ -159,14 +160,36 @@ export default function Employees() {
     setError('');
     try {
       await employeeApi.create(payload);
+      setDuplicateJobTitleConfirmation(null);
       setOpen(false);
       setMessage('Employee created.');
       await refreshDirectory();
     } catch (err) {
+      if (
+        err.error?.code
+        === 'DUPLICATE_JOB_TITLE_CONFIRMATION_REQUIRED'
+      ) {
+        setDuplicateJobTitleConfirmation({
+          payload,
+          message: err.error.message,
+        });
+        return;
+      }
+
+      setDuplicateJobTitleConfirmation(null);
       setError(err.error?.message || 'Employee creation failed');
     } finally {
       setSaving(false);
     }
+  };
+
+  const confirmDuplicateJobTitleCreate = async () => {
+    if (!duplicateJobTitleConfirmation) return;
+
+    await create({
+      ...duplicateJobTitleConfirmation.payload,
+      confirm_duplicate_job_title: true,
+    });
   };
 
   const transfer = async (payload) => {
@@ -424,43 +447,103 @@ export default function Employees() {
       )}
 
       <Modal
-        title="Create employee"
-        description="Add the employee’s core employment and reporting information."
+        title={
+          duplicateJobTitleConfirmation
+            ? 'Duplicate job title'
+            : 'Create employee'
+        }
+        description={
+          duplicateJobTitleConfirmation
+            ? 'Review this organizational role before continuing.'
+            : 'Add the employee’s core employment and reporting information.'
+        }
         open={open}
-        onClose={() => setOpen(false)}
-        size="xl"
+        onClose={() => {
+          if (duplicateJobTitleConfirmation) {
+            setDuplicateJobTitleConfirmation(null);
+          } else {
+            setOpen(false);
+          }
+        }}
+        size={duplicateJobTitleConfirmation ? 'sm' : 'xl'}
         footer={
-          <>
-            <Button
-              type="button"
-              variant="secondary"
-              onClick={() => setOpen(false)}
-              disabled={saving}
-            >
-              Cancel
-            </Button>
-            <Button
-              type="submit"
-              form="create-employee-form"
-              disabled={saving}
-              className="min-w-36"
-            >
-              {saving ? 'Saving...' : 'Save employee'}
-            </Button>
-          </>
+          duplicateJobTitleConfirmation ? (
+            <>
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => setDuplicateJobTitleConfirmation(null)}
+                disabled={saving}
+              >
+                No, go back to editing
+              </Button>
+              <Button
+                type="button"
+                onClick={confirmDuplicateJobTitleCreate}
+                disabled={saving}
+              >
+                {saving
+                  ? 'Saving...'
+                  : 'Yes, continue. This role is independent.'}
+              </Button>
+            </>
+          ) : (
+            <>
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => setOpen(false)}
+                disabled={saving}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                form="create-employee-form"
+                disabled={saving}
+                className="min-w-36"
+              >
+                {saving ? 'Saving...' : 'Save employee'}
+              </Button>
+            </>
+          )
         }
       >
-        <EmployeeForm
-          formId="create-employee-form"
-          showActions={false}
-          onSubmit={create}
-          loading={saving}
-          employees={employeeOptions}
-          departments={departments}
-        />
+        <div
+          className={duplicateJobTitleConfirmation ? 'hidden' : ''}
+          aria-hidden={
+            duplicateJobTitleConfirmation ? 'true' : undefined
+          }
+        >
+          <EmployeeForm
+            formId="create-employee-form"
+            showActions={false}
+            onSubmit={create}
+            loading={saving}
+            employees={employeeOptions}
+            departments={departments}
+          />
+        </div>
+
+        {duplicateJobTitleConfirmation ? (
+          <p className="text-sm leading-6 text-slate-700">
+            {duplicateJobTitleConfirmation.message}
+          </p>
+        ) : null}
       </Modal>
-      <Modal title="Change department" description="This change is applied to every selected employee." open={transferOpen} onClose={() => setTransferOpen(false)}>
-        <DepartmentTransferModal employees={selectedEmployees} departments={departments} loading={saving} onSubmit={transfer} />
+
+      <Modal
+        title="Change department"
+        description="This change is applied to every selected employee."
+        open={transferOpen}
+        onClose={() => setTransferOpen(false)}
+      >
+        <DepartmentTransferModal
+          employees={selectedEmployees}
+          departments={departments}
+          loading={saving}
+          onSubmit={transfer}
+        />
       </Modal>
     </div>
   );

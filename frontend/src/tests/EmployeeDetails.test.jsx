@@ -30,14 +30,26 @@ vi.mock('../hooks/usePermissions.js', () => ({
 
 vi.mock('../components/employees/EmployeeForm.jsx', () => ({
   default: ({ onSubmit }) => (
-    <button
-      type="button"
-      onClick={() => onSubmit({
-        email: 'jane.new@acme.test',
-      })}
-    >
-      Submit staged email change
-    </button>
+    <>
+      <button
+        type="button"
+        onClick={() => onSubmit({
+          email: 'jane.new@acme.test',
+        })}
+      >
+        Submit staged email change
+      </button>
+      <button
+        type="button"
+        onClick={() => onSubmit({
+          job_title: 'CEO',
+          change_effective_date: '2026-08-23',
+          change_reason: 'Promotion',
+        })}
+      >
+        Submit duplicate job title
+      </button>
+    </>
   ),
 }));
 
@@ -151,4 +163,85 @@ test('shows the staged identity-email verification message after editing an empl
   expect(
     screen.queryByText('Employment details updated.'),
   ).not.toBeInTheDocument();
+});
+
+
+test('retries employee update with explicit duplicate-title confirmation', async () => {
+  employeeApi.update
+    .mockRejectedValueOnce({
+      error: {
+        code: 'DUPLICATE_JOB_TITLE_CONFIRMATION_REQUIRED',
+        message: (
+          'This organization already has an employee assigned '
+          + 'to the job title CEO.'
+        ),
+      },
+    })
+    .mockResolvedValueOnce({
+      data: {
+        ...employee,
+        job_title: 'CEO',
+      },
+      message: 'Employee updated',
+    });
+
+  render(
+    <MemoryRouter initialEntries={['/employees/employee-1']}>
+      <Routes>
+        <Route
+          path="/employees/:id"
+          element={<EmployeeDetails />}
+        />
+      </Routes>
+    </MemoryRouter>,
+  );
+
+  expect(
+    await screen.findByRole('heading', {
+      name: 'Jane Doe',
+    }),
+  ).toBeInTheDocument();
+
+  fireEvent.click(
+    screen.getByRole('button', {
+      name: /edit employee/i,
+    }),
+  );
+
+  fireEvent.click(
+    await screen.findByRole('button', {
+      name: /submit duplicate job title/i,
+    }),
+  );
+
+  const continueButton = await screen.findByRole('button', {
+    name: /yes, continue\. this role is independent/i,
+  });
+
+  expect(screen.getAllByRole('dialog')).toHaveLength(1);
+
+  fireEvent.click(continueButton);
+
+  await waitFor(() => {
+    expect(employeeApi.update).toHaveBeenCalledTimes(2);
+  });
+
+  expect(employeeApi.update.mock.calls[0]).toEqual([
+    'employee-1',
+    {
+      job_title: 'CEO',
+      change_effective_date: '2026-08-23',
+      change_reason: 'Promotion',
+    },
+  ]);
+
+  expect(employeeApi.update.mock.calls[1]).toEqual([
+    'employee-1',
+    {
+      job_title: 'CEO',
+      change_effective_date: '2026-08-23',
+      change_reason: 'Promotion',
+      confirm_duplicate_job_title: true,
+    },
+  ]);
 });

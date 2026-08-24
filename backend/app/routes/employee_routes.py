@@ -34,6 +34,7 @@ from app.services.department_service import (
     update_department,
 )
 from app.services.employee_service import (
+    DuplicateJobTitleConfirmationRequired,
     create_employee,
     soft_delete_employee,
     transfer_employees_department,
@@ -316,6 +317,13 @@ def create():
         employee = create_employee(payload, tenant_id)
     except ValidationError as err:
         return fail('VALIDATION_ERROR', err.messages, 422)
+    except DuplicateJobTitleConfirmationRequired as exc:
+        db.session.rollback()
+        return fail(
+            'DUPLICATE_JOB_TITLE_CONFIRMATION_REQUIRED',
+            str(exc),
+            409,
+        )
     except Exception as exc:
         db.session.rollback()
         return fail('EMPLOYEE_CREATE_FAILED', str(exc), 400)
@@ -847,6 +855,14 @@ def patch_employee(employee_id):
 
     except ValidationError as err:
         return fail('VALIDATION_ERROR', err.messages, 422)
+
+    except DuplicateJobTitleConfirmationRequired as exc:
+        db.session.rollback()
+        return fail(
+            'DUPLICATE_JOB_TITLE_CONFIRMATION_REQUIRED',
+            str(exc),
+            409,
+        )
 
     except EmailChangeConflictError as exc:
         db.session.rollback()

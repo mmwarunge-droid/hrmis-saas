@@ -8,6 +8,7 @@ import ActivateAccount from './pages/ActivateAccount.jsx';
 import Attendance from './pages/Attendance.jsx';
 import AskKinetic from './pages/AskKinetic.jsx';
 import EmployeeExperienceSettings from './pages/EmployeeExperienceSettings.jsx';
+import EmploymentGovernanceSettings from './pages/EmploymentGovernanceSettings.jsx';
 import EmployeeHome from './pages/EmployeeHome.jsx';
 import HomeRouter from './pages/HomeRouter.jsx';
 import HelpCenter from './pages/HelpCenter.jsx';
@@ -107,6 +108,10 @@ export default function App() {
               path="/settings/employee-experience"
               element={<EmployeeExperienceSettings />}
             />
+          <Route
+            path="/settings/employment-governance"
+            element={<EmploymentGovernanceSettings />}
+          />
           </Route>
           <Route element={<RoleRoute roles={['SUPER_ADMIN']} />}>
             <Route path="/organizations" element={<Organizations />} />

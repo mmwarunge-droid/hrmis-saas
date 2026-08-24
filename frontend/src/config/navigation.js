@@ -64,6 +64,7 @@ export const navigationGroups = [
       { to: '/organizations', label: 'Organizations', icon: Building2, role: 'SUPER_ADMIN', keywords: 'tenants clients companies' },
       { to: '/users', label: 'Access & users', icon: Users, permission: 'user:read', keywords: 'accounts roles permissions' },
       { to: '/settings/employee-experience', label: 'Employee experience', icon: Sparkles, roles: ['SUPER_ADMIN', 'ORGANIZATION_OWNER', 'CLIENT_ADMIN'], keywords: 'homepage branding events' },
+      { to: '/settings/employment-governance', label: 'Employment governance', icon: Briefcase, roles: ['SUPER_ADMIN', 'ORGANIZATION_OWNER', 'CLIENT_ADMIN'], keywords: 'job titles duplicate roles organization governance' },
       { to: '/settings', label: 'Settings', icon: Settings, keywords: 'security account preferences' },
       { to: '/help', label: 'Help center', icon: LifeBuoy, keywords: 'support guide help demo' },
     ],
@@ -109,6 +110,7 @@ export const pageTitles = {
   '/organizations': 'Organizations',
   '/settings': 'Settings',
   '/settings/employee-experience': 'Employee experience',
+  '/settings/employment-governance': 'Employment governance',
 };
 
 export function getPageTitle(pathname) {
