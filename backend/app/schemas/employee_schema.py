@@ -82,6 +82,11 @@ class EmployeeCreateSchema(Schema):
     employment_status = fields.Str(required=False, validate=validate.OneOf(['active','probation','inactive','suspended','terminated']))
     employment_type = fields.Str(required=False, validate=validate.OneOf(['full_time','part_time','contractor','intern','temporary']))
     job_title = fields.Str(required=False, allow_none=True)
+    confirm_duplicate_job_title = fields.Bool(
+        required=False,
+        load_default=False,
+        load_only=True,
+    )
     department_id = fields.UUID(required=False, allow_none=True)
     manager_id = fields.UUID(required=False, allow_none=True)
     work_location = fields.Str(required=False, allow_none=True)

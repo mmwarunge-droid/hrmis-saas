@@ -1,7 +1,9 @@
 from datetime import date, timedelta
 
+from sqlalchemy import func
+
 from app.extensions import db
-from app.models import AccountToken, Department, Employee, JobHistory, User
+from app.models import AccountToken, Department, Employee, JobHistory, Tenant, User
 from app.models.base import utcnow
 from app.services.account_recovery_service import (
     ensure_identity_email_available,
@@ -11,6 +13,99 @@ from app.services.account_recovery_service import (
     send_email_verification_email,
 )
 from app.services.audit_service import log_event
+
+
+class DuplicateJobTitleConfirmationRequired(Exception):
+    def __init__(self, job_title):
+        self.job_title = job_title
+        super().__init__(
+            'This organization already has an employee assigned '
+            f'to the job title {job_title}. '
+            'Are you sure you want to continue?'
+        )
+
+
+def _normalize_job_title(value):
+    if value is None:
+        return None
+    return value.strip()
+
+
+def _job_title_key(value):
+    normalized = _normalize_job_title(value)
+    if not normalized:
+        return None
+    return normalized.lower()
+
+
+def _warning_title_is_configured(tenant_id, job_title):
+    job_title_key = _job_title_key(job_title)
+    if not job_title_key:
+        return False
+
+    tenant = db.session.get(Tenant, tenant_id)
+    if tenant is None:
+        return False
+
+    configured_keys = {
+        key
+        for title in (tenant.duplicate_job_title_warning_titles or [])
+        if (key := _job_title_key(title))
+    }
+    return job_title_key in configured_keys
+
+
+JOB_TITLE_OCCUPYING_STATUSES = {'active', 'probation'}
+
+
+def _job_title_is_occupied_by_status(employment_status):
+    return employment_status in JOB_TITLE_OCCUPYING_STATUSES
+
+
+def _duplicate_job_title_exists(
+    tenant_id,
+    job_title,
+    *,
+    exclude_employee_id=None,
+):
+    normalized = _normalize_job_title(job_title)
+    if not normalized:
+        return False
+
+    query = Employee.query.filter(
+        Employee.tenant_id == tenant_id,
+        Employee.deleted_at.is_(None),
+        Employee.employment_status.in_(JOB_TITLE_OCCUPYING_STATUSES),
+        func.lower(func.trim(Employee.job_title)) == normalized.lower(),
+    )
+
+    if exclude_employee_id is not None:
+        query = query.filter(Employee.id != exclude_employee_id)
+
+    return db.session.query(query.exists()).scalar()
+
+
+def _require_duplicate_job_title_confirmation(
+    tenant_id,
+    job_title,
+    *,
+    confirmed=False,
+    exclude_employee_id=None,
+    employment_status='active',
+):
+    if confirmed or not _job_title_is_occupied_by_status(employment_status):
+        return
+
+    normalized = _normalize_job_title(job_title)
+    if not _warning_title_is_configured(tenant_id, normalized):
+        return
+
+    if _duplicate_job_title_exists(
+        tenant_id,
+        normalized,
+        exclude_employee_id=exclude_employee_id,
+    ):
+        raise DuplicateJobTitleConfirmationRequired(normalized)
 
 
 def _assert_tenant_fk(model, object_id, tenant_id, field_name):
@@ -124,9 +219,25 @@ def _record_job_change(employee, effective_date, reason):
 
 
 def create_employee(payload, tenant_id, commit: bool = True):
+    payload = dict(payload)
+    confirm_duplicate_job_title = payload.pop(
+        'confirm_duplicate_job_title',
+        False,
+    )
+
+    if 'job_title' in payload:
+        payload['job_title'] = _normalize_job_title(payload.get('job_title'))
+
     _assert_tenant_fk(User, payload.get('user_id'), tenant_id, 'user_id')
     _assert_tenant_fk(Department, payload.get('department_id'), tenant_id, 'department_id')
     _assert_valid_manager(None, payload.get('manager_id'), tenant_id)
+
+    _require_duplicate_job_title_confirmation(
+        tenant_id,
+        payload.get('job_title'),
+        confirmed=confirm_duplicate_job_title,
+        employment_status=payload.get('employment_status', 'active'),
+    )
 
     employee = Employee(tenant_id=tenant_id, **payload)
     db.session.add(employee)
@@ -253,6 +364,13 @@ def update_employee(employee, payload, commit: bool = True):
     effective_date = payload.pop('change_effective_date', None)
     change_reason = payload.pop('change_reason', None)
     requested_email = payload.pop('email', None)
+    confirm_duplicate_job_title = payload.pop(
+        'confirm_duplicate_job_title',
+        False,
+    )
+
+    if 'job_title' in payload:
+        payload['job_title'] = _normalize_job_title(payload.get('job_title'))
 
     if 'user_id' in payload:
         _assert_tenant_fk(User, payload.get('user_id'), tenant_id, 'user_id')
@@ -268,6 +386,30 @@ def update_employee(employee, payload, commit: bool = True):
             employee,
             payload.get('manager_id'),
             tenant_id,
+        )
+
+    proposed_job_title = payload.get('job_title', employee.job_title)
+    proposed_employment_status = payload.get(
+        'employment_status',
+        employee.employment_status,
+    )
+    job_title_changed = (
+        'job_title' in payload
+        and _job_title_key(proposed_job_title)
+        != _job_title_key(employee.job_title)
+    )
+    starts_job_title_occupancy = (
+        not _job_title_is_occupied_by_status(employee.employment_status)
+        and _job_title_is_occupied_by_status(proposed_employment_status)
+    )
+
+    if job_title_changed or starts_job_title_occupancy:
+        _require_duplicate_job_title_confirmation(
+            tenant_id,
+            proposed_job_title,
+            confirmed=confirm_duplicate_job_title,
+            exclude_employee_id=employee.id,
+            employment_status=proposed_employment_status,
         )
 
     old_job = (

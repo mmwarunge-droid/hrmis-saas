@@ -84,6 +84,7 @@ export default function EmployeeDetails() {
   const [linkOpen, setLinkOpen] = useState(false);
   const [userOptions, setUserOptions] = useState([]);
   const [saving, setSaving] = useState(false);
+  const [duplicateJobTitleConfirmation, setDuplicateJobTitleConfirmation] = useState(null);
   const [accessSaving, setAccessSaving] = useState(false);
   const [linkSaving, setLinkSaving] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -188,14 +189,36 @@ export default function EmployeeDetails() {
     setSuccess('');
     try {
       const response = await employeeApi.update(id, payload);
+      setDuplicateJobTitleConfirmation(null);
       await load();
       setOpen(false);
       setSuccess(response.message || 'Employment details updated.');
     } catch (err) {
+      if (
+        err.error?.code
+        === 'DUPLICATE_JOB_TITLE_CONFIRMATION_REQUIRED'
+      ) {
+        setDuplicateJobTitleConfirmation({
+          payload,
+          message: err.error.message,
+        });
+        return;
+      }
+
+      setDuplicateJobTitleConfirmation(null);
       setError(err.error?.message || 'Employee update failed');
     } finally {
       setSaving(false);
     }
+  };
+
+  const confirmDuplicateJobTitleUpdate = async () => {
+    if (!duplicateJobTitleConfirmation) return;
+
+    await update({
+      ...duplicateJobTitleConfirmation.payload,
+      confirm_duplicate_job_title: true,
+    });
   };
 
   const openLink = async () => {
@@ -519,9 +542,75 @@ export default function EmployeeDetails() {
         </div>
       </div>
 
-      <Modal title={`Edit ${employee.full_name}`} description="Update employment data while preserving the effective-date history." open={open} onClose={() => setOpen(false)} size="xl">
-        <EmployeeForm onSubmit={update} loading={saving} initialValues={employee} employees={employeeOptions} departments={departments} excludeEmployeeId={employee.id} submitLabel="Update employee" showChangeContext />
+      <Modal
+        title={
+          duplicateJobTitleConfirmation
+            ? 'Duplicate job title'
+            : `Edit ${employee.full_name}`
+        }
+        description={
+          duplicateJobTitleConfirmation
+            ? 'Review this organizational role before continuing.'
+            : 'Update employment data while preserving the effective-date history.'
+        }
+        open={open}
+        onClose={() => {
+          if (duplicateJobTitleConfirmation) {
+            setDuplicateJobTitleConfirmation(null);
+          } else {
+            setOpen(false);
+          }
+        }}
+        size={duplicateJobTitleConfirmation ? 'sm' : 'xl'}
+        footer={
+          duplicateJobTitleConfirmation ? (
+            <>
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => setDuplicateJobTitleConfirmation(null)}
+                disabled={saving}
+              >
+                No, go back to editing
+              </Button>
+              <Button
+                type="button"
+                onClick={confirmDuplicateJobTitleUpdate}
+                disabled={saving}
+              >
+                {saving
+                  ? 'Saving...'
+                  : 'Yes, continue. This role is independent.'}
+              </Button>
+            </>
+          ) : null
+        }
+      >
+        <div
+          className={duplicateJobTitleConfirmation ? 'hidden' : ''}
+          aria-hidden={
+            duplicateJobTitleConfirmation ? 'true' : undefined
+          }
+        >
+          <EmployeeForm
+            onSubmit={update}
+            loading={saving}
+            initialValues={employee}
+            employees={employeeOptions}
+            departments={departments}
+            excludeEmployeeId={employee.id}
+            submitLabel="Update employee"
+            showChangeContext
+          />
+        </div>
+
+        {duplicateJobTitleConfirmation ? (
+          <p className="text-sm leading-6 text-slate-700">
+            {duplicateJobTitleConfirmation.message}
+          </p>
+        ) : null}
       </Modal>
+
       <Modal title={`Provision access for ${employee.full_name}`} description="Create a linked Kinetic account for this employee record." open={accessOpen} onClose={() => setAccessOpen(false)} size="lg">
         <EmployeeAccessForm employee={employee} onSubmit={provisionAccess} loading={accessSaving} />
       </Modal>

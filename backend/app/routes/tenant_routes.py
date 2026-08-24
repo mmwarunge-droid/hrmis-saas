@@ -13,6 +13,7 @@ from app.schemas.user_schema import (
     TenantMfaPolicySchema,
     TenantUpdateSchema,
 )
+from app.schemas.employment_governance_schema import EmploymentGovernanceSchema
 from app.services.account_recovery_service import (
     issue_account_token,
     send_account_invitation_email,
@@ -31,6 +32,45 @@ from app.utils.pagination import get_pagination
 from app.utils.response import fail, success
 
 tenant_bp = Blueprint('tenants', __name__, url_prefix='/tenants')
+
+EMPLOYMENT_GOVERNANCE_ADMIN_ROLES = {
+    'CLIENT_ADMIN',
+    'ORGANIZATION_OWNER',
+    'SUPER_ADMIN',
+}
+
+
+def _employment_governance_tenant(tenant_id):
+    if not current_user.has_any_role(EMPLOYMENT_GOVERNANCE_ADMIN_ROLES):
+        return None, fail(
+            'FORBIDDEN',
+            'You cannot manage employment governance settings',
+            403,
+        )
+
+    if (
+        not current_user.has_role('SUPER_ADMIN')
+        and str(current_user.tenant_id) != str(tenant_id)
+    ):
+        return None, fail(
+            'FORBIDDEN',
+            'You cannot manage another organization',
+            403,
+        )
+
+    tenant = Tenant.query.filter_by(
+        id=tenant_id,
+        deleted_at=None,
+    ).first()
+
+    if not tenant:
+        return None, fail(
+            'TENANT_NOT_FOUND',
+            'Organization not found',
+            404,
+        )
+
+    return tenant, None
 
 
 def _tenant_scope_query():
@@ -465,6 +505,83 @@ def update_tenant(tenant_id):
     data = tenant.to_dict()
     data['revoked_sessions'] = revoked_sessions
     return success(data, 'Tenant updated')
+
+
+@tenant_bp.get('/<tenant_id>/employment-governance')
+@jwt_required()
+def get_employment_governance(tenant_id):
+    tenant, error = _employment_governance_tenant(tenant_id)
+    if error:
+        return error
+
+    return success({
+        'duplicate_job_title_warning_titles': list(
+            tenant.duplicate_job_title_warning_titles or []
+        ),
+    })
+
+
+@tenant_bp.patch('/<tenant_id>/employment-governance')
+@jwt_required()
+def update_employment_governance(tenant_id):
+    tenant, error = _employment_governance_tenant(tenant_id)
+    if error:
+        return error
+
+    try:
+        payload = EmploymentGovernanceSchema().load(
+            request.get_json(silent=True) or {}
+        )
+    except ValidationError as err:
+        return fail('VALIDATION_ERROR', err.messages, 422)
+
+    normalized_titles = []
+    seen_titles = set()
+
+    for raw_title in payload['duplicate_job_title_warning_titles']:
+        title = raw_title.strip()
+
+        if not title:
+            return fail(
+                'VALIDATION_ERROR',
+                {
+                    'duplicate_job_title_warning_titles': [
+                        'Job titles cannot be blank.'
+                    ]
+                },
+                422,
+            )
+
+        normalized = title.lower()
+        if normalized in seen_titles:
+            continue
+
+        seen_titles.add(normalized)
+        normalized_titles.append(title)
+
+    tenant.duplicate_job_title_warning_titles = normalized_titles
+
+    log_event(
+        'tenant.employment_governance_update',
+        'Tenant',
+        tenant.id,
+        tenant_id=tenant.id,
+        actor=current_user,
+        metadata={
+            'duplicate_job_title_warning_titles': normalized_titles,
+        },
+    )
+
+    db.session.commit()
+
+    return success(
+        {
+            'duplicate_job_title_warning_titles': list(
+                tenant.duplicate_job_title_warning_titles or []
+            ),
+        },
+        'Employment governance settings updated',
+    )
 
 
 @tenant_bp.get('/<tenant_id>/mfa-policy')

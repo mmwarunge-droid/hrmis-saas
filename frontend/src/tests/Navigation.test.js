@@ -1,4 +1,8 @@
-import { navigationGroups, visibleNavigation } from '../config/navigation.js';
+import {
+  getPageTitle,
+  navigationGroups,
+  visibleNavigation,
+} from '../config/navigation.js';
 
 function labels(groups) {
   return groups.flatMap((group) => group.links.map((item) => item.label));
@@ -31,6 +35,13 @@ test('shows people and administration destinations only when authorized', () => 
     'Departments',
     'Access & users',
     'Employee experience',
+    'Employment governance',
   ]));
   expect(labels(visible)).not.toContain('Organizations');
+});
+
+test('uses the employment governance page title', () => {
+  expect(
+    getPageTitle('/settings/employment-governance'),
+  ).toBe('Employment governance');
 });
