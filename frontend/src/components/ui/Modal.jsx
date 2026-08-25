@@ -205,7 +205,7 @@ export default function Modal({
           <div
             data-modal-footer
             className="
-              flex shrink-0
+              flex shrink-0 flex-wrap
               items-center justify-end
               gap-3
               border-t border-slate-200
