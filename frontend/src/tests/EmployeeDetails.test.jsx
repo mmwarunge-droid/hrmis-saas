@@ -29,8 +29,19 @@ vi.mock('../hooks/usePermissions.js', () => ({
 }));
 
 vi.mock('../components/employees/EmployeeForm.jsx', () => ({
-  default: ({ onSubmit }) => (
+  default: ({ onSubmit, error = '', fieldErrors = {} }) => (
     <>
+      {error ? <div role="alert">{error}</div> : null}
+
+      <input
+        aria-label="Mock change effective date"
+        value="2026-08-27"
+        readOnly
+        aria-invalid={
+          fieldErrors.change_effective_date ? 'true' : 'false'
+        }
+      />
+
       <button
         type="button"
         onClick={() => onSubmit({
@@ -39,6 +50,7 @@ vi.mock('../components/employees/EmployeeForm.jsx', () => ({
       >
         Submit staged email change
       </button>
+
       <button
         type="button"
         onClick={() => onSubmit({
@@ -48,6 +60,17 @@ vi.mock('../components/employees/EmployeeForm.jsx', () => ({
         })}
       >
         Submit duplicate job title
+      </button>
+
+      <button
+        type="button"
+        onClick={() => onSubmit({
+          job_title: 'People Analyst',
+          change_effective_date: '2026-08-27',
+          change_reason: 'Future-dated change',
+        })}
+      >
+        Submit invalid effective date
       </button>
     </>
   ),
@@ -244,4 +267,71 @@ test('retries employee update with explicit duplicate-title confirmation', async
       confirm_duplicate_job_title: true,
     },
   ]);
+});
+
+test('keeps effective-date validation inside the employee edit workflow', async () => {
+  employeeApi.update.mockRejectedValueOnce({
+    error: {
+      message: 'Effective date cannot be in the future',
+    },
+  });
+
+  render(
+    <MemoryRouter initialEntries={['/employees/employee-1']}>
+      <Routes>
+        <Route
+          path="/employees/:id"
+          element={<EmployeeDetails />}
+        />
+      </Routes>
+    </MemoryRouter>,
+  );
+
+  expect(
+    await screen.findByRole('heading', {
+      name: 'Jane Doe',
+    }),
+  ).toBeInTheDocument();
+
+  fireEvent.click(
+    screen.getByRole('button', {
+      name: /edit employee/i,
+    }),
+  );
+
+  fireEvent.click(
+    await screen.findByRole('button', {
+      name: /submit invalid effective date/i,
+    }),
+  );
+
+  await waitFor(() => {
+    expect(employeeApi.update).toHaveBeenCalledWith(
+      'employee-1',
+      {
+        job_title: 'People Analyst',
+        change_effective_date: '2026-08-27',
+        change_reason: 'Future-dated change',
+      },
+    );
+  });
+
+  const dialog = screen.getByRole('dialog');
+  const alert = await screen.findByRole('alert');
+
+  expect(dialog).toContainElement(alert);
+  expect(alert).toHaveTextContent(
+    'Effective date cannot be in the future',
+  );
+
+  const effectiveDate = dialog.querySelector(
+    '[aria-label="Mock change effective date"]',
+  );
+
+  expect(effectiveDate).not.toBeNull();
+  expect(effectiveDate).toHaveAttribute('aria-invalid', 'true');
+  expect(effectiveDate).toHaveValue('2026-08-27');
+
+  // No page-level submission alert should exist behind the open workflow.
+  expect(screen.getAllByRole('alert')).toHaveLength(1);
 });

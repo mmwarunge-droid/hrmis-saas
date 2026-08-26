@@ -2,6 +2,7 @@ import { useState } from 'react';
 import Button from '../ui/Button.jsx';
 import Input from '../ui/Input.jsx';
 import Select from '../ui/Select.jsx';
+import Alert from '../ui/Alert.jsx';
 
 const today = new Date().toISOString().slice(0, 10);
 
@@ -40,14 +41,23 @@ export default function EmployeeForm({
   stickyActions = false,
   formId = undefined,
   showActions = true,
+  error = '',
+  fieldErrors = {},
+  onErrorClear = null,
 }) {
   const [form, setForm] = useState(() => initialForm(initialValues));
 
   const update = (event) => {
+    const { name, value } = event.target;
+
     setForm((current) => ({
       ...current,
-      [event.target.name]: event.target.value,
+      [name]: value,
     }));
+
+    if (error || fieldErrors[name]) {
+      onErrorClear?.(name);
+    }
   };
 
   const submit = (event) => {
@@ -81,11 +91,25 @@ export default function EmployeeForm({
 
   return (
     <form id={formId} onSubmit={submit} className="grid gap-4 md:grid-cols-2">
+      {error ? (
+        <div className="md:col-span-2">
+          <Alert type="error">{error}</Alert>
+        </div>
+      ) : null}
+
       <Input label="Employee number" name="employee_number" value={form.employee_number} onChange={update} required />
       <Input label="Email" type="email" name="email" value={form.email} onChange={update} required />
       <Input label="First name" name="first_name" value={form.first_name} onChange={update} required />
       <Input label="Last name" name="last_name" value={form.last_name} onChange={update} required />
-      <Input label="Hire date" type="date" name="hire_date" value={form.hire_date} onChange={update} required />
+      <Input
+        label="Hire date"
+        type="date"
+        name="hire_date"
+        value={form.hire_date}
+        onChange={update}
+        error={fieldErrors.hire_date}
+        required
+      />
       <Input label="Job title" name="job_title" value={form.job_title} onChange={update} />
 
       <Select label="Department" name="department_id" value={form.department_id} onChange={update}>
@@ -131,6 +155,7 @@ export default function EmployeeForm({
             max={today}
             value={form.change_effective_date}
             onChange={update}
+            error={fieldErrors.change_effective_date}
           />
           <label className="block space-y-1 md:col-span-2">
             <span className="text-sm font-medium text-slate-700">Reason for employment change</span>

@@ -89,6 +89,7 @@ export default function EmployeeDetails() {
   const [linkSaving, setLinkSaving] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [formError, setFormError] = useState('');
   const [success, setSuccess] = useState('');
 
   const canReadDocuments = hasPermission('document:read');
@@ -185,7 +186,7 @@ export default function EmployeeDetails() {
 
   const update = async (payload) => {
     setSaving(true);
-    setError('');
+    setFormError('');
     setSuccess('');
     try {
       const response = await employeeApi.update(id, payload);
@@ -206,7 +207,7 @@ export default function EmployeeDetails() {
       }
 
       setDuplicateJobTitleConfirmation(null);
-      setError(err.error?.message || 'Employee update failed');
+      setFormError(err.error?.message || 'Employee update failed');
     } finally {
       setSaving(false);
     }
@@ -354,7 +355,15 @@ export default function EmployeeDetails() {
                 </>
               )}
               {hasPermission('employee:update') && (
-                <Button onClick={() => setOpen(true)}><Pencil size={15} /> Edit employee</Button>
+                <Button
+                  onClick={() => {
+                    setFormError('');
+                    setDuplicateJobTitleConfirmation(null);
+                    setOpen(true);
+                  }}
+                >
+                  <Pencil size={15} /> Edit employee
+                </Button>
               )}
             </div>
           </div>
@@ -558,6 +567,7 @@ export default function EmployeeDetails() {
           if (duplicateJobTitleConfirmation) {
             setDuplicateJobTitleConfirmation(null);
           } else {
+            setFormError('');
             setOpen(false);
           }
         }}
@@ -601,6 +611,13 @@ export default function EmployeeDetails() {
             excludeEmployeeId={employee.id}
             submitLabel="Update employee"
             showChangeContext
+            error={formError}
+            fieldErrors={{
+              change_effective_date: /effective date/i.test(formError)
+                ? formError
+                : '',
+            }}
+            onErrorClear={() => setFormError('')}
           />
         </div>
 

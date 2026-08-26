@@ -138,3 +138,55 @@ test('keeps create-employee actions sticky and exposes cancel', () => {
 
   expect(onCancel).toHaveBeenCalledTimes(1);
 });
+
+test('renders server validation inside the employee form and marks the effective date field', () => {
+  const error = 'Effective date cannot be in the future';
+
+  render(
+    <EmployeeForm
+      onSubmit={vi.fn()}
+      showChangeContext
+      error={error}
+      fieldErrors={{
+        change_effective_date: error,
+      }}
+      initialValues={{
+        employee_number: 'EMP-003',
+        first_name: 'Carol',
+        last_name: 'Njeri',
+        email: 'carol@acme.test',
+        hire_date: '2026-01-01',
+        employment_status: 'active',
+        employment_type: 'full_time',
+        change_effective_date: '2026-08-27',
+      }}
+    />,
+  );
+
+  expect(screen.getByRole('alert')).toHaveTextContent(error);
+
+  const effectiveDate = screen.getByLabelText(/change effective date/i);
+  expect(effectiveDate).toHaveValue('2026-08-27');
+  expect(effectiveDate).toHaveAttribute('aria-invalid', 'true');
+});
+
+test('clears a stale employee-form error when the user edits a field', () => {
+  const onErrorClear = vi.fn();
+
+  render(
+    <EmployeeForm
+      onSubmit={vi.fn()}
+      error="Employee could not be saved"
+      onErrorClear={onErrorClear}
+    />,
+  );
+
+  fireEvent.change(screen.getByLabelText(/first name/i), {
+    target: {
+      name: 'first_name',
+      value: 'Updated',
+    },
+  });
+
+  expect(onErrorClear).toHaveBeenCalledWith('first_name');
+});
