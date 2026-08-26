@@ -54,6 +54,7 @@ export default function Employees() {
   const [duplicateJobTitleConfirmation, setDuplicateJobTitleConfirmation] = useState(null);
   const [transferOpen, setTransferOpen] = useState(false);
   const [error, setError] = useState('');
+  const [formError, setFormError] = useState('');
   const [message, setMessage] = useState('');
   const [query, setQuery] = useState('');
   const [status, setStatus] = useState('');
@@ -157,7 +158,7 @@ export default function Employees() {
 
   const create = async (payload) => {
     setSaving(true);
-    setError('');
+    setFormError('');
     try {
       await employeeApi.create(payload);
       setDuplicateJobTitleConfirmation(null);
@@ -177,7 +178,7 @@ export default function Employees() {
       }
 
       setDuplicateJobTitleConfirmation(null);
-      setError(err.error?.message || 'Employee creation failed');
+      setFormError(err.error?.message || 'Employee creation failed');
     } finally {
       setSaving(false);
     }
@@ -315,7 +316,17 @@ export default function Employees() {
         actions={(
           <>
             <Link to="/org-chart"><Button variant="secondary"><Network size={16} /> Org chart</Button></Link>
-            {hasPermission('employee:create') && <Button onClick={() => setOpen(true)}><Plus size={16} /> Add employee</Button>}
+            {hasPermission('employee:create') && (
+              <Button
+                onClick={() => {
+                  setFormError('');
+                  setDuplicateJobTitleConfirmation(null);
+                  setOpen(true);
+                }}
+              >
+                <Plus size={16} /> Add employee
+              </Button>
+            )}
           </>
         )}
       />
@@ -462,6 +473,7 @@ export default function Employees() {
           if (duplicateJobTitleConfirmation) {
             setDuplicateJobTitleConfirmation(null);
           } else {
+            setFormError('');
             setOpen(false);
           }
         }}
@@ -492,7 +504,10 @@ export default function Employees() {
               <Button
                 type="button"
                 variant="secondary"
-                onClick={() => setOpen(false)}
+                onClick={() => {
+                  setFormError('');
+                  setOpen(false);
+                }}
                 disabled={saving}
               >
                 Cancel
@@ -522,6 +537,13 @@ export default function Employees() {
             loading={saving}
             employees={employeeOptions}
             departments={departments}
+            error={formError}
+            fieldErrors={{
+              hire_date: /effective date/i.test(formError)
+                ? formError
+                : '',
+            }}
+            onErrorClear={() => setFormError('')}
           />
         </div>
 

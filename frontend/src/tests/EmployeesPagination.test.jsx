@@ -289,3 +289,71 @@ test('retries employee creation with explicit duplicate-title confirmation', asy
     confirm_duplicate_job_title: true,
   });
 });
+
+test('keeps employee creation effective-date errors inside the create workflow', async () => {
+  usePermissions.mockReturnValue({
+    hasPermission: (permission) => permission === 'employee:create',
+  });
+
+  employeeApi.create.mockRejectedValueOnce({
+    error: {
+      message: 'Effective date cannot be in the future',
+    },
+  });
+
+  render(
+    <MemoryRouter>
+      <Employees />
+    </MemoryRouter>,
+  );
+
+  await screen.findByText('Showing 15 of 35 matching people');
+
+  fireEvent.click(
+    screen.getByRole('button', { name: /add employee/i }),
+  );
+
+  fireEvent.change(screen.getByLabelText('Employee number'), {
+    target: { value: 'EMP-901' },
+  });
+  fireEvent.change(screen.getByLabelText('Email'), {
+    target: { value: 'validation@example.test' },
+  });
+  fireEvent.change(screen.getByLabelText('First name'), {
+    target: { value: 'Validation' },
+  });
+  fireEvent.change(screen.getByLabelText('Last name'), {
+    target: { value: 'Test' },
+  });
+  fireEvent.change(screen.getByLabelText('Hire date'), {
+    target: { value: '2026-08-01' },
+  });
+
+  fireEvent.click(
+    screen.getByRole('button', { name: /save employee/i }),
+  );
+
+  const alert = await screen.findByRole('alert');
+  const dialog = screen.getByRole('dialog');
+
+  expect(dialog).toContainElement(alert);
+  expect(alert).toHaveTextContent('Effective date cannot be in the future');
+
+  const hireDate = dialog.querySelector(
+    'input[name="hire_date"]',
+  );
+
+  expect(hireDate).not.toBeNull();
+  expect(hireDate).toHaveAttribute('aria-invalid', 'true');
+  expect(hireDate).toHaveValue('2026-08-01');
+
+  // The failed save must not destroy the in-progress form.
+  expect(screen.getByLabelText('Employee number')).toHaveValue('EMP-901');
+  expect(screen.getByLabelText('Email')).toHaveValue(
+    'validation@example.test',
+  );
+
+  // Only the form-level alert should use alert semantics. The inline
+  // field message intentionally repeats the validation beside Hire date.
+  expect(screen.getAllByRole('alert')).toHaveLength(1);
+});
