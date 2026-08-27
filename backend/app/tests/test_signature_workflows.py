@@ -686,3 +686,100 @@ def test_my_signature_tasks_ignores_cross_tenant_recipient_user_link(
         item['id'] != recipient_id
         for item in items
     )
+
+def test_signature_reminder_does_not_create_cross_tenant_notification(
+    client,
+    app,
+    tenant,
+    admin_user,
+    auth_headers,
+):
+    """Malformed recipient.user_id must not create a cross-tenant notification."""
+    signer = _create_employee_signer(
+        app,
+        tenant.id,
+        number='SIGN-XTENANT-NOTIFY',
+        email='signature.notify.local@acme.test',
+        password='StrongLocalSignerPass123!',
+        first_name='Local',
+    )
+
+    document_id = _create_document(
+        app,
+        tenant.id,
+        admin_user,
+    )
+
+    due_at = (
+        datetime.utcnow()
+        + timedelta(days=7)
+    ).replace(microsecond=0)
+
+    create_response = client.post(
+        '/api/signature-requests',
+        headers=auth_headers,
+        json={
+            'document_id': str(document_id),
+            'subject': 'Notification tenant-boundary test',
+            'signing_mode': 'sequential',
+            'due_at': due_at.isoformat(),
+            'recipients': [{
+                'employee_id': str(signer['employee_id']),
+                'role_label': 'Employee',
+                'sequence': 1,
+            }],
+        },
+    )
+
+    assert create_response.status_code == 201
+
+    request_data = create_response.get_json()['data']
+    request_id = request_data['id']
+    recipient_id = request_data['recipients'][0]['id']
+
+    with app.app_context():
+        foreign_tenant = Tenant(
+            name='Foreign Signature Notification Tenant',
+            slug='foreign-signature-notification-tenant',
+            country='Kenya',
+        )
+        db.session.add(foreign_tenant)
+        db.session.flush()
+
+        foreign_user = register_user({
+            'tenant_id': foreign_tenant.id,
+            'email': 'signature.notify.foreign@other.test',
+            'first_name': 'Foreign',
+            'last_name': 'NotificationUser',
+            'password': 'StrongForeignNotifyPass123!',
+            'roles': ['EMPLOYEE'],
+            'email_verified_at': utcnow(),
+        })
+        foreign_user_id = inspect(foreign_user).identity[0]
+
+        recipient = db.session.get(
+            SignatureRecipient,
+            recipient_id,
+        )
+        recipient.user_id = foreign_user_id
+        db.session.commit()
+
+        assert Notification.query.filter_by(
+            tenant_id=tenant.id,
+            user_id=foreign_user_id,
+            notification_type='signature',
+        ).count() == 0
+
+    reminder_response = client.post(
+        f'/api/signature-requests/{request_id}/remind',
+        headers=auth_headers,
+    )
+
+    assert reminder_response.status_code == 200
+
+    with app.app_context():
+        assert Notification.query.filter_by(
+            tenant_id=tenant.id,
+            user_id=foreign_user_id,
+            notification_type='signature',
+        ).count() == 0

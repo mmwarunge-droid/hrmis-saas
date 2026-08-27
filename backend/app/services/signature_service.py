@@ -8,7 +8,6 @@ from app.extensions import db
 from app.models import (
     Document,
     Employee,
-    Notification,
     SignatureArtifact,
     SignatureEvent,
     SignatureRecipient,
@@ -16,6 +15,9 @@ from app.models import (
     SignatureRequest,
     Tenant,
     User,
+)
+from app.services.notification_service import (
+    create_notification,
 )
 from app.models.base import to_utc_naive, utcnow
 from app.services.audit_service import log_event
@@ -174,20 +176,16 @@ def _create_notification(
     action_url=None,
     metadata=None,
 ):
-    if not user_id:
-        return None
-
-    notification = Notification(
+    return create_notification(
         tenant_id=tenant_id,
         user_id=user_id,
         title=title,
         body=body,
         notification_type='signature',
         action_url=action_url,
-        metadata_json=metadata or {},
+        metadata=metadata,
+        email_delivery=False,
     )
-    db.session.add(notification)
-    return notification
 
 
 def _deliver_email(
