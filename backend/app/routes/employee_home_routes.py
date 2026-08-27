@@ -68,6 +68,14 @@ def _require_tenant(explicit_tenant_id=None):
     return tenant, None
 
 
+def _current_employee(tenant):
+    return Employee.query.filter_by(
+        user_id=current_user.id,
+        tenant_id=tenant.id,
+        deleted_at=None,
+    ).first()
+
+
 def _require_home_admin(tenant_id):
     tenant, error = _require_tenant(tenant_id)
     if error:
@@ -346,9 +354,7 @@ def employee_home():
     ]
     new_hires.sort(key=lambda item: item['hire_date'], reverse=True)
 
-    viewer = current_user.employee_profile
-    if viewer and str(viewer.tenant_id) != str(tenant.id):
-        viewer = None
+    viewer = _current_employee(tenant)
 
     return success({
         'branding': {
@@ -393,7 +399,11 @@ def employee_home():
 @employee_home_bp.patch('/employee-home/profile')
 @jwt_required()
 def update_own_home_profile():
-    employee = current_user.employee_profile
+    tenant, error = _require_tenant()
+    if error:
+        return error
+
+    employee = _current_employee(tenant)
     if not employee:
         return fail(
             'EMPLOYEE_PROFILE_REQUIRED',
@@ -425,7 +435,11 @@ def update_own_home_profile():
 @employee_home_bp.post('/employee-home/profile-image/<asset>')
 @jwt_required()
 def upload_own_profile_image(asset):
-    employee = current_user.employee_profile
+    tenant, error = _require_tenant()
+    if error:
+        return error
+
+    employee = _current_employee(tenant)
     if not employee:
         return fail(
             'EMPLOYEE_PROFILE_REQUIRED',

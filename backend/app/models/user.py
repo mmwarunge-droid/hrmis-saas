@@ -162,6 +162,18 @@ class User(db.Model, TimestampMixin, SoftDeleteMixin, ReprMixin):
             return True
         return permissions.issubset(set(self.permission_codes))
 
+    @property
+    def active_employee_profile(self):
+        employee = self.employee_profile
+        if not employee or employee.deleted_at is not None:
+            return None
+        if (
+            not self.tenant_id
+            or str(employee.tenant_id) != str(self.tenant_id)
+        ):
+            return None
+        return employee
+
     def to_dict(self):
         return {
             'id': str(self.id),
@@ -220,12 +232,12 @@ class User(db.Model, TimestampMixin, SoftDeleteMixin, ReprMixin):
             'permissions': self.permission_codes,
             'employee_profile': (
                 {
-                    'id': str(self.employee_profile.id),
-                    'employee_number': self.employee_profile.employee_number,
-                    'full_name': self.employee_profile.full_name,
-                    'employment_status': self.employee_profile.employment_status,
+                    'id': str(self.active_employee_profile.id),
+                    'employee_number': self.active_employee_profile.employee_number,
+                    'full_name': self.active_employee_profile.full_name,
+                    'employment_status': self.active_employee_profile.employment_status,
                 }
-                if self.employee_profile
+                if self.active_employee_profile
                 else None
             ),
         }

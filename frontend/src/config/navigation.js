@@ -23,7 +23,7 @@ export const navigationGroups = [
     label: 'Workspace',
     links: [
       { to: '/dashboard', label: 'Home', icon: Home, permission: 'dashboard:read', keywords: 'dashboard overview' },
-      { to: '/profile', label: 'My info', icon: UserRound, roles: ['EMPLOYEE', 'MANAGER'], keywords: 'profile personal information' },
+      { to: '/profile', label: 'My info', icon: UserRound, requiresEmployeeProfile: true, keywords: 'profile personal information' },
       { to: '/tasks', label: 'My tasks', icon: CheckSquare2, keywords: 'checklist approvals work' },
       { to: '/ask-kinetic', label: 'Ask Kinetic', icon: Bot, keywords: 'help assistant guidance' },
     ],
@@ -71,12 +71,20 @@ export const navigationGroups = [
   },
 ];
 
-export function canViewNavigationItem(item, { hasPermission, hasRole }) {
+export function canViewNavigationItem(
+  item,
+  {
+    hasPermission,
+    hasRole,
+    hasEmployeeProfile = false,
+  },
+) {
   return (
     (!item.permission || hasPermission(item.permission))
     && (!item.permissionAny || item.permissionAny.some(hasPermission))
     && (!item.role || hasRole(item.role))
     && (!item.roles || item.roles.some(hasRole))
+    && (!item.requiresEmployeeProfile || hasEmployeeProfile)
   );
 }
 

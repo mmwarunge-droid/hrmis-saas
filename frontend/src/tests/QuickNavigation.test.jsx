@@ -1,6 +1,17 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import GlobalSearch from '../components/navigation/GlobalSearch.jsx';
+
+vi.mock('../hooks/useAuth.js', () => ({
+  default: () => ({
+    user: {
+      employee_profile: {
+        id: 'employee-1',
+      },
+    },
+  }),
+}));
+
 import usePermissions from '../hooks/usePermissions.js';
 
 vi.mock('../hooks/usePermissions.js', () => ({ default: vi.fn() }));

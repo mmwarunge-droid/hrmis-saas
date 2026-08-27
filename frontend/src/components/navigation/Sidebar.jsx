@@ -19,7 +19,11 @@ function SidebarContent({ collapsed, mobile, onClose, onToggleCollapsed }) {
     isSuperAdmin,
     setTenantId,
   } = useTenant();
-  const groups = visibleNavigation(navigationGroups, { hasPermission, hasRole });
+  const groups = visibleNavigation(navigationGroups, {
+    hasPermission,
+    hasRole,
+    hasEmployeeProfile: Boolean(user?.employee_profile),
+  });
   const compact = collapsed && !mobile;
 
   return (
