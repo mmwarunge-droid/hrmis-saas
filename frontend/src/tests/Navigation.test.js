@@ -45,3 +45,28 @@ test('uses the employment governance page title', () => {
     getPageTitle('/settings/employment-governance'),
   ).toBe('Employment governance');
 });
+
+test('shows My info to a client administrator who is also an employee', () => {
+  const roles = new Set(['CLIENT_ADMIN']);
+
+  const visible = visibleNavigation(navigationGroups, {
+    hasPermission: () => false,
+    hasRole: (role) => roles.has(role),
+    hasEmployeeProfile: true,
+  });
+
+  expect(labels(visible)).toContain('My info');
+});
+
+
+test('hides My info when the authenticated user has no employee profile', () => {
+  const roles = new Set(['EMPLOYEE']);
+
+  const visible = visibleNavigation(navigationGroups, {
+    hasPermission: () => false,
+    hasRole: (role) => roles.has(role),
+    hasEmployeeProfile: false,
+  });
+
+  expect(labels(visible)).not.toContain('My info');
+});

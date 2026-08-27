@@ -2,6 +2,7 @@ import { ArrowRight, Search, X } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { navigationGroups, visibleNavigation } from '../../config/navigation.js';
+import useAuth from '../../hooks/useAuth.js';
 import usePermissions from '../../hooks/usePermissions.js';
 
 export default function GlobalSearch({ open, onClose }) {
@@ -9,7 +10,9 @@ export default function GlobalSearch({ open, onClose }) {
   const [activeIndex, setActiveIndex] = useState(0);
   const inputRef = useRef(null);
   const navigate = useNavigate();
+  const { user } = useAuth();
   const { hasPermission, hasRole } = usePermissions();
+  const hasEmployeeProfile = Boolean(user?.employee_profile);
 
   const closeSearch = useCallback(() => {
     setQuery('');
@@ -18,9 +21,13 @@ export default function GlobalSearch({ open, onClose }) {
   }, [onClose]);
 
   const items = useMemo(
-    () => visibleNavigation(navigationGroups, { hasPermission, hasRole })
+    () => visibleNavigation(navigationGroups, {
+      hasPermission,
+      hasRole,
+      hasEmployeeProfile,
+    })
       .flatMap((group) => group.links.map((item) => ({ ...item, group: group.label }))),
-    [hasPermission, hasRole],
+    [hasEmployeeProfile, hasPermission, hasRole],
   );
 
   const results = useMemo(() => {

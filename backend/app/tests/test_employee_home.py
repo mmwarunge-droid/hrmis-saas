@@ -7,6 +7,7 @@ from app.models import (
     LeaveRequest,
     LeaveType,
     OrganizationEvent,
+    Tenant,
 )
 from app.services.auth_service import register_user
 
@@ -252,3 +253,190 @@ def test_employee_uploads_own_profile_image(
     asset = client.get(profile['profile_photo_url'])
     assert asset.status_code == 200
     assert asset.data == image
+
+def test_foreign_tenant_employee_link_is_not_self_profile(
+    client,
+    app,
+    tenant,
+):
+    with app.app_context():
+        other_tenant = Tenant(
+            name='Other Organization',
+            slug='other-organization',
+            country='Kenya',
+        )
+        db.session.add(other_tenant)
+        db.session.flush()
+
+        user = register_user({
+            'tenant_id': tenant.id,
+            'email': 'foreign-link@acme.test',
+            'first_name': 'Foreign',
+            'last_name': 'Link',
+            'password': 'StrongPass123!',
+            'roles': ['CLIENT_ADMIN'],
+        })
+
+        foreign_employee = Employee(
+            tenant_id=other_tenant.id,
+            user_id=user.id,
+            employee_number='OTHER-001',
+            first_name='Foreign',
+            last_name='Link',
+            email='foreign-link@other.test',
+            hire_date=date.today(),
+            employment_status='active',
+            employment_type='full_time',
+        )
+        db.session.add(foreign_employee)
+        db.session.commit()
+
+        foreign_employee_id = foreign_employee.id
+
+    _login(client, 'foreign-link@acme.test')
+
+    me = client.get('/api/auth/me')
+    assert me.status_code == 200
+    assert me.get_json()['data']['employee_profile'] is None
+
+    home = client.get('/api/employee-home')
+    assert home.status_code == 200
+    assert 'id' not in home.get_json()['data']['viewer']
+
+    update = client.patch(
+        '/api/employee-home/profile',
+        json={'biography': 'Must not cross tenant boundaries'},
+        headers=_csrf_header(client),
+    )
+
+    assert update.status_code == 409
+    assert update.get_json()['error']['code'] == 'EMPLOYEE_PROFILE_REQUIRED'
+
+    upload = client.post(
+        '/api/employee-home/profile-image/photo',
+        data={},
+        headers=_csrf_header(client),
+    )
+    assert upload.status_code == 409
+    assert upload.get_json()['error']['code'] == 'EMPLOYEE_PROFILE_REQUIRED'
+
+    with app.app_context():
+        employee = db.session.get(Employee, foreign_employee_id)
+        assert employee.biography is None
+
+
+def test_soft_deleted_employee_link_is_not_self_profile(
+    client,
+    app,
+    tenant,
+):
+    with app.app_context():
+        user = register_user({
+            'tenant_id': tenant.id,
+            'email': 'deleted-profile@acme.test',
+            'first_name': 'Deleted',
+            'last_name': 'Profile',
+            'password': 'StrongPass123!',
+            'roles': ['EMPLOYEE'],
+        })
+
+        employee = Employee(
+            tenant_id=tenant.id,
+            user_id=user.id,
+            employee_number='EMP-DELETED',
+            first_name='Deleted',
+            last_name='Profile',
+            email='deleted-profile@acme.test',
+            hire_date=date.today(),
+            employment_status='inactive',
+            employment_type='full_time',
+        )
+        employee.deleted_at = datetime.utcnow()
+
+        db.session.add(employee)
+        db.session.commit()
+
+        employee_id = employee.id
+
+    _login(client, 'deleted-profile@acme.test')
+
+    me = client.get('/api/auth/me')
+    assert me.status_code == 200
+    assert me.get_json()['data']['employee_profile'] is None
+
+    home = client.get('/api/employee-home')
+    assert home.status_code == 200
+    assert 'id' not in home.get_json()['data']['viewer']
+
+    update = client.patch(
+        '/api/employee-home/profile',
+        json={'biography': 'Deleted records are not self-service profiles'},
+        headers=_csrf_header(client),
+    )
+
+    assert update.status_code == 409
+    assert update.get_json()['error']['code'] == 'EMPLOYEE_PROFILE_REQUIRED'
+
+    upload = client.post(
+        '/api/employee-home/profile-image/photo',
+        data={},
+        headers=_csrf_header(client),
+    )
+    assert upload.status_code == 409
+    assert upload.get_json()['error']['code'] == 'EMPLOYEE_PROFILE_REQUIRED'
+
+    with app.app_context():
+        employee = db.session.get(Employee, employee_id)
+        assert employee.biography is None
+
+def test_client_admin_can_use_employee_self_profile(
+    client,
+    app,
+    tenant,
+):
+    with app.app_context():
+        user = register_user({
+            'tenant_id': tenant.id,
+            'email': 'admin-employee@acme.test',
+            'first_name': 'Admin',
+            'last_name': 'Employee',
+            'password': 'StrongPass123!',
+            'roles': ['CLIENT_ADMIN'],
+        })
+
+        employee = Employee(
+            tenant_id=tenant.id,
+            user_id=user.id,
+            employee_number='EMP-ADMIN',
+            first_name='Admin',
+            last_name='Employee',
+            email='admin-employee@acme.test',
+            hire_date=date.today(),
+            employment_status='active',
+            employment_type='full_time',
+            job_title='People Operations Lead',
+        )
+        db.session.add(employee)
+        db.session.commit()
+
+        employee_id = employee.id
+
+    _login(client, 'admin-employee@acme.test')
+
+    me = client.get('/api/auth/me')
+    assert me.status_code == 200
+    assert me.get_json()['data']['employee_profile']['id'] == str(employee_id)
+
+    home = client.get('/api/employee-home')
+    assert home.status_code == 200
+    assert home.get_json()['data']['viewer']['id'] == str(employee_id)
+
+    update = client.patch(
+        '/api/employee-home/profile',
+        json={'biography': 'Administrator and employee.'},
+        headers=_csrf_header(client),
+    )
+    assert update.status_code == 200
+    assert update.get_json()['data']['biography'] == (
+        'Administrator and employee.'
+    )
