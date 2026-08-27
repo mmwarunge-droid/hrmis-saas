@@ -14,6 +14,7 @@ from app.services.leave_policy_service import (
 from app.services.leave_service import (
     create_leave_request,
     decide_leave_request,
+    resolve_required_approver,
 )
 
 
@@ -375,3 +376,85 @@ def test_leave_request_rejects_overlapping_dates(
             tenant_id=tenant_id,
             employee_id=employee_id,
         ).count() == 1
+
+
+def test_leave_routing_ignores_cross_tenant_employee_user_link(
+    app,
+    tenant,
+):
+    """Malformed Employee.user_id must not import another tenant's roles."""
+    with app.app_context():
+        tenant_id = tenant.id
+
+        owner = register_user({
+            'tenant_id': tenant_id,
+            'email': 'leave.boundary.owner@acme.test',
+            'first_name': 'Boundary',
+            'last_name': 'Owner',
+            'password': 'StrongPass123!',
+            'roles': ['MANAGER'],
+        })
+        alternate = register_user({
+            'tenant_id': tenant_id,
+            'email': 'leave.boundary.alternate@acme.test',
+            'first_name': 'Boundary',
+            'last_name': 'Alternate',
+            'password': 'StrongPass123!',
+            'roles': ['MANAGER'],
+        })
+        requester = register_user({
+            'tenant_id': tenant_id,
+            'email': 'leave.boundary.requester@acme.test',
+            'first_name': 'Boundary',
+            'last_name': 'Requester',
+            'password': 'StrongPass123!',
+            'roles': ['EMPLOYEE'],
+        })
+
+        foreign_tenant = Tenant(
+            name='Leave Routing Foreign Tenant',
+            slug='leave-routing-foreign-tenant',
+            country='Kenya',
+        )
+        db.session.add(foreign_tenant)
+        db.session.flush()
+
+        foreign_owner = register_user({
+            'tenant_id': foreign_tenant.id,
+            'email': 'leave.boundary.foreign-owner@other.test',
+            'first_name': 'Foreign',
+            'last_name': 'Owner',
+            'password': 'StrongPass123!',
+            'roles': ['ORGANIZATION_OWNER'],
+        })
+
+        employee = Employee(
+            tenant_id=tenant_id,
+            user_id=foreign_owner.id,
+            employee_number='LEAVE-XTENANT-USER',
+            first_name='Malformed',
+            last_name='Link',
+            email='leave.boundary.employee@acme.test',
+            hire_date=date(2026, 1, 1),
+            employment_status='active',
+            employment_type='full_time',
+        )
+        db.session.add(employee)
+
+        current_tenant = db.session.get(Tenant, tenant_id)
+        current_tenant.organization_owner_user_id = owner.id
+        current_tenant.leave_alternate_approver_user_id = alternate.id
+        db.session.commit()
+
+        employee = db.session.get(Employee, employee.id)
+        requester = db.session.get(User, requester.id)
+        current_tenant = db.session.get(Tenant, tenant_id)
+
+        approver, route = resolve_required_approver(
+            employee,
+            current_tenant,
+            requester,
+        )
+
+        assert approver.id == owner.id
+        assert route == 'employee_to_owner'

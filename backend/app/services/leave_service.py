@@ -43,7 +43,13 @@ def calculate_working_days(start_date, end_date):
 def _employee_user(employee):
     if not employee.user_id:
         return None
-    return db.session.get(User, employee.user_id)
+
+    return User.query.filter(
+        User.id == employee.user_id,
+        User.tenant_id == employee.tenant_id,
+        User.is_active.is_(True),
+        User.deleted_at.is_(None),
+    ).first()
 
 
 def _manager_approver(employee):
