@@ -10,6 +10,7 @@ from app.models import (
     SignatureEvent,
     SignatureRecipient,
     SignatureRequest,
+    Tenant,
 )
 from app.models.base import utcnow
 from app.services.auth_service import register_user
@@ -506,3 +507,182 @@ def test_client_admin_reminds_reschedules_and_cancels_request(
         assert 'signature.reminder_sent' in event_types
         assert 'signature.deadline_updated' in event_types
         assert 'signature.request_cancelled' in event_types
+
+def test_signature_request_rejects_employee_with_cross_tenant_user_link(
+    client,
+    app,
+    tenant,
+    admin_user,
+    auth_headers,
+):
+    """A signer must have valid platform access in the request tenant."""
+    with app.app_context():
+        foreign_tenant = Tenant(
+            name='Foreign Signature Tenant',
+            slug='foreign-signature-tenant',
+            country='Kenya',
+        )
+        db.session.add(foreign_tenant)
+        db.session.flush()
+
+        foreign_user = register_user({
+            'tenant_id': foreign_tenant.id,
+            'email': 'foreign.signature.user@other.test',
+            'first_name': 'Foreign',
+            'last_name': 'Signer',
+            'password': 'StrongForeignSignerPass123!',
+            'roles': ['EMPLOYEE'],
+            'email_verified_at': utcnow(),
+        })
+        foreign_user_id = inspect(foreign_user).identity[0]
+
+        malformed_employee = Employee(
+            tenant_id=tenant.id,
+            user_id=foreign_user_id,
+            employee_number='SIGN-XTENANT-001',
+            first_name='Malformed',
+            last_name='Signer',
+            email='malformed.signer@acme.test',
+            hire_date=datetime.utcnow().date(),
+            employment_status='active',
+            employment_type='full_time',
+        )
+        db.session.add(malformed_employee)
+        db.session.commit()
+
+        employee_id = malformed_employee.id
+
+    document_id = _create_document(
+        app,
+        tenant.id,
+        admin_user,
+    )
+
+    due_at = (
+        datetime.utcnow()
+        + timedelta(days=7)
+    ).replace(microsecond=0)
+
+    response = client.post(
+        '/api/signature-requests',
+        headers=auth_headers,
+        json={
+            'document_id': str(document_id),
+            'subject': 'Cross-tenant signer must be rejected',
+            'signing_mode': 'sequential',
+            'due_at': due_at.isoformat(),
+            'recipients': [{
+                'employee_id': str(employee_id),
+                'role_label': 'Employee',
+                'sequence': 1,
+            }],
+        },
+    )
+
+    assert response.status_code == 400
+
+    with app.app_context():
+        assert SignatureRecipient.query.filter_by(
+            employee_id=employee_id,
+        ).count() == 0
+
+
+def test_my_signature_tasks_ignores_cross_tenant_recipient_user_link(
+    client,
+    app,
+    tenant,
+    admin_user,
+):
+    """A foreign User ID on a recipient must not expose another tenant's task."""
+    foreign_password = 'StrongForeignTaskPass123!'
+
+    document_id = _create_document(
+        app,
+        tenant.id,
+        admin_user,
+    )
+    admin_user_id = inspect(admin_user).identity[0]
+
+    with app.app_context():
+        foreign_tenant = Tenant(
+            name='Foreign Signature Task Tenant',
+            slug='foreign-signature-task-tenant',
+            country='Kenya',
+        )
+        db.session.add(foreign_tenant)
+        db.session.flush()
+
+        foreign_user = register_user({
+            'tenant_id': foreign_tenant.id,
+            'email': 'foreign.signature.task@other.test',
+            'first_name': 'Foreign',
+            'last_name': 'TaskUser',
+            'password': foreign_password,
+            'roles': ['EMPLOYEE'],
+            'email_verified_at': utcnow(),
+        })
+        foreign_user_id = inspect(foreign_user).identity[0]
+        foreign_email = foreign_user.email
+
+        malformed_employee = Employee(
+            tenant_id=tenant.id,
+            user_id=foreign_user_id,
+            employee_number='SIGN-XTENANT-002',
+            first_name='Malformed',
+            last_name='Task',
+            email='malformed.task@acme.test',
+            hire_date=datetime.utcnow().date(),
+            employment_status='active',
+            employment_type='full_time',
+        )
+        db.session.add(malformed_employee)
+        db.session.flush()
+
+        signature_request = SignatureRequest(
+            tenant_id=tenant.id,
+            document_id=document_id,
+            created_by_id=admin_user_id,
+            subject='Tenant A confidential signature task',
+            signing_mode='sequential',
+            status='sent',
+            current_sequence=1,
+            sent_at=utcnow(),
+            assurance_level='standard',
+        )
+        db.session.add(signature_request)
+        db.session.flush()
+
+        malformed_recipient = SignatureRecipient(
+            tenant_id=tenant.id,
+            signature_request_id=signature_request.id,
+            user_id=foreign_user_id,
+            employee_id=malformed_employee.id,
+            name=malformed_employee.full_name,
+            email=malformed_employee.email,
+            role_label='Employee',
+            sequence=1,
+            status='notified',
+        )
+        db.session.add(malformed_recipient)
+        db.session.commit()
+
+        recipient_id = str(malformed_recipient.id)
+
+    _login(
+        client,
+        foreign_email,
+        foreign_password,
+    )
+
+    response = client.get(
+        '/api/signature-requests/my-tasks',
+    )
+
+    assert response.status_code == 200
+
+    items = response.get_json()['data']['items']
+
+    assert all(
+        item['id'] != recipient_id
+        for item in items
+    )

@@ -474,10 +474,20 @@ def create_signature_request(
                 'for this organization.',
             )
 
-        if not employee.user_id:
+        user = None
+
+        if employee.user_id:
+            user = User.query.filter(
+                User.id == employee.user_id,
+                User.tenant_id == employee.tenant_id,
+                User.is_active.is_(True),
+                User.deleted_at.is_(None),
+            ).first()
+
+        if not user:
             raise ValueError(
-                f'{employee.full_name} does not yet have '
-                'platform access.',
+                f'{employee.full_name} does not have valid '
+                'platform access for this organization.',
             )
 
         sequence = (
@@ -488,6 +498,7 @@ def create_signature_request(
 
         resolved_recipients.append({
             'employee': employee,
+            'user': user,
             'sequence': sequence,
             'role_label': (
                 recipient_payload.get('role_label')
@@ -558,7 +569,7 @@ def create_signature_request(
         recipient = SignatureRecipient(
             tenant_id=tenant_id,
             signature_request_id=signature_request.id,
-            user_id=employee.user_id,
+            user_id=resolved['user'].id,
             employee_id=employee.id,
             name=employee.full_name,
             email=employee.email,
@@ -910,6 +921,7 @@ def list_signature_requests(
 def list_my_signature_tasks(user):
     recipients = SignatureRecipient.query.filter(
         SignatureRecipient.user_id == user.id,
+        SignatureRecipient.tenant_id == user.tenant_id,
         SignatureRecipient.status.in_([
             'notified',
             'viewed',
