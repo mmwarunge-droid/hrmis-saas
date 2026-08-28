@@ -783,3 +783,104 @@ def test_signature_reminder_does_not_create_cross_tenant_notification(
             user_id=foreign_user_id,
             notification_type='signature',
         ).count() == 0
+
+def test_signature_view_does_not_email_cross_tenant_request_creator(
+    client,
+    app,
+    tenant,
+    admin_user,
+    auth_headers,
+):
+    """Malformed created_by_id must not leak signature details by email."""
+    signer = _create_employee_signer(
+        app,
+        tenant.id,
+        number='SIGN-XTENANT-ADMIN-MAIL',
+        email='signature.adminmail.signer@acme.test',
+        password='StrongAdminMailSignerPass123!',
+        first_name='MailSigner',
+    )
+
+    document_id = _create_document(
+        app,
+        tenant.id,
+        admin_user,
+    )
+
+    due_at = (
+        datetime.utcnow()
+        + timedelta(days=7)
+    ).replace(microsecond=0)
+
+    create_response = client.post(
+        '/api/signature-requests',
+        headers=auth_headers,
+        json={
+            'document_id': str(document_id),
+            'subject': 'Cross-tenant creator email boundary',
+            'signing_mode': 'sequential',
+            'due_at': due_at.isoformat(),
+            'recipients': [{
+                'employee_id': str(signer['employee_id']),
+                'role_label': 'Employee',
+                'sequence': 1,
+            }],
+        },
+    )
+
+    assert create_response.status_code == 201
+
+    request_data = create_response.get_json()['data']
+    request_id = request_data['id']
+    recipient_id = request_data['recipients'][0]['id']
+
+    with app.app_context():
+        foreign_tenant = Tenant(
+            name='Foreign Signature Creator Tenant',
+            slug='foreign-signature-creator-tenant',
+            country='Kenya',
+        )
+        db.session.add(foreign_tenant)
+        db.session.flush()
+
+        foreign_user = register_user({
+            'tenant_id': foreign_tenant.id,
+            'email': 'foreign.signature.creator@other.test',
+            'first_name': 'Foreign',
+            'last_name': 'Creator',
+            'password': 'StrongForeignCreatorPass123!',
+            'roles': ['CLIENT_ADMIN'],
+            'email_verified_at': utcnow(),
+        })
+        foreign_user_id = inspect(foreign_user).identity[0]
+        foreign_email = foreign_user.email
+
+        signature_request = db.session.get(
+            SignatureRequest,
+            request_id,
+        )
+        signature_request.created_by_id = foreign_user_id
+        db.session.commit()
+
+    signer_headers = _login(
+        client,
+        signer['email'],
+        signer['password'],
+    )
+
+    app.extensions['mail_outbox'].clear()
+
+    viewed_response = client.patch(
+        (
+            '/api/signature-requests/recipients/'
+            f'{recipient_id}/viewed'
+        ),
+        headers=signer_headers,
+    )
+
+    assert viewed_response.status_code == 200
+
+    assert all(
+        message['to'] != foreign_email
+        for message in app.extensions['mail_outbox']
+    )

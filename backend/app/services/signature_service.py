@@ -313,12 +313,20 @@ def _notify_admin(
     if not signature_request.created_by_id:
         return
 
-    administrator = db.session.get(
-        User,
-        signature_request.created_by_id,
-    )
+    administrator = User.query.filter(
+        User.id == signature_request.created_by_id,
+        User.is_active.is_(True),
+        User.deleted_at.is_(None),
+    ).first()
 
     if not administrator:
+        return
+
+    if (
+        not administrator.has_role('SUPER_ADMIN')
+        and str(administrator.tenant_id)
+        != str(signature_request.tenant_id)
+    ):
         return
 
     _create_notification(
