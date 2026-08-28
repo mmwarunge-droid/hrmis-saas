@@ -8,12 +8,16 @@ from sqlalchemy import inspect
 from app.extensions import db
 from app.models import (
     Document,
+    Notification,
     SignatureProviderEvent,
     SignatureRecipient,
     SignatureReminderRule,
     SignatureRequest,
+    Tenant,
 )
 
+from app.models.base import utcnow
+from app.services.auth_service import register_user
 
 def _create_qes_request(
     app,
@@ -389,3 +393,87 @@ def test_callback_metadata_recovers_provider_request_mapping(
             'provider-request-recovered'
         )
         assert event.processing_status == 'processed'
+
+def test_qes_callback_does_not_notify_cross_tenant_request_creator(
+    client,
+    app,
+    tenant,
+    admin_user,
+):
+    """Malformed created_by_id must not create a cross-tenant notification."""
+    api_key = 'qes-cross-tenant-callback-api-key'
+    provider_request_id = 'provider-request-cross-tenant-owner'
+
+    app.config['DROPBOX_SIGN_API_KEY'] = api_key
+    app.config['DROPBOX_SIGN_CLIENT_ID'] = 'qes-client-id'
+
+    created = _create_qes_request(
+        app,
+        tenant,
+        admin_user,
+        suffix='cross-tenant-owner',
+        provider_request_id=provider_request_id,
+    )
+
+    with app.app_context():
+        foreign_tenant = Tenant(
+            name='Foreign Provider Owner Tenant',
+            slug='foreign-provider-owner-tenant',
+            country='Kenya',
+        )
+        db.session.add(foreign_tenant)
+        db.session.flush()
+
+        foreign_user = register_user({
+            'tenant_id': foreign_tenant.id,
+            'email': 'foreign.provider.owner@other.test',
+            'first_name': 'Foreign',
+            'last_name': 'ProviderOwner',
+            'password': 'StrongForeignProviderPass123!',
+            'roles': ['CLIENT_ADMIN'],
+            'email_verified_at': utcnow(),
+        })
+        foreign_user_id = inspect(foreign_user).identity[0]
+
+        signature_request = db.session.get(
+            SignatureRequest,
+            created['request_id'],
+        )
+        signature_request.created_by_id = foreign_user_id
+        db.session.commit()
+
+        assert Notification.query.filter_by(
+            tenant_id=tenant.id,
+            user_id=foreign_user_id,
+            notification_type='signature',
+        ).count() == 0
+
+    event_time = int(
+        datetime.now(timezone.utc).timestamp(),
+    )
+
+    response = _post_callback(
+        client,
+        _callback_payload(
+            api_key=api_key,
+            event_type='signature_request_downloadable',
+            event_time=event_time,
+            provider_request_id=provider_request_id,
+        ),
+    )
+
+    assert response.status_code == 200
+
+    with app.app_context():
+        signature_request = db.session.get(
+            SignatureRequest,
+            created['request_id'],
+        )
+
+        assert signature_request.provider_status == 'downloadable'
+
+        assert Notification.query.filter_by(
+            tenant_id=tenant.id,
+            user_id=foreign_user_id,
+            notification_type='signature',
+        ).count() == 0

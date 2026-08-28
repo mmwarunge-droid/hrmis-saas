@@ -4,7 +4,6 @@ from sqlalchemy.exc import IntegrityError
 
 from app.extensions import db
 from app.models import (
-    Notification,
     SignatureEvent,
     SignatureProviderEvent,
     SignatureRecipient,
@@ -14,6 +13,7 @@ from app.models.base import utcnow
 from app.services.signature_evidence_service import (
     queue_signature_evidence,
 )
+from app.services.notification_service import create_notification
 from app.services.signature_providers.registry import (
     get_signature_provider,
 )
@@ -212,16 +212,14 @@ def _record_workflow_event(
 
 
 def _notify_request_owner(signature_request, title, body):
-    if not signature_request.created_by_id:
-        return
-
-    db.session.add(Notification(
+    return create_notification(
         tenant_id=signature_request.tenant_id,
         user_id=signature_request.created_by_id,
         title=title,
         body=body,
         notification_type='signature',
-    ))
+        email_delivery=False,
+    )
 
 
 def _disable_reminders(signature_request):

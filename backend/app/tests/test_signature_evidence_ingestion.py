@@ -5,12 +5,15 @@ from sqlalchemy import inspect
 from app.extensions import db
 from app.models import (
     Document,
+    Notification,
     SignatureArtifact,
     SignatureProviderEvent,
     SignatureRecipient,
     SignatureRequest,
+    Tenant,
 )
 from app.models.base import utcnow
+from app.services.auth_service import register_user
 from app.services.signature_evidence_service import (
     claim_signature_evidence_jobs,
     process_signature_evidence,
@@ -239,3 +242,73 @@ def test_evidence_ingestion_schedules_provider_409_retry(
         assert 'still being prepared' in (
             result.evidence_last_error
         )
+
+
+def test_evidence_verification_does_not_notify_cross_tenant_request_creator(
+    app,
+    tenant,
+    admin_user,
+    tmp_path,
+    monkeypatch,
+):
+    """Malformed created_by_id must not create a cross-tenant notification."""
+    request_id, _document_id = _request_fixture(
+        app,
+        tenant,
+        admin_user,
+        tmp_path,
+    )
+
+    provider = FakeEvidenceProvider()
+    monkeypatch.setattr(
+        'app.services.signature_evidence_service.'
+        'get_signature_provider',
+        lambda _name: provider,
+    )
+
+    with app.app_context():
+        foreign_tenant = Tenant(
+            name='Foreign Evidence Owner Tenant',
+            slug='foreign-evidence-owner-tenant',
+            country='Kenya',
+        )
+        db.session.add(foreign_tenant)
+        db.session.flush()
+
+        foreign_user = register_user({
+            'tenant_id': foreign_tenant.id,
+            'email': 'foreign.evidence.owner@other.test',
+            'first_name': 'Foreign',
+            'last_name': 'EvidenceOwner',
+            'password': 'StrongForeignEvidencePass123!',
+            'roles': ['CLIENT_ADMIN'],
+            'email_verified_at': utcnow(),
+        })
+        foreign_user_id = inspect(foreign_user).identity[0]
+
+        signature_request = db.session.get(
+            SignatureRequest,
+            request_id,
+        )
+        signature_request.created_by_id = foreign_user_id
+        db.session.commit()
+
+        assert Notification.query.filter_by(
+            tenant_id=tenant.id,
+            user_id=foreign_user_id,
+            notification_type='signature',
+        ).count() == 0
+
+        claimed = claim_signature_evidence_jobs()
+        assert claimed == [request_id]
+
+        result = process_signature_evidence(request_id)
+
+        assert result.status == 'completed'
+        assert result.evidence_status == 'verified'
+
+        assert Notification.query.filter_by(
+            tenant_id=tenant.id,
+            user_id=foreign_user_id,
+            notification_type='signature',
+        ).count() == 0
