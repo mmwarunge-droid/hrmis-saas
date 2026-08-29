@@ -14,32 +14,37 @@ export default defineConfig(({ mode }) => {
       );
     }
 
-    let apiUrl;
-    try {
-      apiUrl = new URL(apiBaseUrl);
-    } catch {
-      throw new Error(
-        'VITE_API_BASE_URL must be a valid absolute URL for production builds',
-      );
-    }
+    const normalizedApiBaseUrl = apiBaseUrl.trim();
 
-    const developmentHosts = new Set([
-      'localhost',
-      '127.0.0.1',
-      '0.0.0.0',
-    ]);
+    if (normalizedApiBaseUrl !== '/api') {
+      let apiUrl;
+      try {
+        apiUrl = new URL(normalizedApiBaseUrl);
+      } catch {
+        throw new Error(
+          'VITE_API_BASE_URL must be /api or a valid absolute URL '
+          + 'for production builds',
+        );
+      }
 
-    if (developmentHosts.has(apiUrl.hostname)) {
-      throw new Error(
-        'VITE_API_BASE_URL cannot use a local development host '
-        + 'for production builds',
-      );
-    }
+      const developmentHosts = new Set([
+        'localhost',
+        '127.0.0.1',
+        '0.0.0.0',
+      ]);
 
-    if (apiUrl.protocol !== 'https:') {
-      throw new Error(
-        'VITE_API_BASE_URL must use HTTPS for production builds',
-      );
+      if (developmentHosts.has(apiUrl.hostname)) {
+        throw new Error(
+          'VITE_API_BASE_URL cannot use a local development host '
+          + 'for production builds',
+        );
+      }
+
+      if (apiUrl.protocol !== 'https:') {
+        throw new Error(
+          'VITE_API_BASE_URL must use HTTPS for production builds',
+        );
+      }
     }
   }
 
