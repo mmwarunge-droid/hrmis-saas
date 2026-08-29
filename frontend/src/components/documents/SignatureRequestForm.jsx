@@ -39,7 +39,8 @@ export default function SignatureRequestForm({
     message: '',
     assurance_level: 'standard',
     signing_mode: 'sequential',
-    due_at: '',
+    due_date: '',
+    due_time: '',
     first_reminder_after_days: 2,
     reminder_interval_days: 2,
     escalation_days_before_due: 1,
@@ -182,7 +183,9 @@ export default function SignatureRequestForm({
       }
     }
 
-    const dueAt = new Date(form.due_at);
+    const dueAt = new Date(
+      `${form.due_date}T${form.due_time}`,
+    );
 
     if (Number.isNaN(dueAt.getTime())) {
       setError('Enter a valid completion deadline.');
@@ -411,16 +414,29 @@ export default function SignatureRequestForm({
           required
         />
 
-        <Input
-          label="Completion deadline"
-          type="datetime-local"
-          value={form.due_at}
-          onChange={(event) => setForm({
-            ...form,
-            due_at: event.target.value,
-          })}
-          required
-        />
+        <div className="grid gap-3 sm:grid-cols-2">
+          <Input
+            label="Completion date"
+            type="date"
+            value={form.due_date}
+            onChange={(event) => setForm({
+              ...form,
+              due_date: event.target.value,
+            })}
+            required
+          />
+
+          <Input
+            label="Deadline time"
+            type="time"
+            value={form.due_time}
+            onChange={(event) => setForm({
+              ...form,
+              due_time: event.target.value,
+            })}
+            required
+          />
+        </div>
       </div>
 
       <label className="block space-y-1">

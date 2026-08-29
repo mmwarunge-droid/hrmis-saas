@@ -21,6 +21,20 @@ function futureLocalDate(days = 7) {
   return localDate.toISOString().slice(0, 16);
 }
 
+function setCompletionDeadline(deadline) {
+  const [date, time] = deadline.split('T');
+
+  fireEvent.change(
+    screen.getByLabelText('Completion date'),
+    { target: { value: date } },
+  );
+
+  fireEvent.change(
+    screen.getByLabelText('Deadline time'),
+    { target: { value: time } },
+  );
+}
+
 const document = {
   id: 'document-1',
   tenant_id: 'tenant-1',
@@ -43,6 +57,28 @@ const employees = [
 ];
 
 describe('SignatureRequestForm', () => {
+  it('uses separate date and time controls for the completion deadline', () => {
+    render(
+      <SignatureRequestForm
+        document={document}
+        employees={employees}
+        onSubmit={vi.fn()}
+      />,
+    );
+
+    expect(
+      screen.getByLabelText('Completion date'),
+    ).toHaveAttribute('type', 'date');
+
+    expect(
+      screen.getByLabelText('Deadline time'),
+    ).toHaveAttribute('type', 'time');
+
+    expect(
+      screen.queryByLabelText('Completion deadline'),
+    ).not.toBeInTheDocument();
+  });
+
   it('creates a standard Kinetic signature request by default', () => {
     const onSubmit = vi.fn();
     const deadline = futureLocalDate();
@@ -68,10 +104,7 @@ describe('SignatureRequestForm', () => {
     ).toBeInTheDocument();
     expect(screen.getByLabelText('Sequence')).toBeEnabled();
 
-    fireEvent.change(
-      screen.getByLabelText('Completion deadline'),
-      { target: { value: deadline } },
-    );
+    setCompletionDeadline(deadline);
     fireEvent.change(
       screen.getByLabelText('Signatory 1'),
       { target: { value: 'employee-1' } },
@@ -141,10 +174,7 @@ describe('SignatureRequestForm', () => {
     fireEvent.click(
       screen.getByRole('button', { name: 'Add signatory' }),
     );
-    fireEvent.change(
-      screen.getByLabelText('Completion deadline'),
-      { target: { value: deadline } },
-    );
+    setCompletionDeadline(deadline);
     fireEvent.change(
       screen.getByLabelText('Signing order'),
       { target: { value: 'parallel' } },
@@ -218,10 +248,7 @@ describe('SignatureRequestForm', () => {
       ),
     ).toBeDisabled();
 
-    fireEvent.change(
-      screen.getByLabelText('Completion deadline'),
-      { target: { value: deadline } },
-    );
+    setCompletionDeadline(deadline);
     fireEvent.change(
       screen.getByLabelText('Signatory 1'),
       { target: { value: 'employee-1' } },
@@ -267,10 +294,7 @@ describe('SignatureRequestForm', () => {
       />,
     );
 
-    fireEvent.change(
-      screen.getByLabelText('Completion deadline'),
-      { target: { value: deadline } },
-    );
+    setCompletionDeadline(deadline);
     fireEvent.change(
       screen.getByLabelText('Signatory 1'),
       { target: { value: 'employee-1' } },
