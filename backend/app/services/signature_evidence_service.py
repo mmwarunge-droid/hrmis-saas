@@ -8,12 +8,12 @@ from sqlalchemy import or_
 
 from app.extensions import db
 from app.models import (
-    Notification,
     SignatureArtifact,
     SignatureEvent,
     SignatureProviderEvent,
     SignatureRequest,
 )
+from app.services.notification_service import create_notification
 from app.models.base import utcnow
 from app.services.document_conversion_service import (
     DocumentConversionError,
@@ -84,16 +84,14 @@ def _record_event(
 
 
 def _notify_owner(signature_request, title, body):
-    if not signature_request.created_by_id:
-        return
-
-    db.session.add(Notification(
+    return create_notification(
         tenant_id=signature_request.tenant_id,
         user_id=signature_request.created_by_id,
         title=title,
         body=body,
         notification_type='signature',
-    ))
+        email_delivery=False,
+    )
 
 
 def _expected_source_checksum(signature_request):
