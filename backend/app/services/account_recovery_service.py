@@ -120,6 +120,17 @@ def issue_account_token(
             'target_email is only supported for email verification tokens'
         )
 
+    raw_token = secrets.token_urlsafe(32)
+
+    # Serialize credential issuance for this identity. Without locking the
+    # User row, two concurrent issuers can both invalidate the same predecessor
+    # set and then insert separate unconsumed tokens for the same purpose.
+    db.session.execute(
+        select(User.id)
+        .where(User.id == user.id)
+        .with_for_update()
+    ).scalar_one()
+
     now = utcnow()
     AccountToken.query.filter(
         AccountToken.user_id == user.id,
@@ -129,8 +140,6 @@ def issue_account_token(
         {AccountToken.consumed_at: now},
         synchronize_session=False,
     )
-
-    raw_token = secrets.token_urlsafe(32)
     account_token = AccountToken(
         tenant_id=user.tenant_id,
         user_id=user.id,

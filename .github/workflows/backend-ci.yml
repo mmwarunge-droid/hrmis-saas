@@ -53,3 +53,8 @@ jobs:
           APP_ENV: testing
           FLASK_ENV: testing
         run: pytest --cov=app
+
+      - name: Run PostgreSQL concurrency tests
+        env:
+          HRMIS_PG_TEST_URL: ${{ env.DATABASE_URL }}
+        run: pytest app/tests/test_account_token_postgres_concurrency.py -vv
