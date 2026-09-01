@@ -1,5 +1,10 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { MemoryRouter } from 'react-router-dom';
+import {
+  MemoryRouter,
+  Route,
+  Routes,
+  useLocation,
+} from 'react-router-dom';
 
 import { documentApi } from '../api/documentApi.js';
 import { employeeApi } from '../api/employeeApi.js';
@@ -49,6 +54,16 @@ function document(index) {
     size_bytes: 1024,
     expiry_date: null,
   };
+}
+
+function LocationProbe() {
+  const location = useLocation();
+
+  return (
+    <div data-testid="location">
+      {location.pathname}{location.search}
+    </div>
+  );
 }
 
 beforeEach(() => {
@@ -157,4 +172,97 @@ test('uses access-scoped document totals and server pagination', async () => {
       }),
     );
   });
+});
+
+test('routes pending documents to the existing signing workflow', async () => {
+  usePermissions.mockReturnValue({
+    hasPermission: (permission) => permission === 'document:approve',
+    hasRole: () => false,
+  });
+
+  documentApi.list.mockResolvedValue({
+    data: {
+      items: [{
+        ...document(1),
+        signature_status: 'pending',
+      }],
+      meta: {
+        page: 1,
+        per_page: 15,
+        total: 1,
+        pages: 1,
+      },
+    },
+  });
+
+  render(
+    <MemoryRouter initialEntries={['/documents']}>
+      <Routes>
+        <Route path="/documents" element={<Documents />} />
+        <Route
+          path="/signature-requests"
+          element={<LocationProbe />}
+        />
+      </Routes>
+    </MemoryRouter>,
+  );
+
+  const manageButton = await screen.findByRole(
+    'button',
+    { name: 'Manage signing' },
+  );
+
+  expect(
+    screen.queryByRole(
+      'button',
+      { name: 'Send for signature' },
+    ),
+  ).not.toBeInTheDocument();
+
+  fireEvent.click(manageButton);
+
+  expect(
+    await screen.findByTestId('location'),
+  ).toHaveTextContent(
+    '/signature-requests?document_id=document-1',
+  );
+});
+
+test('allows a new request after a document workflow has expired', async () => {
+  usePermissions.mockReturnValue({
+    hasPermission: (permission) => permission === 'document:approve',
+    hasRole: () => false,
+  });
+
+  documentApi.list.mockResolvedValue({
+    data: {
+      items: [{
+        ...document(1),
+        signature_status: 'expired',
+      }],
+      meta: {
+        page: 1,
+        per_page: 15,
+        total: 1,
+        pages: 1,
+      },
+    },
+  });
+
+  render(
+    <MemoryRouter>
+      <Documents />
+    </MemoryRouter>,
+  );
+
+  fireEvent.click(
+    await screen.findByRole(
+      'button',
+      { name: 'Send for signature' },
+    ),
+  );
+
+  expect(
+    screen.getByText('Send document for signature'),
+  ).toBeInTheDocument();
 });

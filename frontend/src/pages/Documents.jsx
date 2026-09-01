@@ -14,6 +14,7 @@ import {
   Search,
   ShieldCheck,
 } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 
 import { documentApi } from '../api/documentApi';
 import { employeeApi } from '../api/employeeApi';
@@ -58,6 +59,7 @@ function formatSize(bytes) {
 }
 
 export default function Documents() {
+  const navigate = useNavigate();
   const [documents, setDocuments] = useState([]);
   const [employees, setEmployees] = useState([]);
   const [tenants, setTenants] = useState([]);
@@ -177,6 +179,12 @@ export default function Documents() {
     setSignatureOpen(true);
     setError('');
     setSuccess('');
+  };
+
+  const manageSignatureRequest = (document) => {
+    navigate(
+      `/signature-requests?document_id=${encodeURIComponent(document.id)}`,
+    );
   };
 
   const closeSignatureRequest = () => {
@@ -307,22 +315,41 @@ export default function Documents() {
     {
       key: 'actions',
       label: '',
-      render: (row) => (
-        canManageSignatures && row.status === 'active'
-          ? (
+      render: (row) => {
+        if (!canManageSignatures || row.status !== 'active') {
+          return '—';
+        }
+
+        if (row.signature_status === 'signed') {
+          return '—';
+        }
+
+        if (row.signature_status === 'pending') {
+          return (
             <Button
               type="button"
               size="sm"
               variant="soft"
-              disabled={row.signature_status === 'signed'}
-              onClick={() => openSignatureRequest(row)}
+              onClick={() => manageSignatureRequest(row)}
             >
-              <PenLine size={14} />
-              Send for signature
+              <FileSignature size={14} />
+              Manage signing
             </Button>
-          )
-          : '—'
-      ),
+          );
+        }
+
+        return (
+          <Button
+            type="button"
+            size="sm"
+            variant="soft"
+            onClick={() => openSignatureRequest(row)}
+          >
+            <PenLine size={14} />
+            Send for signature
+          </Button>
+        );
+      },
     },
   ];
 
