@@ -18,6 +18,16 @@ class OnboardingTaskCreateSchema(Schema):
     due_days_after_start = fields.Int(required=False, validate=validate.Range(min=0))
     required = fields.Bool(required=False)
     requires_acknowledgement = fields.Bool(required=False)
+    max_attempts = fields.Int(
+        required=False,
+        load_default=1,
+        validate=validate.Range(min=1, max=20),
+    )
+    pass_mark_percent = fields.Float(
+        required=False,
+        allow_none=True,
+        validate=validate.Range(min=0, max=100),
+    )
 
 
 class OnboardingTemplateCreateSchema(Schema):
@@ -34,6 +44,16 @@ class OnboardingAssignSchema(Schema):
 class OnboardingTaskCompleteSchema(Schema):
     completion_notes = fields.Str(required=False, allow_none=True)
     acknowledged = fields.Bool(required=False)
+
+
+class OnboardingRetakeSchema(Schema):
+    reason = fields.Str(required=True, validate=validate.Length(min=3, max=1000))
+    due_date = fields.Date(required=False, allow_none=True)
+    grant_additional_attempts = fields.Int(
+        required=False,
+        load_default=0,
+        validate=validate.Range(min=0, max=10),
+    )
 
 
 class OnboardingVideoProgressSchema(Schema):

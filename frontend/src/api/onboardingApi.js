@@ -20,6 +20,11 @@ export const onboardingApi = {
   assignments: (params = {}) => apiClient.get('/onboarding/assignments', { params }),
   summary: () => apiClient.get('/onboarding/summary'),
   updateAssignment: (id, payload) => apiClient.patch(`/onboarding/assignments/${id}`, payload),
+  attempts: (id) => apiClient.get(`/onboarding/assignments/${id}/attempts`),
+  retake: (id, payload) => apiClient.post(
+    `/onboarding/assignments/${id}/retake`,
+    payload,
+  ),
   myTasks: () => apiClient.get('/onboarding/my-tasks'),
   viewed: (id) => apiClient.patch(`/onboarding/tasks/${id}/view`),
   videoProgress: (id, payload) => apiClient.patch(

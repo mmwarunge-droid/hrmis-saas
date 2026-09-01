@@ -11,6 +11,7 @@ from app.models import (
     OnboardingResource,
     OnboardingTask,
     OnboardingTemplate,
+    OnboardingTrainingAttempt,
     Role,
     Tenant,
     User,
@@ -285,6 +286,153 @@ def update_template(template, payload):
     return template
 
 
+def _current_attempt(assignment):
+    attempt = OnboardingTrainingAttempt.query.filter_by(
+        tenant_id=assignment.tenant_id,
+        assignment_id=assignment.id,
+        attempt_number=assignment.current_attempt_number,
+    ).first()
+    if attempt:
+        return attempt
+
+    attempt = OnboardingTrainingAttempt(
+        tenant_id=assignment.tenant_id,
+        assignment_id=assignment.id,
+        attempt_number=assignment.current_attempt_number,
+        status='pending',
+    )
+    db.session.add(attempt)
+    db.session.flush()
+    return attempt
+
+
+def _mark_attempt_started(assignment, now=None):
+    now = now or utcnow()
+    attempt = _current_attempt(assignment)
+    if attempt.status == 'pending':
+        attempt.status = 'in_progress'
+    if not attempt.started_at:
+        attempt.started_at = now
+    return attempt
+
+
+def _finalize_attempt(assignment, status, *, passed=None, now=None):
+    now = now or utcnow()
+    attempt = _current_attempt(assignment)
+    if not attempt.started_at:
+        attempt.started_at = assignment.video_started_at or now
+    attempt.status = status
+    attempt.completed_at = now
+    attempt.passed = passed
+    attempt.time_spent_seconds = float(
+        assignment.video_verified_seconds or 0.0
+    )
+    return attempt
+
+
+def retake_assignment(
+    assignment,
+    actor,
+    *,
+    reason,
+    due_date=None,
+    grant_additional_attempts=0,
+):
+    grant_additional_attempts = int(grant_additional_attempts or 0)
+    if grant_additional_attempts < 0 or grant_additional_attempts > 10:
+        raise ValueError('Additional attempts must be between 0 and 10')
+
+    current = _current_attempt(assignment)
+    allowed_before = assignment.attempt_limit
+    allowed_after = allowed_before + grant_additional_attempts
+
+    if assignment.current_attempt_number >= allowed_after:
+        raise ValueError(
+            'Maximum attempts reached. Grant an additional attempt to '
+            'resubmit this training.'
+        )
+
+    now = utcnow()
+    if current.status in {'pending', 'in_progress'}:
+        current.status = 'superseded'
+        current.completed_at = now
+        current.passed = False
+        current.time_spent_seconds = float(
+            assignment.video_verified_seconds or 0.0
+        )
+
+    assignment.additional_attempts_granted = (
+        int(assignment.additional_attempts_granted or 0)
+        + grant_additional_attempts
+    )
+    assignment.current_attempt_number += 1
+
+    if due_date is not None:
+        assignment.due_date = due_date
+
+    assignment.status = (
+        'overdue'
+        if assignment.due_date and assignment.due_date < now.date()
+        else 'pending'
+    )
+    assignment.completed_at = None
+    assignment.resource_viewed_at = None
+    assignment.acknowledged_at = None
+    assignment.completion_notes = None
+    assignment.video_verified_seconds = 0.0
+    assignment.video_last_position_seconds = 0.0
+    assignment.video_last_heartbeat_at = None
+    assignment.video_started_at = None
+    assignment.video_completed_at = None
+
+    next_attempt = OnboardingTrainingAttempt(
+        tenant_id=assignment.tenant_id,
+        assignment_id=assignment.id,
+        attempt_number=assignment.current_attempt_number,
+        status='pending',
+        authorized_by_user_id=actor.id if actor else None,
+        authorization_reason=reason,
+    )
+    db.session.add(next_attempt)
+    db.session.flush()
+
+    if assignment.assigned_to_user_id:
+        create_notification(
+            tenant_id=assignment.tenant_id,
+            user_id=assignment.assigned_to_user_id,
+            title='Training retake assigned',
+            body=(
+                f'{assignment.task.title} · Attempt '
+                f'{assignment.current_attempt_number} of '
+                f'{assignment.attempt_limit}'
+            ),
+            notification_type='onboarding',
+            action_url='/tasks',
+            priority='normal',
+            metadata={
+                'assignment_id': str(assignment.id),
+                'attempt_number': assignment.current_attempt_number,
+                'attempt_limit': assignment.attempt_limit,
+                'retake': True,
+            },
+        )
+
+    log_event(
+        'onboarding.assignment_retake',
+        'EmployeeOnboardingTask',
+        assignment.id,
+        tenant_id=assignment.tenant_id,
+        metadata={
+            'attempt_number': assignment.current_attempt_number,
+            'attempt_limit': assignment.attempt_limit,
+            'additional_attempts_granted': grant_additional_attempts,
+            'reason': reason,
+        },
+    )
+    db.session.commit()
+    return assignment
+
+
 def assign_template(employee_id, template_id, tenant_id):
     employee = Employee.query.filter_by(
         id=employee_id,
@@ -331,6 +479,14 @@ def assign_template(employee_id, template_id, tenant_id):
         )
         db.session.add(assignment)
         db.session.flush()
+        db.session.add(
+            OnboardingTrainingAttempt(
+                tenant_id=tenant_id,
+                assignment_id=assignment.id,
+                attempt_number=1,
+                status='pending',
+            )
+        )
         created.append(assignment)
         if assignee:
             create_notification(
@@ -391,9 +547,27 @@ def update_assignment(assignment, payload, actor):
 
         assignment.status = next_status
         if assignment.status == 'completed':
-            assignment.completed_at = utcnow()
-        elif assignment.status not in {'completed', 'waived'}:
+            now = utcnow()
+            assignment.completed_at = now
+            _finalize_attempt(
+                assignment,
+                'completed',
+                passed=True,
+                now=now,
+            )
+        elif assignment.status == 'waived':
+            now = utcnow()
             assignment.completed_at = None
+            _finalize_attempt(
+                assignment,
+                'waived',
+                passed=None,
+                now=now,
+            )
+        else:
+            assignment.completed_at = None
+            if assignment.status == 'in_progress':
+                _mark_attempt_started(assignment)
     if 'completion_notes' in payload:
         assignment.completion_notes = payload['completion_notes']
 
@@ -413,6 +587,7 @@ def mark_assignment_viewed(assignment):
         assignment.resource_viewed_at = utcnow()
     if assignment.status == 'pending':
         assignment.status = 'in_progress'
+    _mark_attempt_started(assignment)
     log_event(
         'onboarding.resource_view',
         'EmployeeOnboardingTask',
@@ -447,6 +622,7 @@ def record_video_progress(assignment, *, event, position_seconds):
         assignment.resource_viewed_at = now
     if assignment.status == 'pending':
         assignment.status = 'in_progress'
+    _mark_attempt_started(assignment, now)
 
     if event == 'start':
         if position > verified:
@@ -544,6 +720,13 @@ def complete_assignment(assignment, notes=None, acknowledged=False):
         assignment.resource_viewed_at = now
     if acknowledged:
         assignment.acknowledged_at = now
+
+    _finalize_attempt(
+        assignment,
+        'completed',
+        passed=True,
+        now=now,
+    )
 
     log_event(
         'onboarding.task_complete',

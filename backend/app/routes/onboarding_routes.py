@@ -10,10 +10,12 @@ from app.models import (
     OnboardingResource,
     OnboardingTask,
     OnboardingTemplate,
+    OnboardingTrainingAttempt,
 )
 from app.schemas.onboarding_schema import (
     OnboardingAssignSchema,
     OnboardingAssignmentUpdateSchema,
+    OnboardingRetakeSchema,
     OnboardingTaskCompleteSchema,
     OnboardingVideoProgressSchema,
     OnboardingTemplateCreateSchema,
@@ -27,6 +29,7 @@ from app.services.onboarding_service import (
     create_template,
     mark_assignment_viewed,
     record_video_progress,
+    retake_assignment,
     update_assignment,
     update_template,
     video_progress_state,
@@ -373,6 +376,70 @@ def patch_assignment(assignment_id):
     return success(
         _serialize_assignment(assignment),
         'Onboarding assignment updated',
+    )
+
+
+@onboarding_bp.get('/assignments/<assignment_id>/attempts')
+@jwt_required()
+@permission_required('onboarding:assign')
+def assignment_attempts(assignment_id):
+    scope = _onboarding_admin_scope()
+    if not scope:
+        return _forbidden_onboarding_admin()
+
+    assignment = tenant_query(EmployeeOnboardingTask).filter_by(
+        id=assignment_id,
+    ).first_or_404()
+    if scope == 'team' and not _manager_can_administer(assignment.employee):
+        return _forbidden_onboarding_admin()
+
+    attempts = OnboardingTrainingAttempt.query.filter_by(
+        tenant_id=assignment.tenant_id,
+        assignment_id=assignment.id,
+    ).order_by(OnboardingTrainingAttempt.attempt_number.desc()).all()
+
+    return success({
+        'assignment': _serialize_assignment(assignment),
+        'items': [attempt.to_dict() for attempt in attempts],
+    })
+
+
+@onboarding_bp.post('/assignments/<assignment_id>/retake')
+@jwt_required()
+@permission_required('onboarding:assign')
+def retake_onboarding_assignment(assignment_id):
+    scope = _onboarding_admin_scope()
+    if not scope:
+        return _forbidden_onboarding_admin()
+
+    assignment = tenant_query(EmployeeOnboardingTask).filter_by(
+        id=assignment_id,
+    ).with_for_update().first_or_404()
+    if scope == 'team' and not _manager_can_administer(assignment.employee):
+        return _forbidden_onboarding_admin()
+
+    try:
+        payload = OnboardingRetakeSchema().load(request.get_json() or {})
+        assignment = retake_assignment(
+            assignment,
+            current_user,
+            reason=payload['reason'],
+            due_date=payload.get('due_date'),
+            grant_additional_attempts=payload.get(
+                'grant_additional_attempts',
+                0,
+            ),
+        )
+    except ValidationError as err:
+        return fail('VALIDATION_ERROR', err.messages, 422)
+    except ValueError as exc:
+        db.session.rollback()
+        return fail('ONBOARDING_RETAKE_FAILED', str(exc), 400)
+
+    return success(
+        _serialize_assignment(assignment),
+        'Training retake assigned',
+        201,
     )
 
 

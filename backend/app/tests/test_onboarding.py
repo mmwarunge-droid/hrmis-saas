@@ -312,3 +312,206 @@ def test_onboarding_template_rejects_cross_tenant_training_resource(
     assert 'invalid for this organization' in (
         response.get_json()['error']['message']
     )
+
+
+def test_training_retake_reuses_content_and_preserves_attempt_history(
+    client,
+    app,
+    auth_headers,
+    tmp_path,
+):
+    app.config['UPLOAD_FOLDER'] = str(tmp_path / 'uploads')
+
+    employee = client.post(
+        '/api/employees',
+        headers=auth_headers,
+        json={
+            'employee_number': 'EMP-RETAKE-01',
+            'first_name': 'Retake',
+            'last_name': 'Employee',
+            'email': 'retake.employee@example.com',
+            'hire_date': '2026-09-01',
+        },
+    ).get_json()['data']
+
+    resource_response = client.post(
+        '/api/onboarding/resources',
+        headers=auth_headers,
+        data={
+            'file': (BytesIO(b'policy content'), 'ethics.pdf'),
+        },
+        content_type='multipart/form-data',
+    )
+    assert resource_response.status_code == 201
+    resource = resource_response.get_json()['data']
+
+    template_response = client.post(
+        '/api/onboarding/templates',
+        headers=auth_headers,
+        json={
+            'name': 'Ethics Retake Plan',
+            'tasks': [{
+                'title': 'Workplace ethics',
+                'task_type': 'document',
+                'resource_id': resource['id'],
+                'assignee_role': 'CLIENT_ADMIN',
+                'requires_acknowledgement': True,
+                'max_attempts': 2,
+            }],
+        },
+    )
+    assert template_response.status_code == 201
+    template = template_response.get_json()['data']
+
+    assigned = client.post(
+        '/api/onboarding/assign',
+        headers=auth_headers,
+        json={
+            'employee_id': employee['id'],
+            'template_id': template['id'],
+        },
+    )
+    assert assigned.status_code == 201
+    assignment = assigned.get_json()['data']['items'][0]
+    assignment_id = assignment['id']
+    assert assignment['current_attempt_number'] == 1
+    assert assignment['attempt_limit'] == 2
+
+    completed = client.patch(
+        f'/api/onboarding/tasks/{assignment_id}/complete',
+        headers=auth_headers,
+        json={'acknowledged': True},
+    )
+    assert completed.status_code == 200
+
+    retake = client.post(
+        f'/api/onboarding/assignments/{assignment_id}/retake',
+        headers=auth_headers,
+        json={
+            'reason': 'Annual policy refresh',
+            'due_date': '2026-09-30',
+        },
+    )
+    assert retake.status_code == 201, retake.get_json()
+    data = retake.get_json()['data']
+    assert data['current_attempt_number'] == 2
+    assert data['attempt_limit'] == 2
+    assert data['attempts_remaining'] == 0
+    assert data['status'] == 'pending'
+    assert data['resource']['id'] == resource['id']
+    assert data['resource_viewed_at'] is None
+    assert data['acknowledged_at'] is None
+
+    history = client.get(
+        f'/api/onboarding/assignments/{assignment_id}/attempts',
+        headers=auth_headers,
+    )
+    assert history.status_code == 200
+    attempts = history.get_json()['data']['items']
+    assert [item['attempt_number'] for item in attempts] == [2, 1]
+    assert attempts[0]['status'] == 'pending'
+    assert attempts[0]['authorization_reason'] == 'Annual policy refresh'
+    assert attempts[1]['status'] == 'completed'
+    assert attempts[1]['passed'] is True
+
+    exhausted = client.post(
+        f'/api/onboarding/assignments/{assignment_id}/retake',
+        headers=auth_headers,
+        json={'reason': 'Try again'},
+    )
+    assert exhausted.status_code == 400
+    assert 'Maximum attempts reached' in exhausted.get_json()['error']['message']
+
+    granted = client.post(
+        f'/api/onboarding/assignments/{assignment_id}/retake',
+        headers=auth_headers,
+        json={
+            'reason': 'Connectivity issue during the previous attempt',
+            'grant_additional_attempts': 1,
+        },
+    )
+    assert granted.status_code == 201, granted.get_json()
+    data = granted.get_json()['data']
+    assert data['current_attempt_number'] == 3
+    assert data['attempt_limit'] == 3
+    assert data['additional_attempts_granted'] == 1
+
+
+def test_video_retake_resets_verified_progress_without_reupload(
+    client,
+    app,
+    auth_headers,
+    tmp_path,
+):
+    app.config['UPLOAD_FOLDER'] = str(tmp_path / 'uploads')
+
+    employee = client.post(
+        '/api/employees',
+        headers=auth_headers,
+        json={
+            'employee_number': 'EMP-RETAKE-02',
+            'first_name': 'Video',
+            'last_name': 'Retake',
+            'email': 'video.retake@example.com',
+            'hire_date': '2026-09-01',
+        },
+    ).get_json()['data']
+
+    resource_response = client.post(
+        '/api/onboarding/resources',
+        headers=auth_headers,
+        data={
+            'file': (BytesIO(b'demo video'), 'retake.webm'),
+            'duration_seconds': '10',
+        },
+        content_type='multipart/form-data',
+    )
+    assert resource_response.status_code == 201
+    resource = resource_response.get_json()['data']
+
+    template = client.post(
+        '/api/onboarding/templates',
+        headers=auth_headers,
+        json={
+            'name': 'Video Retake Plan',
+            'tasks': [{
+                'title': 'Compliance video',
+                'task_type': 'video',
+                'resource_id': resource['id'],
+                'assignee_role': 'CLIENT_ADMIN',
+                'max_attempts': 2,
+            }],
+        },
+    ).get_json()['data']
+
+    assignment = client.post(
+        '/api/onboarding/assign',
+        headers=auth_headers,
+        json={
+            'employee_id': employee['id'],
+            'template_id': template['id'],
+        },
+    ).get_json()['data']['items'][0]
+
+    from app.extensions import db
+    from app.models import EmployeeOnboardingTask
+
+    with client.application.app_context():
+        row = db.session.get(EmployeeOnboardingTask, assignment['id'])
+        row.video_verified_seconds = 6.0
+        row.video_last_position_seconds = 6.0
+        row.status = 'in_progress'
+        db.session.commit()
+
+    retake = client.post(
+        f"/api/onboarding/assignments/{assignment['id']}/retake",
+        headers=auth_headers,
+        json={'reason': 'Restart verified viewing from the beginning'},
+    )
+    assert retake.status_code == 201, retake.get_json()
+    data = retake.get_json()['data']
+    assert data['current_attempt_number'] == 2
+    assert data['video_verified_seconds'] == 0.0
+    assert data['video_last_position_seconds'] == 0.0
+    assert data['video_progress']['completion_ready'] is False
+    assert data['resource']['id'] == resource['id']
