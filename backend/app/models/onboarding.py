@@ -108,6 +108,8 @@ class OnboardingTask(db.Model, TenantMixin, TimestampMixin, ReprMixin):
         nullable=False,
         default=False,
     )
+    max_attempts = db.Column(db.Integer, nullable=False, default=1)
+    pass_mark_percent = db.Column(db.Float)
 
     template = db.relationship('OnboardingTemplate', back_populates='tasks')
     resource = db.relationship('OnboardingResource')
@@ -126,6 +128,15 @@ class OnboardingTask(db.Model, TenantMixin, TimestampMixin, ReprMixin):
             "task_type IN ('action','document','video')",
             name='ck_onboarding_tasks_type',
         ),
+        db.CheckConstraint(
+            'max_attempts >= 1 AND max_attempts <= 20',
+            name='ck_onboarding_tasks_max_attempts',
+        ),
+        db.CheckConstraint(
+            'pass_mark_percent IS NULL OR '
+            '(pass_mark_percent >= 0 AND pass_mark_percent <= 100)',
+            name='ck_onboarding_tasks_pass_mark',
+        ),
     )
 
     def to_dict(self):
@@ -141,6 +152,8 @@ class OnboardingTask(db.Model, TenantMixin, TimestampMixin, ReprMixin):
             'due_days_after_start': self.due_days_after_start,
             'required': self.required,
             'requires_acknowledgement': self.requires_acknowledgement,
+            'max_attempts': self.max_attempts,
+            'pass_mark_percent': self.pass_mark_percent,
         }
 
 
@@ -190,6 +203,16 @@ class EmployeeOnboardingTask(db.Model, TenantMixin, TimestampMixin, ReprMixin):
     video_started_at = db.Column(db.DateTime)
     video_completed_at = db.Column(db.DateTime)
     completion_notes = db.Column(db.Text)
+    current_attempt_number = db.Column(
+        db.Integer,
+        nullable=False,
+        default=1,
+    )
+    additional_attempts_granted = db.Column(
+        db.Integer,
+        nullable=False,
+        default=0,
+    )
 
     employee = db.relationship(
         'Employee',
@@ -197,6 +220,12 @@ class EmployeeOnboardingTask(db.Model, TenantMixin, TimestampMixin, ReprMixin):
     )
     task = db.relationship('OnboardingTask', back_populates='assignments')
     assigned_to = db.relationship('User')
+    attempts = db.relationship(
+        'OnboardingTrainingAttempt',
+        back_populates='assignment',
+        cascade='all, delete-orphan',
+        order_by='OnboardingTrainingAttempt.attempt_number',
+    )
 
     __table_args__ = (
         db.UniqueConstraint(
@@ -209,7 +238,25 @@ class EmployeeOnboardingTask(db.Model, TenantMixin, TimestampMixin, ReprMixin):
             "status IN ('pending','in_progress','completed','waived','overdue')",
             name='ck_employee_onboarding_tasks_status',
         ),
+        db.CheckConstraint(
+            'current_attempt_number >= 1',
+            name='ck_employee_onboarding_current_attempt',
+        ),
+        db.CheckConstraint(
+            'additional_attempts_granted >= 0',
+            name='ck_employee_onboarding_extra_attempts',
+        ),
     )
+
+    @property
+    def attempt_limit(self):
+        return int(self.task.max_attempts or 1) + int(
+            self.additional_attempts_granted or 0
+        )
+
+    @property
+    def attempts_remaining(self):
+        return max(self.attempt_limit - self.current_attempt_number, 0)
 
     def to_dict(self):
         return {
@@ -253,4 +300,105 @@ class EmployeeOnboardingTask(db.Model, TenantMixin, TimestampMixin, ReprMixin):
                 else None
             ),
             'completion_notes': self.completion_notes,
+            'current_attempt_number': self.current_attempt_number,
+            'max_attempts': self.task.max_attempts,
+            'additional_attempts_granted': (
+                self.additional_attempts_granted
+            ),
+            'attempt_limit': self.attempt_limit,
+            'attempts_remaining': self.attempts_remaining,
+            'pass_mark_percent': self.task.pass_mark_percent,
+        }
+
+
+class OnboardingTrainingAttempt(
+    db.Model,
+    TenantMixin,
+    TimestampMixin,
+    ReprMixin,
+):
+    __tablename__ = 'onboarding_training_attempts'
+
+    id = db.Column(GUID(), primary_key=True, default=uuid_pk)
+    assignment_id = db.Column(
+        GUID(),
+        db.ForeignKey('employee_onboarding_tasks.id', ondelete='CASCADE'),
+        nullable=False,
+        index=True,
+    )
+    attempt_number = db.Column(db.Integer, nullable=False)
+    status = db.Column(
+        db.String(20),
+        nullable=False,
+        default='pending',
+        index=True,
+    )
+    started_at = db.Column(db.DateTime)
+    completed_at = db.Column(db.DateTime)
+    score_percent = db.Column(db.Float)
+    passed = db.Column(db.Boolean)
+    time_spent_seconds = db.Column(db.Float, nullable=False, default=0.0)
+    authorized_by_user_id = db.Column(
+        GUID(),
+        db.ForeignKey('users.id', ondelete='SET NULL'),
+        nullable=True,
+        index=True,
+    )
+    authorization_reason = db.Column(db.Text)
+
+    assignment = db.relationship(
+        'EmployeeOnboardingTask',
+        back_populates='attempts',
+    )
+    authorized_by = db.relationship('User')
+
+    __table_args__ = (
+        db.UniqueConstraint(
+            'tenant_id',
+            'assignment_id',
+            'attempt_number',
+            name='uq_onboarding_training_attempt_number',
+        ),
+        db.CheckConstraint(
+            "status IN ('pending','in_progress','completed','failed',"
+            "'superseded','waived')",
+            name='ck_onboarding_training_attempt_status',
+        ),
+        db.CheckConstraint(
+            'attempt_number >= 1',
+            name='ck_onboarding_training_attempt_number',
+        ),
+        db.CheckConstraint(
+            'score_percent IS NULL OR '
+            '(score_percent >= 0 AND score_percent <= 100)',
+            name='ck_onboarding_training_attempt_score',
+        ),
+    )
+
+    def to_dict(self):
+        return {
+            'id': str(self.id),
+            'assignment_id': str(self.assignment_id),
+            'attempt_number': self.attempt_number,
+            'status': self.status,
+            'started_at': (
+                self.started_at.isoformat() if self.started_at else None
+            ),
+            'completed_at': (
+                self.completed_at.isoformat() if self.completed_at else None
+            ),
+            'score_percent': self.score_percent,
+            'passed': self.passed,
+            'time_spent_seconds': float(self.time_spent_seconds or 0.0),
+            'authorized_by_user_id': (
+                str(self.authorized_by_user_id)
+                if self.authorized_by_user_id
+                else None
+            ),
+            'authorized_by_name': (
+                self.authorized_by.full_name
+                if self.authorized_by
+                else None
+            ),
+            'authorization_reason': self.authorization_reason,
         }

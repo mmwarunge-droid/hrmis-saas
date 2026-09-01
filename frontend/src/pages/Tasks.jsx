@@ -315,6 +315,13 @@ export default function Tasks() {
                         {task.template_name || 'Employee workflow'}
                         {' · '}
                         Due {task.due_date || 'not set'}
+                        {' · '}
+                        Attempt {task.current_attempt_number || 1}
+                        {' of '}
+                        {task.attempt_limit || task.max_attempts || 1}
+                        {(task.attempts_remaining === 0 && !done)
+                          ? ' · Final attempt'
+                          : ''}
                       </p>
                       {task.resource?.resource_type === 'document' && (
                         <a

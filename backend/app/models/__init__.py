@@ -40,6 +40,7 @@ from app.models.onboarding import (
     OnboardingResource,
     OnboardingTask,
     OnboardingTemplate,
+    OnboardingTrainingAttempt,
 )
 from app.models.audit_log import AuditLog, Notification
 from app.models.goal import Goal, GoalCheckIn
@@ -55,5 +56,5 @@ __all__ = [
     'SignatureDiscussionCommentRevision',
     'SignatureArtifact', 'SignatureProviderEvent',
     'LeaveType', 'LeaveBalance', 'LeaveRequest', 'LeaveLedgerEntry',
-    'AttendanceRecord', 'OnboardingTemplate', 'OnboardingResource', 'OnboardingTask', 'EmployeeOnboardingTask', 'AuditLog', 'Notification', 'Goal', 'GoalCheckIn',
+    'AttendanceRecord', 'OnboardingTemplate', 'OnboardingResource', 'OnboardingTask', 'EmployeeOnboardingTask', 'OnboardingTrainingAttempt', 'AuditLog', 'Notification', 'Goal', 'GoalCheckIn',
 ]

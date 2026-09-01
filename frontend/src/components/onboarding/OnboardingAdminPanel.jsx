@@ -4,7 +4,9 @@ import {
   CircleDashed,
   Clock3,
   FileText,
+  History,
   Plus,
+  RotateCcw,
   UserPlus,
   Video,
   X,
@@ -17,6 +19,7 @@ import Badge from '../ui/Badge.jsx';
 import Button from '../ui/Button.jsx';
 import Card from '../ui/Card.jsx';
 import Input from '../ui/Input.jsx';
+import Modal from '../ui/Modal.jsx';
 import Pagination from '../ui/Pagination.jsx';
 import Select from '../ui/Select.jsx';
 import StatCard from '../ui/StatCard.jsx';
@@ -63,6 +66,7 @@ const emptyTask = () => ({
   due_days_after_start: 0,
   required: true,
   requires_acknowledgement: false,
+  max_attempts: 1,
 });
 
 export default function OnboardingAdminPanel() {
@@ -90,6 +94,13 @@ export default function OnboardingAdminPanel() {
     employee_id: '',
     template_id: '',
   });
+  const [retakeAssignment, setRetakeAssignment] = useState(null);
+  const [retakeForm, setRetakeForm] = useState({
+    due_date: '',
+    reason: '',
+    grant_additional_attempts: 0,
+  });
+  const [attemptHistory, setAttemptHistory] = useState([]);
   const toast = useToast();
 
   const load = useCallback(async () => {
@@ -181,6 +192,7 @@ export default function OnboardingAdminPanel() {
             due_days_after_start: Number(task.due_days_after_start || 0),
             required: task.required,
             requires_acknowledgement: task.requires_acknowledgement,
+            max_attempts: Number(task.max_attempts || 1),
           };
         }),
       );
@@ -226,6 +238,53 @@ export default function OnboardingAdminPanel() {
       await load();
     } catch (err) {
       setError(err.error?.message || 'Assignment update failed.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const openRetake = async (assignment) => {
+    setRetakeAssignment(assignment);
+    setRetakeForm({
+      due_date: assignment.due_date || '',
+      reason: '',
+      grant_additional_attempts: (
+        assignment.attempts_remaining > 0 ? 0 : 1
+      ),
+    });
+    setAttemptHistory([]);
+    setError('');
+    try {
+      const response = await onboardingApi.attempts(assignment.id);
+      setAttemptHistory(response.data.items || []);
+    } catch (err) {
+      setError(
+        err.error?.message
+        || 'Unable to load training attempt history.',
+      );
+    }
+  };
+
+  const submitRetake = async (event) => {
+    event.preventDefault();
+    if (!retakeAssignment) return;
+
+    setSaving(true);
+    setError('');
+    try {
+      await onboardingApi.retake(retakeAssignment.id, {
+        reason: retakeForm.reason,
+        due_date: retakeForm.due_date || null,
+        grant_additional_attempts: Number(
+          retakeForm.grant_additional_attempts || 0,
+        ),
+      });
+      toast.success('Training retake assigned.');
+      setRetakeAssignment(null);
+      setAttemptHistory([]);
+      await load();
+    } catch (err) {
+      setError(err.error?.message || 'Unable to resubmit training.');
     } finally {
       setSaving(false);
     }
@@ -311,6 +370,19 @@ export default function OnboardingAdminPanel() {
                       min="0"
                       value={task.due_days_after_start}
                       onChange={(event) => updateTask(index, 'due_days_after_start', event.target.value)}
+                    />
+                    <Input
+                      label="Maximum attempts"
+                      type="number"
+                      min="1"
+                      max="20"
+                      value={task.max_attempts}
+                      onChange={(event) => updateTask(
+                        index,
+                        'max_attempts',
+                        event.target.value,
+                      )}
+                      hint="Applies to retakes of this requirement."
                     />
                     <Input
                       label="Task description"
@@ -437,7 +509,10 @@ export default function OnboardingAdminPanel() {
         </div>
         <div className="divide-y divide-slate-100 border-t border-slate-200">
           {assignments.map((assignment) => (
-            <div key={assignment.id} className="grid gap-3 px-4 py-4 lg:grid-cols-[1.2fr_1.4fr_0.8fr_0.8fr] lg:items-center">
+            <div
+              key={assignment.id}
+              className="grid gap-3 px-4 py-4 lg:grid-cols-[1.1fr_1.35fr_0.8fr_0.9fr_1fr] lg:items-center"
+            >
               <div>
                 <p className="font-semibold text-slate-900">{assignment.employee_name}</p>
                 <p className="text-xs text-slate-500">{assignment.employee_number}</p>
@@ -449,6 +524,17 @@ export default function OnboardingAdminPanel() {
               <div>
                 <p className="text-xs text-slate-500">Due</p>
                 <p className="text-sm font-medium text-slate-800">{assignment.due_date || 'Not set'}</p>
+              </div>
+              <div>
+                <p className="text-xs text-slate-500">Attempt</p>
+                <p className="text-sm font-semibold text-slate-800">
+                  {assignment.current_attempt_number}
+                  {' of '}
+                  {assignment.attempt_limit}
+                </p>
+                <p className="text-xs text-slate-500">
+                  {assignment.attempts_remaining} remaining
+                </p>
               </div>
               <Select
                 aria-label={`Update ${assignment.task_title} status`}
@@ -467,6 +553,18 @@ export default function OnboardingAdminPanel() {
                 )}
                 <option value="waived">Waived</option>
               </Select>
+              <Button
+                type="button"
+                size="sm"
+                variant="soft"
+                disabled={saving}
+                onClick={() => openRetake(assignment)}
+              >
+                <RotateCcw size={14} />
+                {assignment.attempts_remaining > 0
+                  ? 'Resubmit training'
+                  : 'Grant attempt'}
+              </Button>
             </div>
           ))}
           {!loading && assignments.length === 0 && (
@@ -485,6 +583,138 @@ export default function OnboardingAdminPanel() {
           </div>
         )}
       </Card>
+
+      <Modal
+        open={Boolean(retakeAssignment)}
+        title={retakeAssignment?.attempts_remaining > 0
+          ? 'Resubmit training'
+          : 'Grant additional attempt'}
+        description={
+          "Reuse the existing training content and preserve the employee's "
+          + 'previous attempt history.'
+        }
+        onClose={() => !saving && setRetakeAssignment(null)}
+      >
+        {retakeAssignment && (
+          <form className="space-y-5" onSubmit={submitRetake}>
+            <div className="grid gap-3 rounded-lg bg-slate-50 p-4 sm:grid-cols-2">
+              <div>
+                <p className="text-xs text-slate-500">Employee</p>
+                <p className="font-semibold text-slate-900">
+                  {retakeAssignment.employee_name}
+                </p>
+              </div>
+              <div>
+                <p className="text-xs text-slate-500">Training</p>
+                <p className="font-semibold text-slate-900">
+                  {retakeAssignment.task_title}
+                </p>
+              </div>
+              <div>
+                <p className="text-xs text-slate-500">Content</p>
+                <p className="text-sm text-slate-700">
+                  {retakeAssignment.resource?.original_filename
+                    || retakeAssignment.task_type}
+                </p>
+              </div>
+              <div>
+                <p className="text-xs text-slate-500">Current attempt</p>
+                <p className="text-sm text-slate-700">
+                  {retakeAssignment.current_attempt_number}
+                  {' of '}
+                  {retakeAssignment.attempt_limit}
+                </p>
+              </div>
+            </div>
+
+            <Input
+              label="Completion deadline"
+              type="date"
+              value={retakeForm.due_date}
+              onChange={(event) => setRetakeForm((current) => ({
+                ...current,
+                due_date: event.target.value,
+              }))}
+            />
+
+            {retakeAssignment.attempts_remaining === 0 && (
+              <Input
+                label="Additional attempts to grant"
+                type="number"
+                min="1"
+                max="10"
+                value={retakeForm.grant_additional_attempts}
+                onChange={(event) => setRetakeForm((current) => ({
+                  ...current,
+                  grant_additional_attempts: event.target.value,
+                }))}
+                required
+              />
+            )}
+
+            <Input
+              label="Reason for resubmission"
+              value={retakeForm.reason}
+              onChange={(event) => setRetakeForm((current) => ({
+                ...current,
+                reason: event.target.value,
+              }))}
+              placeholder="e.g. Repeat compliance training after policy update"
+              required
+            />
+
+            <div>
+              <div className="flex items-center gap-2">
+                <History size={15} className="text-slate-500" />
+                <p className="text-sm font-bold text-slate-900">
+                  Attempt history
+                </p>
+              </div>
+              <div className="mt-2 space-y-2">
+                {attemptHistory.map((attempt) => (
+                  <div
+                    key={attempt.id}
+                    className="flex items-center justify-between rounded-lg border border-slate-200 px-3 py-2 text-sm"
+                  >
+                    <span>Attempt {attempt.attempt_number}</span>
+                    <Badge
+                      tone={attempt.status === 'completed'
+                        ? 'green'
+                        : attempt.status === 'failed'
+                          ? 'red'
+                          : 'gray'}
+                    >
+                      {attempt.status}
+                    </Badge>
+                  </div>
+                ))}
+                {attemptHistory.length === 0 && (
+                  <p className="text-xs text-slate-500">
+                    No previous attempts recorded.
+                  </p>
+                )}
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-3">
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => setRetakeAssignment(null)}
+                disabled={saving}
+              >
+                Cancel
+              </Button>
+              <Button type="submit" disabled={saving}>
+                <RotateCcw size={15} />
+                {retakeAssignment.attempts_remaining > 0
+                  ? 'Resubmit'
+                  : 'Grant & resubmit'}
+              </Button>
+            </div>
+          </form>
+        )}
+      </Modal>
     </div>
   );
 }
