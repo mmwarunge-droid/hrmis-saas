@@ -1,6 +1,6 @@
 """add onboarding training resources and acknowledgements
 
-Revision ID: 027_onboarding_training_resources
+Revision ID: 027_onboarding_training
 Revises: 026_job_title_governance
 Create Date: 2026-09-01
 """
@@ -10,7 +10,7 @@ import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
 
 
-revision = '027_onboarding_training_resources'
+revision = '027_onboarding_training'
 down_revision = '026_job_title_governance'
 branch_labels = None
 depends_on = None
