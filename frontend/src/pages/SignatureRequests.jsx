@@ -4,6 +4,7 @@ import {
   useMemo,
   useState,
 } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import {
   CheckCircle2,
   Clock3,
@@ -86,6 +87,8 @@ function currentSignatories(request) {
 }
 
 export default function SignatureRequests() {
+  const [searchParams] = useSearchParams();
+  const documentId = searchParams.get('document_id') || '';
   const [requests, setRequests] = useState([]);
   const [details, setDetails] = useState(null);
   const [evidence, setEvidence] = useState(null);
@@ -101,9 +104,17 @@ export default function SignatureRequests() {
     setLoading(true);
 
     try {
-      const response = await signatureApi.list(
-        status === 'all' ? {} : { status },
-      );
+      const params = {};
+
+      if (status !== 'all') {
+        params.status = status;
+      }
+
+      if (documentId) {
+        params.document_id = documentId;
+      }
+
+      const response = await signatureApi.list(params);
 
       setRequests(response.data.items || []);
     } catch (err) {
@@ -114,7 +125,7 @@ export default function SignatureRequests() {
     } finally {
       setLoading(false);
     }
-  }, [status]);
+  }, [documentId, status]);
 
   useEffect(() => {
     load();
