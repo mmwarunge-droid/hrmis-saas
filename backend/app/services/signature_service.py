@@ -58,6 +58,10 @@ OPEN_SIGNATURE_REQUEST_STATUSES = {
     'sent',
     'in_progress',
 }
+EXPIRABLE_INTERNAL_SIGNATURE_REQUEST_STATUSES = {
+    'sent',
+    'in_progress',
+}
 
 
 def _provider_backed(signature_request):
@@ -122,6 +126,80 @@ def refresh_document_signature_status(document):
         document.signature_status = 'not_required'
 
     return document.signature_status
+
+
+def expire_overdue_internal_signature_requests(
+    *,
+    tenant_id=None,
+    document_id=None,
+    now=None,
+    actor=None,
+    commit=False,
+):
+    now = to_utc_naive(now or utcnow())
+
+    query = SignatureRequest.query.filter(
+        SignatureRequest.provider.is_(None),
+        SignatureRequest.status.in_(
+            EXPIRABLE_INTERNAL_SIGNATURE_REQUEST_STATUSES,
+        ),
+        SignatureRequest.due_at.isnot(None),
+        SignatureRequest.due_at <= now,
+    )
+
+    if tenant_id is not None:
+        query = query.filter(
+            SignatureRequest.tenant_id == tenant_id,
+        )
+
+    if document_id is not None:
+        query = query.filter(
+            SignatureRequest.document_id == document_id,
+        )
+
+    expired_requests = query.all()
+    affected_documents = {}
+
+    for signature_request in expired_requests:
+        signature_request.status = 'expired'
+
+        for recipient in signature_request.recipients:
+            if recipient.status not in FINAL_RECIPIENT_STATUSES:
+                recipient.status = 'expired'
+
+        if signature_request.reminder_rule:
+            signature_request.reminder_rule.is_active = False
+            signature_request.reminder_rule.next_run_at = None
+
+        _record_event(
+            signature_request,
+            'signature.request_expired',
+            actor=actor,
+            description='The signature request expired at its deadline',
+            metadata={
+                'due_at': signature_request.due_at.isoformat(),
+                'expired_at': now.isoformat(),
+                'provider': 'internal',
+            },
+        )
+
+        affected_documents[
+            str(signature_request.document_id)
+        ] = signature_request.document
+
+    for document in affected_documents.values():
+        refresh_document_signature_status(document)
+
+    if expired_requests:
+        # Persist the status transition inside the current transaction
+        # before a replacement request is inserted. This also releases
+        # any active-request database constraint for the stale workflow.
+        db.session.flush()
+
+    if commit and expired_requests:
+        db.session.commit()
+
+    return len(expired_requests)
 
 
 def _task_url(recipient_id=None):
@@ -413,6 +491,13 @@ def create_signature_request(
             'Standard Kinetic signing supports PDF and Word '
             '(.docx) documents only.',
         )
+
+    expire_overdue_internal_signature_requests(
+        tenant_id=tenant_id,
+        document_id=document.id,
+        now=utcnow(),
+        actor=actor,
+    )
 
     existing_request = SignatureRequest.query.filter(
         SignatureRequest.document_id == document.id,

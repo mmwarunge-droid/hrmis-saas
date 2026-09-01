@@ -76,6 +76,22 @@ def register_commands(app: Flask) -> None:
 
         click.echo(json.dumps(result, sort_keys=True))
 
+    @app.cli.command('signature-expiries')
+    def signature_expiries() -> None:
+        """Expire overdue internal document-signing workflows."""
+        from app.services.signature_service import (
+            expire_overdue_internal_signature_requests,
+        )
+
+        result = {
+            'expired_requests': (
+                expire_overdue_internal_signature_requests(
+                    commit=True,
+                )
+            ),
+        }
+        click.echo(json.dumps(result, sort_keys=True))
+
     @app.cli.command('leave-repair-event-balances')
     @click.option(
         '--tenant-id',

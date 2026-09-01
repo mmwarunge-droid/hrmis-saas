@@ -884,3 +884,252 @@ def test_signature_view_does_not_email_cross_tenant_request_creator(
         message['to'] != foreign_email
         for message in app.extensions['mail_outbox']
     )
+
+def test_overdue_internal_signature_request_expires_before_replacement(
+    client,
+    app,
+    tenant,
+    admin_user,
+    auth_headers,
+):
+    signer = _create_employee_signer(
+        app,
+        tenant.id,
+        number='SIGN-EXP-001',
+        email='expired.request.signer@acme.test',
+        password='StrongExpiredSignerPass123!',
+        first_name='Expired',
+    )
+    document_id = _create_document(
+        app,
+        tenant.id,
+        admin_user,
+    )
+
+    initial_due_at = (
+        datetime.utcnow()
+        + timedelta(days=7)
+    ).replace(microsecond=0)
+
+    initial_response = client.post(
+        '/api/signature-requests',
+        headers=auth_headers,
+        json={
+            'document_id': str(document_id),
+            'subject': 'Initial signature request',
+            'signing_mode': 'sequential',
+            'due_at': initial_due_at.isoformat(),
+            'recipients': [{
+                'employee_id': str(signer['employee_id']),
+                'role_label': 'Employee',
+                'sequence': 1,
+            }],
+            'reminder': {
+                'first_reminder_after_days': 2,
+                'reminder_interval_days': 2,
+                'escalation_days_before_due': 1,
+            },
+        },
+    )
+
+    assert initial_response.status_code == 201
+
+    initial_data = initial_response.get_json()['data']
+    initial_request_id = initial_data['id']
+
+    expired_due_at = (
+        datetime.utcnow()
+        - timedelta(days=1)
+    ).replace(microsecond=0)
+
+    with app.app_context():
+        initial_request = db.session.get(
+            SignatureRequest,
+            initial_request_id,
+        )
+        assert initial_request is not None
+        assert initial_request.provider is None
+
+        initial_request.due_at = expired_due_at
+
+        for recipient in initial_request.recipients:
+            recipient.due_at = expired_due_at
+
+        assert initial_request.reminder_rule is not None
+        initial_request.reminder_rule.next_run_at = expired_due_at
+
+        db.session.commit()
+
+    replacement_due_at = (
+        datetime.utcnow()
+        + timedelta(days=14)
+    ).replace(microsecond=0)
+
+    replacement_response = client.post(
+        '/api/signature-requests',
+        headers=auth_headers,
+        json={
+            'document_id': str(document_id),
+            'subject': 'Replacement signature request',
+            'signing_mode': 'sequential',
+            'due_at': replacement_due_at.isoformat(),
+            'recipients': [{
+                'employee_id': str(signer['employee_id']),
+                'role_label': 'Employee',
+                'sequence': 1,
+            }],
+        },
+    )
+
+    assert replacement_response.status_code == 201, (
+        replacement_response.get_json()
+    )
+
+    replacement_data = replacement_response.get_json()['data']
+
+    with app.app_context():
+        initial_request = db.session.get(
+            SignatureRequest,
+            initial_request_id,
+        )
+        document = db.session.get(
+            Document,
+            document_id,
+        )
+
+        assert initial_request.status == 'expired'
+
+        assert all(
+            recipient.status == 'expired'
+            for recipient in initial_request.recipients
+        )
+
+        assert initial_request.reminder_rule.is_active is False
+        assert initial_request.reminder_rule.next_run_at is None
+
+        event_types = {
+            event.event_type
+            for event in SignatureEvent.query.filter_by(
+                signature_request_id=initial_request_id,
+            ).all()
+        }
+
+        assert 'signature.request_expired' in event_types
+
+        assert replacement_data['id'] != str(initial_request.id)
+        assert document.signature_status == 'pending'
+
+def test_signature_expiry_cli_expires_overdue_internal_requests(
+    client,
+    app,
+    tenant,
+    admin_user,
+    auth_headers,
+):
+    signer = _create_employee_signer(
+        app,
+        tenant.id,
+        number='SIGN-EXP-CLI-001',
+        email='expiry.cli.signer@acme.test',
+        password='StrongExpiryCliSignerPass123!',
+        first_name='ExpiryCli',
+    )
+    document_id = _create_document(
+        app,
+        tenant.id,
+        admin_user,
+    )
+
+    future_due_at = (
+        datetime.utcnow()
+        + timedelta(days=7)
+    ).replace(microsecond=0)
+
+    create_response = client.post(
+        '/api/signature-requests',
+        headers=auth_headers,
+        json={
+            'document_id': str(document_id),
+            'subject': 'Scheduled expiry regression',
+            'signing_mode': 'sequential',
+            'due_at': future_due_at.isoformat(),
+            'recipients': [{
+                'employee_id': str(signer['employee_id']),
+                'role_label': 'Employee',
+                'sequence': 1,
+            }],
+            'reminder': {
+                'first_reminder_after_days': 2,
+                'reminder_interval_days': 2,
+                'escalation_days_before_due': 1,
+            },
+        },
+    )
+
+    assert create_response.status_code == 201
+
+    request_id = create_response.get_json()['data']['id']
+
+    overdue_at = (
+        datetime.utcnow()
+        - timedelta(days=1)
+    ).replace(microsecond=0)
+
+    with app.app_context():
+        signature_request = db.session.get(
+            SignatureRequest,
+            request_id,
+        )
+        assert signature_request.provider is None
+
+        signature_request.due_at = overdue_at
+
+        for recipient in signature_request.recipients:
+            recipient.due_at = overdue_at
+
+        assert signature_request.reminder_rule is not None
+        signature_request.reminder_rule.next_run_at = overdue_at
+
+        db.session.commit()
+
+    runner = app.test_cli_runner()
+    result = runner.invoke(args=['signature-expiries'])
+
+    assert result.exit_code == 0, result.output
+    assert result.output.strip() == '{"expired_requests": 1}'
+
+    second_result = runner.invoke(args=['signature-expiries'])
+
+    assert second_result.exit_code == 0, second_result.output
+    assert second_result.output.strip() == '{"expired_requests": 0}'
+
+    with app.app_context():
+        signature_request = db.session.get(
+            SignatureRequest,
+            request_id,
+        )
+        document = db.session.get(
+            Document,
+            document_id,
+        )
+
+        assert signature_request.status == 'expired'
+
+        assert all(
+            recipient.status == 'expired'
+            for recipient in signature_request.recipients
+        )
+
+        assert signature_request.reminder_rule.is_active is False
+        assert signature_request.reminder_rule.next_run_at is None
+
+        assert document.signature_status == 'expired'
+
+        event_types = {
+            event.event_type
+            for event in SignatureEvent.query.filter_by(
+                signature_request_id=request_id,
+            ).all()
+        }
+
+        assert 'signature.request_expired' in event_types
