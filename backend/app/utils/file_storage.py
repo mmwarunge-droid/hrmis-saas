@@ -12,6 +12,91 @@ ONBOARDING_DOCUMENT_EXTENSIONS = {'pdf', 'doc', 'docx', 'txt'}
 ONBOARDING_VIDEO_EXTENSIONS = {'mp4', 'webm'}
 
 
+def detect_mp4_duration(file_path: str):
+    """Return MP4 duration in seconds from the movie header when available."""
+    path = Path(file_path)
+
+    def box_header(stream, container_end):
+        start = stream.tell()
+        header = stream.read(8)
+        if len(header) != 8:
+            return None
+
+        size = int.from_bytes(header[:4], 'big')
+        box_type = header[4:8]
+        header_size = 8
+
+        if size == 1:
+            extended = stream.read(8)
+            if len(extended) != 8:
+                return None
+            size = int.from_bytes(extended, 'big')
+            header_size = 16
+        elif size == 0:
+            size = container_end - start
+
+        if size < header_size or start + size > container_end:
+            return None
+        return box_type, stream.tell(), start + size
+
+    try:
+        with path.open('rb') as stream:
+            file_end = path.stat().st_size
+            moov = None
+
+            while stream.tell() + 8 <= file_end:
+                header = box_header(stream, file_end)
+                if not header:
+                    return None
+                box_type, data_start, box_end = header
+                if box_type == b'moov':
+                    moov = (data_start, box_end)
+                    break
+                stream.seek(box_end)
+
+            if not moov:
+                return None
+
+            stream.seek(moov[0])
+            while stream.tell() + 8 <= moov[1]:
+                header = box_header(stream, moov[1])
+                if not header:
+                    return None
+                box_type, data_start, box_end = header
+                if box_type != b'mvhd':
+                    stream.seek(box_end)
+                    continue
+
+                stream.seek(data_start)
+                version_flags = stream.read(4)
+                if len(version_flags) != 4:
+                    return None
+                version = version_flags[0]
+
+                if version == 0:
+                    stream.seek(8, 1)
+                    timescale_bytes = stream.read(4)
+                    duration_bytes = stream.read(4)
+                elif version == 1:
+                    stream.seek(16, 1)
+                    timescale_bytes = stream.read(4)
+                    duration_bytes = stream.read(8)
+                else:
+                    return None
+
+                if not timescale_bytes or not duration_bytes:
+                    return None
+                timescale = int.from_bytes(timescale_bytes, 'big')
+                duration = int.from_bytes(duration_bytes, 'big')
+                if timescale <= 0 or duration <= 0:
+                    return None
+                return duration / timescale
+    except (OSError, ValueError):
+        return None
+
+    return None
+
+
 def _extension(filename: str) -> str:
     return filename.rsplit('.', 1)[-1].lower() if '.' in filename else ''
 
@@ -93,6 +178,11 @@ def save_onboarding_resource_file(file: FileStorage, tenant_id: str) -> dict:
         'file_path': str(path),
         'mime_type': file.mimetype,
         'size_bytes': path.stat().st_size,
+        'detected_duration_seconds': (
+            detect_mp4_duration(str(path))
+            if resource_type == 'video' and ext == 'mp4'
+            else None
+        ),
     }
 
 

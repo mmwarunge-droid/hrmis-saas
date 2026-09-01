@@ -36,6 +36,19 @@ class OnboardingTaskCompleteSchema(Schema):
     acknowledged = fields.Bool(required=False)
 
 
+class OnboardingVideoProgressSchema(Schema):
+    event = fields.Str(
+        required=True,
+        validate=validate.OneOf(
+            ['start', 'heartbeat', 'pause', 'ended'],
+        ),
+    )
+    position_seconds = fields.Float(
+        required=True,
+        validate=validate.Range(min=0, max=86400),
+    )
+
+
 class OnboardingTemplateUpdateSchema(Schema):
     name = fields.Str(required=False)
     description = fields.Str(required=False, allow_none=True)
