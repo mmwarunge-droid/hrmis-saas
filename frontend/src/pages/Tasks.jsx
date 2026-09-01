@@ -16,6 +16,7 @@ import {
 import { onboardingApi } from '../api/onboardingApi';
 import { signatureApi } from '../api/signatureApi';
 import SignatureTaskCard from '../components/documents/SignatureTaskCard.jsx';
+import VerifiedTrainingVideo from '../components/onboarding/VerifiedTrainingVideo.jsx';
 import Alert from '../components/ui/Alert.jsx';
 import Badge from '../components/ui/Badge.jsx';
 import Button from '../components/ui/Button.jsx';
@@ -102,6 +103,12 @@ export default function Tasks() {
       (completed / onboardingTasks.length) * 100,
     )
     : 0;
+
+  const updateOnboardingTask = useCallback((updatedTask) => {
+    setOnboardingTasks((current) => current.map(
+      (task) => (task.id === updatedTask.id ? updatedTask : task),
+    ));
+  }, []);
 
   const completeOnboarding = async (task) => {
     setActionId(task.id);
@@ -325,23 +332,11 @@ export default function Tasks() {
                         </a>
                       )}
                       {task.resource?.resource_type === 'video' && (
-                        <div className="mt-3 max-w-xl">
-                          <video
-                            className="w-full rounded-lg bg-slate-950"
-                            controls
-                            preload="metadata"
-                            src={onboardingApi.resourceContentUrl(
-                              task.resource.id,
-                              task.tenant_id,
-                            )}
-                            onEnded={() => markOnboardingViewed(task.id)}
-                          >
-                            Your browser does not support training video playback.
-                          </video>
-                          <p className="mt-1 text-xs text-slate-500">
-                            Finish the video, then acknowledge the requirement.
-                          </p>
-                        </div>
+                        <VerifiedTrainingVideo
+                          task={task}
+                          onAssignmentUpdate={updateOnboardingTask}
+                          onError={setError}
+                        />
                       )}
                     </div>
 
@@ -361,7 +356,13 @@ export default function Tasks() {
                       <Button
                         size="sm"
                         variant="soft"
-                        disabled={actionId === task.id}
+                        disabled={
+                          actionId === task.id
+                          || (
+                            task.task_type === 'video'
+                            && !task.video_progress?.completion_ready
+                          )
+                        }
                         onClick={() => completeOnboarding(task)}
                       >
                         {task.requires_acknowledgement

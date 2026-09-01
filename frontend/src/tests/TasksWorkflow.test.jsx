@@ -16,6 +16,7 @@ vi.mock('../api/onboardingApi.js', () => ({
     templates: vi.fn(),
     complete: vi.fn(),
     viewed: vi.fn(),
+    videoProgress: vi.fn(),
     resourceContentUrl: vi.fn((id) => `/api/onboarding/resources/${id}/content`),
   },
 }));
@@ -109,7 +110,13 @@ test('declined signature discussions are not counted as documents still awaiting
   ).not.toBeInTheDocument();
 });
 
-test('training task exposes video and records explicit acknowledgement', async () => {
+test('video training stays locked until verified viewing is complete', async () => {
+  const hasFocus = vi.spyOn(document, 'hasFocus').mockReturnValue(true);
+  const pause = vi.spyOn(
+    window.HTMLMediaElement.prototype,
+    'pause',
+  ).mockImplementation(() => {});
+
   onboardingApi.myTasks.mockResolvedValue({
     data: {
       items: [{
@@ -122,6 +129,14 @@ test('training task exposes video and records explicit acknowledgement', async (
         requires_acknowledgement: true,
         status: 'pending',
         due_date: '2026-09-05',
+        video_progress: {
+          duration_seconds: 20,
+          verified_seconds: 0,
+          remaining_seconds: 20,
+          verified_percent: 0,
+          resume_position_seconds: 0,
+          completion_ready: false,
+        },
         resource: {
           id: 'resource-video-1',
           resource_type: 'video',
@@ -130,24 +145,108 @@ test('training task exposes video and records explicit acknowledgement', async (
       }],
     },
   });
+  onboardingApi.videoProgress.mockResolvedValue({
+    data: {
+      id: 'assignment-video-1',
+      tenant_id: 'tenant-1',
+      task_title: 'AML training',
+      task_description: 'Watch the training and acknowledge completion.',
+      template_name: 'Compliance onboarding',
+      task_type: 'video',
+      requires_acknowledgement: true,
+      status: 'in_progress',
+      due_date: '2026-09-05',
+      video_progress: {
+        duration_seconds: 20,
+        verified_seconds: 20,
+        remaining_seconds: 0,
+        verified_percent: 100,
+        resume_position_seconds: 20,
+        completion_ready: true,
+      },
+      resource: {
+        id: 'resource-video-1',
+        resource_type: 'video',
+        original_filename: 'aml.mp4',
+      },
+    },
+  });
   onboardingApi.complete.mockResolvedValue({ data: {} });
 
   const { container } = render(<Tasks />);
 
   expect(await screen.findByText('AML training')).toBeInTheDocument();
-  expect(container.querySelector('video')).toHaveAttribute(
+  const video = container.querySelector('video');
+  expect(video).toHaveAttribute(
     'src',
     '/api/onboarding/resources/resource-video-1/content',
   );
 
-  fireEvent.click(
-    screen.getByRole('button', { name: 'Acknowledge & complete' }),
+  const completeButton = screen.getByRole(
+    'button',
+    { name: 'Acknowledge & complete' },
   );
+  expect(completeButton).toBeDisabled();
+  expect(
+    screen.getByText(/watch the full video to unlock completion/i),
+  ).toBeInTheDocument();
 
+  Object.defineProperty(video, 'currentTime', {
+    configurable: true,
+    writable: true,
+    value: 19,
+  });
+  fireEvent.seeking(video);
+  expect(video.currentTime).toBe(0);
+
+  fireEvent.ended(video);
+  await waitFor(() => {
+    expect(onboardingApi.videoProgress).toHaveBeenCalledWith(
+      'assignment-video-1',
+      {
+        event: 'ended',
+        position_seconds: 0,
+      },
+    );
+  });
+
+  await waitFor(() => {
+    expect(
+      screen.getByRole(
+        'button',
+        { name: 'Acknowledge & complete' },
+      ),
+    ).toBeEnabled();
+  });
+
+  fireEvent.click(
+    screen.getByRole(
+      'button',
+      { name: 'Acknowledge & complete' },
+    ),
+  );
   await waitFor(() => {
     expect(onboardingApi.complete).toHaveBeenCalledWith(
       'assignment-video-1',
       { acknowledged: true },
     );
   });
+
+  Object.defineProperty(video, 'paused', {
+    configurable: true,
+    value: false,
+  });
+  Object.defineProperty(document, 'hidden', {
+    configurable: true,
+    value: true,
+  });
+  fireEvent(document, new Event('visibilitychange'));
+  expect(pause).toHaveBeenCalled();
+
+  Object.defineProperty(document, 'hidden', {
+    configurable: true,
+    value: false,
+  });
+  pause.mockRestore();
+  hasFocus.mockRestore();
 });

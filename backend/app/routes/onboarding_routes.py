@@ -15,6 +15,7 @@ from app.schemas.onboarding_schema import (
     OnboardingAssignSchema,
     OnboardingAssignmentUpdateSchema,
     OnboardingTaskCompleteSchema,
+    OnboardingVideoProgressSchema,
     OnboardingTemplateCreateSchema,
     OnboardingTemplateUpdateSchema,
 )
@@ -25,8 +26,10 @@ from app.services.onboarding_service import (
     create_resource,
     create_template,
     mark_assignment_viewed,
+    record_video_progress,
     update_assignment,
     update_template,
+    video_progress_state,
 )
 from app.utils.decorators import (
     permission_required,
@@ -71,6 +74,15 @@ def _manager_can_administer(employee):
     )
 
 
+def _is_assigned_task_actor(assignment):
+    owns_task = (
+        current_user.employee_profile
+        and assignment.employee_id == current_user.employee_profile.id
+    )
+    assigned_task = assignment.assigned_to_user_id == current_user.id
+    return bool(owns_task or assigned_task)
+
+
 def _can_act_on_assignment(assignment):
     owns_task = (
         current_user.employee_profile
@@ -106,6 +118,7 @@ def _serialize_assignment(assignment):
         'template_id': str(assignment.task.template_id),
         'template_name': assignment.task.template.name,
         'assignee_role': assignment.task.assignee_role,
+        'video_progress': video_progress_state(assignment),
         'assigned_to_name': (
             assignment.assigned_to.full_name
             if assignment.assigned_to
@@ -144,6 +157,7 @@ def upload_onboarding_resource():
             request.files.get('file'),
             tenant_id,
             current_user.id,
+            duration_seconds=request.form.get('duration_seconds'),
         )
     except ValueError as exc:
         db.session.rollback()
@@ -408,12 +422,53 @@ def view_task_resource(assignment_id):
     return success(_serialize_assignment(assignment), 'Training resource viewed')
 
 
+@onboarding_bp.patch('/tasks/<assignment_id>/video-progress')
+@jwt_required()
+def update_video_progress(assignment_id):
+    assignment = tenant_query(EmployeeOnboardingTask).filter_by(
+        id=assignment_id,
+    ).with_for_update().first_or_404()
+    if not _is_assigned_task_actor(assignment):
+        return fail(
+            'FORBIDDEN',
+            'Only the assigned user can record video training progress',
+            403,
+        )
+    try:
+        payload = OnboardingVideoProgressSchema().load(
+            request.get_json() or {},
+        )
+        assignment, progress = record_video_progress(
+            assignment,
+            event=payload['event'],
+            position_seconds=payload['position_seconds'],
+        )
+    except ValidationError as err:
+        return fail('VALIDATION_ERROR', err.messages, 422)
+    except ValueError as exc:
+        db.session.rollback()
+        return fail('ONBOARDING_VIDEO_PROGRESS_FAILED', str(exc), 400)
+
+    data = _serialize_assignment(assignment)
+    data['video_progress'] = progress
+    return success(data, 'Video progress recorded')
+
+
 @onboarding_bp.patch('/tasks/<assignment_id>/complete')
 @jwt_required()
 def complete_task(assignment_id):
     assignment = tenant_query(EmployeeOnboardingTask).filter_by(
         id=assignment_id,
-    ).first_or_404()
+    ).with_for_update().first_or_404()
+    if (
+        assignment.task.task_type == 'video'
+        and not _is_assigned_task_actor(assignment)
+    ):
+        return fail(
+            'FORBIDDEN',
+            'Only the assigned user can complete video training',
+            403,
+        )
     if not _can_act_on_assignment(assignment):
         return fail(
             'FORBIDDEN',

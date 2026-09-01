@@ -18,6 +18,7 @@ class OnboardingResource(db.Model, TenantMixin, TimestampMixin, ReprMixin):
     file_path = db.Column(db.Text, nullable=False)
     mime_type = db.Column(db.String(120))
     size_bytes = db.Column(db.Integer)
+    duration_seconds = db.Column(db.Float)
 
     uploaded_by = db.relationship('User')
 
@@ -39,6 +40,7 @@ class OnboardingResource(db.Model, TenantMixin, TimestampMixin, ReprMixin):
             'original_filename': self.original_filename,
             'mime_type': self.mime_type,
             'size_bytes': self.size_bytes,
+            'duration_seconds': self.duration_seconds,
         }
 
 
@@ -174,6 +176,19 @@ class EmployeeOnboardingTask(db.Model, TenantMixin, TimestampMixin, ReprMixin):
     completed_at = db.Column(db.DateTime)
     resource_viewed_at = db.Column(db.DateTime)
     acknowledged_at = db.Column(db.DateTime)
+    video_verified_seconds = db.Column(
+        db.Float,
+        nullable=False,
+        default=0.0,
+    )
+    video_last_position_seconds = db.Column(
+        db.Float,
+        nullable=False,
+        default=0.0,
+    )
+    video_last_heartbeat_at = db.Column(db.DateTime)
+    video_started_at = db.Column(db.DateTime)
+    video_completed_at = db.Column(db.DateTime)
     completion_notes = db.Column(db.Text)
 
     employee = db.relationship(
@@ -219,6 +234,22 @@ class EmployeeOnboardingTask(db.Model, TenantMixin, TimestampMixin, ReprMixin):
             'acknowledged_at': (
                 self.acknowledged_at.isoformat()
                 if self.acknowledged_at
+                else None
+            ),
+            'video_verified_seconds': float(
+                self.video_verified_seconds or 0.0
+            ),
+            'video_last_position_seconds': float(
+                self.video_last_position_seconds or 0.0
+            ),
+            'video_started_at': (
+                self.video_started_at.isoformat()
+                if self.video_started_at
+                else None
+            ),
+            'video_completed_at': (
+                self.video_completed_at.isoformat()
+                if self.video_completed_at
                 else None
             ),
             'completion_notes': self.completion_notes,

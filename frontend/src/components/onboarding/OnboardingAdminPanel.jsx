@@ -21,6 +21,39 @@ import Pagination from '../ui/Pagination.jsx';
 import Select from '../ui/Select.jsx';
 import StatCard from '../ui/StatCard.jsx';
 
+function readVideoDuration(file) {
+  return new Promise((resolve, reject) => {
+    const video = document.createElement('video');
+    const objectUrl = URL.createObjectURL(file);
+
+    const cleanup = () => {
+      video.onloadedmetadata = null;
+      video.onerror = null;
+      URL.revokeObjectURL(objectUrl);
+      video.removeAttribute('src');
+      video.load();
+    };
+
+    video.preload = 'metadata';
+    video.onloadedmetadata = () => {
+      const duration = Number(video.duration);
+      cleanup();
+
+      if (!Number.isFinite(duration) || duration <= 0) {
+        reject(new Error('Unable to determine the training video duration.'));
+        return;
+      }
+      resolve(duration);
+    };
+    video.onerror = () => {
+      cleanup();
+      reject(new Error('Unable to read the selected training video.'));
+    };
+    video.src = objectUrl;
+  });
+}
+
+
 const emptyTask = () => ({
   title: '',
   description: '',
@@ -126,6 +159,15 @@ export default function OnboardingAdminPanel() {
 
             const formData = new FormData();
             formData.append('file', task.resource_file);
+            if (task.task_type === 'video') {
+              const duration = await readVideoDuration(
+                task.resource_file,
+              );
+              formData.append(
+                'duration_seconds',
+                String(duration),
+              );
+            }
             const resourceResponse = await onboardingApi.uploadResource(formData);
             resourceId = resourceResponse.data.id;
           }
@@ -417,7 +459,12 @@ export default function OnboardingAdminPanel() {
                 <option value="pending">Pending</option>
                 <option value="in_progress">In progress</option>
                 <option value="overdue">Overdue</option>
-                <option value="completed">Completed</option>
+                {(
+                  assignment.task_type !== 'video'
+                  || assignment.status === 'completed'
+                ) && (
+                  <option value="completed">Completed</option>
+                )}
                 <option value="waived">Waived</option>
               </Select>
             </div>

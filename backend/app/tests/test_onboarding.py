@@ -1,7 +1,26 @@
+from datetime import datetime, timedelta
 from io import BytesIO
 
 from app.extensions import db
 from app.models import OnboardingResource, Tenant
+
+
+def _minimal_mp4(duration_seconds):
+    timescale = 1000
+    duration = int(duration_seconds * timescale)
+    mvhd_payload = (
+        b'\x00\x00\x00\x00'
+        + (0).to_bytes(4, 'big')
+        + (0).to_bytes(4, 'big')
+        + timescale.to_bytes(4, 'big')
+        + duration.to_bytes(4, 'big')
+    )
+    mvhd = (
+        (8 + len(mvhd_payload)).to_bytes(4, 'big')
+        + b'mvhd'
+        + mvhd_payload
+    )
+    return (8 + len(mvhd)).to_bytes(4, 'big') + b'moov' + mvhd
 
 
 def test_onboarding_task_completion(client, auth_headers):
@@ -84,25 +103,49 @@ def test_onboarding_administration_summary_and_assignment(client, auth_headers):
     assert updated.status_code == 200
     assert updated.get_json()['data']['status'] == 'waived'
 
-def test_onboarding_training_resource_acknowledgement(
+def test_onboarding_video_requires_verified_watch_progress(
     client,
     app,
     auth_headers,
     tmp_path,
+    monkeypatch,
 ):
     app.config['UPLOAD_FOLDER'] = str(tmp_path / 'uploads')
+
+    missing_duration = client.post(
+        '/api/onboarding/resources',
+        headers=auth_headers,
+        data={
+            'file': (BytesIO(b'demo training video'), 'missing.mp4'),
+        },
+        content_type='multipart/form-data',
+    )
+    assert missing_duration.status_code == 400
+
+    server_verified = client.post(
+        '/api/onboarding/resources',
+        headers=auth_headers,
+        data={
+            'file': (BytesIO(_minimal_mp4(20)), 'server-verified.mp4'),
+        },
+        content_type='multipart/form-data',
+    )
+    assert server_verified.status_code == 201, server_verified.get_json()
+    assert server_verified.get_json()['data']['duration_seconds'] == 20.0
 
     uploaded = client.post(
         '/api/onboarding/resources',
         headers=auth_headers,
         data={
             'file': (BytesIO(b'demo training video'), 'culture.mp4'),
+            'duration_seconds': '20',
         },
         content_type='multipart/form-data',
     )
     assert uploaded.status_code == 201, uploaded.get_json()
     resource = uploaded.get_json()['data']
     assert resource['resource_type'] == 'video'
+    assert resource['duration_seconds'] == 20.0
 
     employee = client.post(
         '/api/employees',
@@ -125,6 +168,7 @@ def test_onboarding_training_resource_acknowledgement(
                 'title': 'Culture and AML training',
                 'task_type': 'video',
                 'resource_id': resource['id'],
+                'assignee_role': 'CLIENT_ADMIN',
                 'requires_acknowledgement': True,
                 'due_days_after_start': 3,
             }],
@@ -143,37 +187,85 @@ def test_onboarding_training_resource_acknowledgement(
     )
     assert assigned.status_code == 201, assigned.get_json()
     assignment = assigned.get_json()['data']['items'][0]
+    assignment_id = assignment['id']
     assert assignment['task_type'] == 'video'
-    assert assignment['resource']['id'] == resource['id']
+    assert assignment['video_progress']['completion_ready'] is False
 
-    content = client.get(
-        f"/api/onboarding/resources/{resource['id']}/content",
-        headers=auth_headers,
-    )
-    assert content.status_code == 200
-
-    missing_ack = client.patch(
-        f"/api/onboarding/tasks/{assignment['id']}/complete",
-        headers=auth_headers,
-        json={},
-    )
-    assert missing_ack.status_code == 400
-
-    viewed = client.patch(
-        f"/api/onboarding/tasks/{assignment['id']}/view",
-        headers=auth_headers,
-    )
-    assert viewed.status_code == 200
-    assert viewed.get_json()['data']['resource_viewed_at'] is not None
-
-    completed = client.patch(
-        f"/api/onboarding/tasks/{assignment['id']}/complete",
+    direct_complete = client.patch(
+        f'/api/onboarding/tasks/{assignment_id}/complete',
         headers=auth_headers,
         json={'acknowledged': True},
     )
-    assert completed.status_code == 200
-    assert completed.get_json()['data']['status'] == 'completed'
-    assert completed.get_json()['data']['acknowledged_at'] is not None
+    assert direct_complete.status_code == 400
+    assert 'Watch the full training video' in (
+        direct_complete.get_json()['error']['message']
+    )
+
+    admin_complete = client.patch(
+        f'/api/onboarding/assignments/{assignment_id}',
+        headers=auth_headers,
+        json={'status': 'completed'},
+    )
+    assert admin_complete.status_code == 400
+
+    clock = [datetime(2026, 9, 1, 8, 0, 0)]
+    monkeypatch.setattr(
+        'app.services.onboarding_service.utcnow',
+        lambda: clock[0],
+    )
+
+    def progress(event, position, advance=0):
+        clock[0] += timedelta(seconds=advance)
+        response = client.patch(
+            f'/api/onboarding/tasks/{assignment_id}/video-progress',
+            headers=auth_headers,
+            json={
+                'event': event,
+                'position_seconds': position,
+            },
+        )
+        assert response.status_code == 200, response.get_json()
+        return response.get_json()['data']['video_progress']
+
+    state = progress('start', 0)
+    assert state['verified_seconds'] == 0.0
+
+    state = progress('heartbeat', 5, advance=5)
+    assert state['verified_seconds'] == 5.0
+
+    state = progress('heartbeat', 18, advance=1)
+    assert state['seek_blocked'] is True
+    assert state['verified_seconds'] == 5.0
+    assert state['resume_position_seconds'] == 5.0
+
+    progress('pause', 5)
+    state = progress('heartbeat', 10, advance=30)
+    assert state['verified_seconds'] == 5.0
+    assert state['seek_blocked'] is True
+
+    progress('start', 5)
+    state = progress('heartbeat', 10, advance=5)
+    assert state['verified_seconds'] == 10.0
+
+    state = progress('heartbeat', 15, advance=5)
+    assert state['verified_seconds'] == 15.0
+
+    state = progress('ended', 20, advance=5)
+    assert state['verified_seconds'] == 20.0
+    assert state['remaining_seconds'] == 0.0
+    assert state['completion_ready'] is True
+    assert state['completed_at'] is not None
+
+    completed = client.patch(
+        f'/api/onboarding/tasks/{assignment_id}/complete',
+        headers=auth_headers,
+        json={'acknowledged': True},
+    )
+    assert completed.status_code == 200, completed.get_json()
+    data = completed.get_json()['data']
+    assert data['status'] == 'completed'
+    assert data['acknowledged_at'] is not None
+    assert data['video_progress']['completion_ready'] is True
 
 
 def test_onboarding_template_rejects_cross_tenant_training_resource(

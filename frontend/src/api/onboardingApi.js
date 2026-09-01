@@ -22,5 +22,9 @@ export const onboardingApi = {
   updateAssignment: (id, payload) => apiClient.patch(`/onboarding/assignments/${id}`, payload),
   myTasks: () => apiClient.get('/onboarding/my-tasks'),
   viewed: (id) => apiClient.patch(`/onboarding/tasks/${id}/view`),
+  videoProgress: (id, payload) => apiClient.patch(
+    `/onboarding/tasks/${id}/video-progress`,
+    payload,
+  ),
   complete: (id, payload = {}) => apiClient.patch(`/onboarding/tasks/${id}/complete`, payload),
 };
