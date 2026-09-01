@@ -1,5 +1,6 @@
-import { CheckCircle2, CircleDashed } from 'lucide-react';
+import { CheckCircle2, CircleDashed, FileText, Video } from 'lucide-react';
 
+import { onboardingApi } from '../../api/onboardingApi.js';
 import Badge from '../ui/Badge.jsx';
 import Button from '../ui/Button.jsx';
 import Table from '../ui/Table.jsx';
@@ -37,8 +38,32 @@ export default function OnboardingChecklist({
             {row.status === 'completed' ? <CheckCircle2 size={17} /> : <CircleDashed size={17} />}
           </span>
           <div className="min-w-0">
-            <p className="font-semibold text-slate-900">Onboarding task</p>
-            <p className="truncate text-xs text-slate-500">Reference {String(row.task_id || '').slice(0, 8)}</p>
+            <p className="font-semibold text-slate-900">
+              {row.task_title || 'Onboarding task'}
+            </p>
+            {row.task_description && (
+              <p className="max-w-md text-xs text-slate-500">
+                {row.task_description}
+              </p>
+            )}
+            {row.resource && (
+              <a
+                className="mt-1 inline-flex items-center gap-1 text-xs font-semibold text-blue-700 hover:underline"
+                href={onboardingApi.resourceContentUrl(
+                  row.resource.id,
+                  row.tenant_id,
+                )}
+                target="_blank"
+                rel="noreferrer"
+              >
+                {row.resource.resource_type === 'video'
+                  ? <Video size={13} />
+                  : <FileText size={13} />}
+                {row.resource.resource_type === 'video'
+                  ? 'Open training video'
+                  : 'Open required reading'}
+              </a>
+            )}
           </div>
         </div>
       ),
@@ -68,7 +93,11 @@ export default function OnboardingChecklist({
           disabled={completingId === row.id}
           onClick={() => onComplete(row.id)}
         >
-          {completingId === row.id ? 'Completing…' : 'Mark complete'}
+          {completingId === row.id
+            ? 'Completing…'
+            : row.requires_acknowledgement
+              ? 'Acknowledge & complete'
+              : 'Mark complete'}
         </Button>
       ) : <span className="text-xs font-semibold text-emerald-700">Done</span>,
     },

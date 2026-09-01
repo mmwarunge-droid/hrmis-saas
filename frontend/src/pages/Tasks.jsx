@@ -8,6 +8,7 @@ import {
   CircleDashed,
   Clock3,
   FileSignature,
+  FileText,
   ListChecks,
   Sparkles,
 } from 'lucide-react';
@@ -102,13 +103,15 @@ export default function Tasks() {
     )
     : 0;
 
-  const completeOnboarding = async (id) => {
-    setActionId(id);
+  const completeOnboarding = async (task) => {
+    setActionId(task.id);
     setError('');
     setSuccess('');
 
     try {
-      await onboardingApi.complete(id);
+      await onboardingApi.complete(task.id, {
+        acknowledged: Boolean(task.requires_acknowledgement),
+      });
       setSuccess('Task marked as complete.');
       await load();
     } catch (err) {
@@ -118,6 +121,18 @@ export default function Tasks() {
       );
     } finally {
       setActionId('');
+    }
+  };
+
+  const markOnboardingViewed = async (id) => {
+    try {
+      await onboardingApi.viewed(id);
+      await load();
+    } catch (err) {
+      setError(
+        err.error?.message
+        || 'Unable to record training activity',
+      );
     }
   };
 
@@ -284,11 +299,50 @@ export default function Tasks() {
                       <p className="font-semibold text-slate-900">
                         {task.task_title || 'Onboarding task'}
                       </p>
+                      {task.task_description && (
+                        <p className="mt-1 text-sm text-slate-600">
+                          {task.task_description}
+                        </p>
+                      )}
                       <p className="mt-1 text-xs text-slate-500">
                         {task.template_name || 'Employee workflow'}
                         {' · '}
                         Due {task.due_date || 'not set'}
                       </p>
+                      {task.resource?.resource_type === 'document' && (
+                        <a
+                          className="mt-3 inline-flex items-center gap-2 text-sm font-semibold text-blue-700 hover:underline"
+                          href={onboardingApi.resourceContentUrl(
+                            task.resource.id,
+                            task.tenant_id,
+                          )}
+                          target="_blank"
+                          rel="noreferrer"
+                          onClick={() => markOnboardingViewed(task.id)}
+                        >
+                          <FileText size={16} />
+                          Open required reading
+                        </a>
+                      )}
+                      {task.resource?.resource_type === 'video' && (
+                        <div className="mt-3 max-w-xl">
+                          <video
+                            className="w-full rounded-lg bg-slate-950"
+                            controls
+                            preload="metadata"
+                            src={onboardingApi.resourceContentUrl(
+                              task.resource.id,
+                              task.tenant_id,
+                            )}
+                            onEnded={() => markOnboardingViewed(task.id)}
+                          >
+                            Your browser does not support training video playback.
+                          </video>
+                          <p className="mt-1 text-xs text-slate-500">
+                            Finish the video, then acknowledge the requirement.
+                          </p>
+                        </div>
+                      )}
                     </div>
 
                     <Badge
@@ -308,11 +362,11 @@ export default function Tasks() {
                         size="sm"
                         variant="soft"
                         disabled={actionId === task.id}
-                        onClick={() => completeOnboarding(
-                          task.id,
-                        )}
+                        onClick={() => completeOnboarding(task)}
                       >
-                        Mark complete
+                        {task.requires_acknowledgement
+                          ? 'Acknowledge & complete'
+                          : 'Mark complete'}
                       </Button>
                     )}
                   </div>

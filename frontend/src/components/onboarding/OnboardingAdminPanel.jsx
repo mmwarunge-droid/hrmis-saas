@@ -3,8 +3,10 @@ import {
   CheckCircle2,
   CircleDashed,
   Clock3,
+  FileText,
   Plus,
   UserPlus,
+  Video,
   X,
 } from 'lucide-react';
 import { employeeApi } from '../../api/employeeApi.js';
@@ -22,9 +24,12 @@ import StatCard from '../ui/StatCard.jsx';
 const emptyTask = () => ({
   title: '',
   description: '',
+  task_type: 'action',
+  resource_file: null,
   assignee_role: 'EMPLOYEE',
   due_days_after_start: 0,
   required: true,
+  requires_acknowledgement: false,
 });
 
 export default function OnboardingAdminPanel() {
@@ -86,9 +91,20 @@ export default function OnboardingAdminPanel() {
   const updateTask = (index, field, value) => {
     setTemplateForm((current) => ({
       ...current,
-      tasks: current.tasks.map((task, taskIndex) => (
-        taskIndex === index ? { ...task, [field]: value } : task
-      )),
+      tasks: current.tasks.map((task, taskIndex) => {
+        if (taskIndex !== index) return task;
+
+        if (field === 'task_type') {
+          return {
+            ...task,
+            task_type: value,
+            resource_file: null,
+            requires_acknowledgement: value !== 'action',
+          };
+        }
+
+        return { ...task, [field]: value };
+      }),
     }));
   };
 
@@ -97,18 +113,46 @@ export default function OnboardingAdminPanel() {
     setSaving(true);
     setError('');
     try {
+      const tasks = await Promise.all(
+        templateForm.tasks.map(async (task) => {
+          let resourceId = null;
+
+          if (task.task_type !== 'action') {
+            if (!task.resource_file) {
+              throw new Error(
+                `Upload a ${task.task_type} for “${task.title || 'this task'}”.`,
+              );
+            }
+
+            const formData = new FormData();
+            formData.append('file', task.resource_file);
+            const resourceResponse = await onboardingApi.uploadResource(formData);
+            resourceId = resourceResponse.data.id;
+          }
+
+          return {
+            title: task.title,
+            description: task.description || null,
+            task_type: task.task_type,
+            resource_id: resourceId,
+            assignee_role: task.assignee_role,
+            due_days_after_start: Number(task.due_days_after_start || 0),
+            required: task.required,
+            requires_acknowledgement: task.requires_acknowledgement,
+          };
+        }),
+      );
+
       await onboardingApi.createTemplate({
-        ...templateForm,
-        tasks: templateForm.tasks.map((task) => ({
-          ...task,
-          due_days_after_start: Number(task.due_days_after_start || 0),
-        })),
+        name: templateForm.name,
+        description: templateForm.description,
+        tasks,
       });
       setTemplateForm({ name: '', description: '', tasks: [emptyTask()] });
       toast.success('Onboarding template created.');
       await load();
     } catch (err) {
-      setError(err.error?.message || 'Template creation failed.');
+      setError(err.error?.message || err.message || 'Template creation failed.');
     } finally {
       setSaving(false);
     }
@@ -201,6 +245,15 @@ export default function OnboardingAdminPanel() {
                       required
                     />
                     <Select
+                      label="Requirement type"
+                      value={task.task_type}
+                      onChange={(event) => updateTask(index, 'task_type', event.target.value)}
+                    >
+                      <option value="action">Action / checklist</option>
+                      <option value="document">Read & acknowledge</option>
+                      <option value="video">Training video</option>
+                    </Select>
+                    <Select
                       label="Responsible role"
                       value={task.assignee_role}
                       onChange={(event) => updateTask(index, 'assignee_role', event.target.value)}
@@ -222,6 +275,34 @@ export default function OnboardingAdminPanel() {
                       value={task.description}
                       onChange={(event) => updateTask(index, 'description', event.target.value)}
                     />
+                    {task.task_type !== 'action' && (
+                      <label className="md:col-span-2 block text-sm font-semibold text-slate-700">
+                        <span className="flex items-center gap-2">
+                          {task.task_type === 'video'
+                            ? <Video size={16} />
+                            : <FileText size={16} />}
+                          {task.task_type === 'video'
+                            ? 'Training video'
+                            : 'Required reading'}
+                        </span>
+                        <input
+                          className="mt-2 block w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm"
+                          type="file"
+                          accept={task.task_type === 'video' ? '.mp4,.webm,video/mp4,video/webm' : '.pdf,.doc,.docx,.txt'}
+                          onChange={(event) => updateTask(
+                            index,
+                            'resource_file',
+                            event.target.files?.[0] || null,
+                          )}
+                          required
+                        />
+                        <span className="mt-1 block text-xs font-normal text-slate-500">
+                          {task.task_type === 'video'
+                            ? 'MP4 or WebM. Keep demo uploads under 10 MB.'
+                            : 'PDF, Word or text. The employee will explicitly acknowledge completion.'}
+                        </span>
+                      </label>
+                    )}
                   </div>
                 </div>
               ))}

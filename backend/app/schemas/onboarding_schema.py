@@ -4,9 +4,20 @@ from marshmallow import Schema, fields, validate
 class OnboardingTaskCreateSchema(Schema):
     title = fields.Str(required=True)
     description = fields.Str(required=False, allow_none=True)
-    assignee_role = fields.Str(required=False, validate=validate.OneOf(['EMPLOYEE','MANAGER','CLIENT_ADMIN','HR_CONSULTANT']))
-    due_days_after_start = fields.Int(required=False)
+    task_type = fields.Str(
+        required=False,
+        validate=validate.OneOf(['action', 'document', 'video']),
+    )
+    resource_id = fields.UUID(required=False, allow_none=True)
+    assignee_role = fields.Str(
+        required=False,
+        validate=validate.OneOf(
+            ['EMPLOYEE', 'MANAGER', 'CLIENT_ADMIN', 'HR_CONSULTANT']
+        ),
+    )
+    due_days_after_start = fields.Int(required=False, validate=validate.Range(min=0))
     required = fields.Bool(required=False)
+    requires_acknowledgement = fields.Bool(required=False)
 
 
 class OnboardingTemplateCreateSchema(Schema):
@@ -22,6 +33,7 @@ class OnboardingAssignSchema(Schema):
 
 class OnboardingTaskCompleteSchema(Schema):
     completion_notes = fields.Str(required=False, allow_none=True)
+    acknowledged = fields.Bool(required=False)
 
 
 class OnboardingTemplateUpdateSchema(Schema):

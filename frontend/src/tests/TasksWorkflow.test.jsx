@@ -1,4 +1,5 @@
 import {
+  fireEvent,
   render,
   screen,
   waitFor,
@@ -14,6 +15,8 @@ vi.mock('../api/onboardingApi.js', () => ({
     myTasks: vi.fn(),
     templates: vi.fn(),
     complete: vi.fn(),
+    viewed: vi.fn(),
+    resourceContentUrl: vi.fn((id) => `/api/onboarding/resources/${id}/content`),
   },
 }));
 
@@ -104,4 +107,47 @@ test('declined signature discussions are not counted as documents still awaiting
   expect(
     screen.queryByText(/will be enabled through the signing-provider integration phase/i),
   ).not.toBeInTheDocument();
+});
+
+test('training task exposes video and records explicit acknowledgement', async () => {
+  onboardingApi.myTasks.mockResolvedValue({
+    data: {
+      items: [{
+        id: 'assignment-video-1',
+        tenant_id: 'tenant-1',
+        task_title: 'AML training',
+        task_description: 'Watch the training and acknowledge completion.',
+        template_name: 'Compliance onboarding',
+        task_type: 'video',
+        requires_acknowledgement: true,
+        status: 'pending',
+        due_date: '2026-09-05',
+        resource: {
+          id: 'resource-video-1',
+          resource_type: 'video',
+          original_filename: 'aml.mp4',
+        },
+      }],
+    },
+  });
+  onboardingApi.complete.mockResolvedValue({ data: {} });
+
+  const { container } = render(<Tasks />);
+
+  expect(await screen.findByText('AML training')).toBeInTheDocument();
+  expect(container.querySelector('video')).toHaveAttribute(
+    'src',
+    '/api/onboarding/resources/resource-video-1/content',
+  );
+
+  fireEvent.click(
+    screen.getByRole('button', { name: 'Acknowledge & complete' }),
+  );
+
+  await waitFor(() => {
+    expect(onboardingApi.complete).toHaveBeenCalledWith(
+      'assignment-video-1',
+      { acknowledged: true },
+    );
+  });
 });

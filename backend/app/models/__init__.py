@@ -35,7 +35,12 @@ from app.models.leave import (
     LeaveType,
 )
 from app.models.attendance import AttendanceRecord
-from app.models.onboarding import EmployeeOnboardingTask, OnboardingTask, OnboardingTemplate
+from app.models.onboarding import (
+    EmployeeOnboardingTask,
+    OnboardingResource,
+    OnboardingTask,
+    OnboardingTemplate,
+)
 from app.models.audit_log import AuditLog, Notification
 from app.models.goal import Goal, GoalCheckIn
 
@@ -50,5 +55,5 @@ __all__ = [
     'SignatureDiscussionCommentRevision',
     'SignatureArtifact', 'SignatureProviderEvent',
     'LeaveType', 'LeaveBalance', 'LeaveRequest', 'LeaveLedgerEntry',
-    'AttendanceRecord', 'OnboardingTemplate', 'OnboardingTask', 'EmployeeOnboardingTask', 'AuditLog', 'Notification', 'Goal', 'GoalCheckIn',
+    'AttendanceRecord', 'OnboardingTemplate', 'OnboardingResource', 'OnboardingTask', 'EmployeeOnboardingTask', 'AuditLog', 'Notification', 'Goal', 'GoalCheckIn',
 ]

@@ -4,10 +4,23 @@ export const onboardingApi = {
   templates: (params = {}) => apiClient.get('/onboarding/templates', { params }),
   createTemplate: (payload) => apiClient.post('/onboarding/templates', payload),
   updateTemplate: (id, payload) => apiClient.patch(`/onboarding/templates/${id}`, payload),
+  uploadResource: (formData) => apiClient.post(
+    '/onboarding/resources',
+    formData,
+    { headers: { 'Content-Type': 'multipart/form-data' } },
+  ),
+  resourceContentUrl: (resourceId, tenantId = '') => {
+    const base = apiClient.defaults.baseURL || '/api';
+    const tenantQuery = tenantId
+      ? `?tenant_id=${encodeURIComponent(tenantId)}`
+      : '';
+    return `${base}/onboarding/resources/${resourceId}/content${tenantQuery}`;
+  },
   assign: (payload) => apiClient.post('/onboarding/assign', payload),
   assignments: (params = {}) => apiClient.get('/onboarding/assignments', { params }),
   summary: () => apiClient.get('/onboarding/summary'),
   updateAssignment: (id, payload) => apiClient.patch(`/onboarding/assignments/${id}`, payload),
   myTasks: () => apiClient.get('/onboarding/my-tasks'),
+  viewed: (id) => apiClient.patch(`/onboarding/tasks/${id}/view`),
   complete: (id, payload = {}) => apiClient.patch(`/onboarding/tasks/${id}/complete`, payload),
 };

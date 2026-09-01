@@ -42,10 +42,13 @@ export default function Onboarding() {
   }), [tasks]);
 
   const complete = async (id) => {
+    const task = tasks.find((item) => item.id === id);
     setCompletingId(id);
     setError('');
     try {
-      await onboardingApi.complete(id);
+      await onboardingApi.complete(id, {
+        acknowledged: Boolean(task?.requires_acknowledgement),
+      });
       toast.success('Onboarding task completed.');
       await load();
     } catch (err) {

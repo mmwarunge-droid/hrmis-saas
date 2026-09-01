@@ -7,6 +7,7 @@ from app.extensions import db
 from app.models import (
     Employee,
     EmployeeOnboardingTask,
+    OnboardingResource,
     OnboardingTask,
     OnboardingTemplate,
 )
@@ -19,8 +20,11 @@ from app.schemas.onboarding_schema import (
 )
 from app.services.onboarding_service import (
     assign_template,
+    can_access_resource,
     complete_assignment,
+    create_resource,
     create_template,
+    mark_assignment_viewed,
     update_assignment,
     update_template,
 )
@@ -29,6 +33,7 @@ from app.utils.decorators import (
     request_tenant_id,
     tenant_query,
 )
+from app.utils.file_storage import send_stored_file
 from app.utils.pagination import get_pagination, paginated_response
 from app.utils.response import fail, success
 
@@ -66,13 +71,38 @@ def _manager_can_administer(employee):
     )
 
 
+def _can_act_on_assignment(assignment):
+    owns_task = (
+        current_user.employee_profile
+        and assignment.employee_id == current_user.employee_profile.id
+    )
+    assigned_task = assignment.assigned_to_user_id == current_user.id
+    return bool(
+        owns_task
+        or assigned_task
+        or current_user.has_any_role(
+            {'HR_CONSULTANT', 'CLIENT_ADMIN', 'SUPER_ADMIN'},
+        )
+    )
+
+
 def _serialize_assignment(assignment):
     data = assignment.to_dict()
     data.update({
+        'tenant_id': str(assignment.tenant_id),
         'employee_name': assignment.employee.full_name,
         'employee_number': assignment.employee.employee_number,
         'task_title': assignment.task.title,
         'task_description': assignment.task.description,
+        'task_type': assignment.task.task_type,
+        'requires_acknowledgement': (
+            assignment.task.requires_acknowledgement
+        ),
+        'resource': (
+            assignment.task.resource.to_dict()
+            if assignment.task.resource
+            else None
+        ),
         'template_id': str(assignment.task.template_id),
         'template_name': assignment.task.template.name,
         'assignee_role': assignment.task.assignee_role,
@@ -96,6 +126,51 @@ def list_templates():
     if request.args.get('active', '').lower() == 'true':
         query = query.filter(OnboardingTemplate.is_active.is_(True))
     return success({'items': [template.to_dict() for template in query.all()]})
+
+
+@onboarding_bp.post('/resources')
+@jwt_required()
+@permission_required('onboarding:create')
+def upload_onboarding_resource():
+    try:
+        tenant_id = request_tenant_id()
+        if not tenant_id:
+            return fail(
+                'TENANT_REQUIRED',
+                'Select an organization before uploading training material',
+                422,
+            )
+        resource = create_resource(
+            request.files.get('file'),
+            tenant_id,
+            current_user.id,
+        )
+    except ValueError as exc:
+        db.session.rollback()
+        return fail('ONBOARDING_RESOURCE_FAILED', str(exc), 400)
+    return success(resource.to_dict(), 'Training resource uploaded', 201)
+
+
+@onboarding_bp.get('/resources/<resource_id>/content')
+@jwt_required()
+def onboarding_resource_content(resource_id):
+    resource = tenant_query(OnboardingResource).filter_by(
+        id=resource_id,
+    ).first_or_404()
+    if not can_access_resource(resource):
+        return fail('FORBIDDEN', 'You cannot access this training resource', 403)
+
+    response = send_stored_file(
+        resource.file_path,
+        resource.original_filename,
+        as_attachment=False,
+        mimetype=resource.mime_type,
+    )
+    response.headers['Content-Security-Policy'] = (
+        "default-src 'none'; frame-ancestors 'self'"
+    )
+    response.headers['X-Content-Type-Options'] = 'nosniff'
+    return response
 
 
 @onboarding_bp.post('/templates')
@@ -311,20 +386,35 @@ def my_tasks():
     return success({'items': [_serialize_assignment(item) for item in items]})
 
 
+@onboarding_bp.patch('/tasks/<assignment_id>/view')
+@jwt_required()
+def view_task_resource(assignment_id):
+    assignment = tenant_query(EmployeeOnboardingTask).filter_by(
+        id=assignment_id,
+    ).first_or_404()
+    if not _can_act_on_assignment(assignment):
+        return fail(
+            'FORBIDDEN',
+            'You cannot view this onboarding task',
+            403,
+        )
+    if not assignment.task.resource_id:
+        return fail(
+            'ONBOARDING_RESOURCE_NOT_FOUND',
+            'This onboarding task has no training resource',
+            400,
+        )
+    assignment = mark_assignment_viewed(assignment)
+    return success(_serialize_assignment(assignment), 'Training resource viewed')
+
+
 @onboarding_bp.patch('/tasks/<assignment_id>/complete')
 @jwt_required()
 def complete_task(assignment_id):
     assignment = tenant_query(EmployeeOnboardingTask).filter_by(
         id=assignment_id,
     ).first_or_404()
-    owns_task = (
-        current_user.employee_profile
-        and assignment.employee_id == current_user.employee_profile.id
-    )
-    assigned_task = assignment.assigned_to_user_id == current_user.id
-    if not owns_task and not assigned_task and not current_user.has_any_role(
-        {'HR_CONSULTANT', 'CLIENT_ADMIN', 'SUPER_ADMIN'},
-    ):
+    if not _can_act_on_assignment(assignment):
         return fail(
             'FORBIDDEN',
             'You cannot complete this onboarding task',
@@ -337,9 +427,13 @@ def complete_task(assignment_id):
         assignment = complete_assignment(
             assignment,
             payload.get('completion_notes'),
+            acknowledged=payload.get('acknowledged', False),
         )
     except ValidationError as err:
         return fail('VALIDATION_ERROR', err.messages, 422)
+    except ValueError as exc:
+        db.session.rollback()
+        return fail('ONBOARDING_TASK_FAILED', str(exc), 400)
     return success(
         _serialize_assignment(assignment),
         'Task completed',
