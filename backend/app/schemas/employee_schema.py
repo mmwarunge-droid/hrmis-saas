@@ -2,6 +2,8 @@ from datetime import date
 
 from marshmallow import Schema, fields, validate
 
+from app.schemas.common_schema import NormalizedEmail
+
 
 class DepartmentSchema(Schema):
     tenant_id = fields.UUID(required=False, allow_none=True)
@@ -73,7 +75,7 @@ class EmployeeCreateSchema(Schema):
     first_name = fields.Str(required=True)
     last_name = fields.Str(required=True)
     preferred_name = fields.Str(required=False, allow_none=True)
-    email = fields.Email(required=True)
+    email = NormalizedEmail(required=True)
     phone = fields.Str(required=False, allow_none=True)
     date_of_birth = fields.Date(required=False, allow_none=True)
     national_identifier_last4 = fields.Str(required=False, allow_none=True)
@@ -98,7 +100,7 @@ class EmployeeUpdateSchema(EmployeeCreateSchema):
     employee_number = fields.Str(required=False, validate=validate.Length(min=1, max=80))
     first_name = fields.Str(required=False)
     last_name = fields.Str(required=False)
-    email = fields.Email(required=False)
+    email = NormalizedEmail(required=False)
     hire_date = fields.Date(required=False)
     change_effective_date = fields.Date(required=False, allow_none=True)
     change_reason = fields.Str(required=False, allow_none=True, validate=validate.Length(max=255))

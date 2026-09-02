@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import Button from '../ui/Button.jsx';
 import Input from '../ui/Input.jsx';
 import Select from '../ui/Select.jsx';
@@ -44,8 +44,12 @@ export default function EmployeeForm({
   error = '',
   fieldErrors = {},
   onErrorClear = null,
+  checkEmailAvailability = null,
 }) {
   const [form, setForm] = useState(() => initialForm(initialValues));
+  const [emailAvailabilityError, setEmailAvailabilityError] = useState('');
+  const [checkingEmail, setCheckingEmail] = useState(false);
+  const emailCheckSequence = useRef(0);
 
   const update = (event) => {
     const { name, value } = event.target;
@@ -55,18 +59,58 @@ export default function EmployeeForm({
       [name]: value,
     }));
 
+    if (name === 'email') {
+      emailCheckSequence.current += 1;
+      setEmailAvailabilityError('');
+      setCheckingEmail(false);
+    }
+
     if (error || fieldErrors[name]) {
       onErrorClear?.(name);
     }
   };
 
+  const checkEmail = async () => {
+    if (!checkEmailAvailability) return;
+
+    const normalized = form.email.trim().toLowerCase();
+    if (!normalized) return;
+
+    setForm((current) => ({
+      ...current,
+      email: normalized,
+    }));
+
+    const sequence = emailCheckSequence.current + 1;
+    emailCheckSequence.current = sequence;
+    setCheckingEmail(true);
+
+    try {
+      const result = await checkEmailAvailability(normalized);
+      if (emailCheckSequence.current !== sequence) return;
+      setEmailAvailabilityError(
+        result.available
+          ? ''
+          : result.message || 'This email is already in use.',
+      );
+    } catch {
+      // Submission still performs the authoritative server-side check.
+    } finally {
+      if (emailCheckSequence.current === sequence) {
+        setCheckingEmail(false);
+      }
+    }
+  };
+
   const submit = (event) => {
     event.preventDefault();
+    if (emailAvailabilityError) return;
+
     const payload = {
       employee_number: form.employee_number,
       first_name: form.first_name,
       last_name: form.last_name,
-      email: form.email,
+      email: form.email.trim().toLowerCase(),
       hire_date: form.hire_date,
       job_title: form.job_title || null,
       employment_status: form.employment_status,
@@ -98,7 +142,17 @@ export default function EmployeeForm({
       ) : null}
 
       <Input label="Employee number" name="employee_number" value={form.employee_number} onChange={update} required />
-      <Input label="Email" type="email" name="email" value={form.email} onChange={update} required />
+      <Input
+        label="Email"
+        type="email"
+        name="email"
+        value={form.email}
+        onChange={update}
+        onBlur={checkEmail}
+        error={emailAvailabilityError || fieldErrors.email}
+        hint={checkingEmail ? 'Checking email availability…' : undefined}
+        required
+      />
       <Input label="First name" name="first_name" value={form.first_name} onChange={update} required />
       <Input label="Last name" name="last_name" value={form.last_name} onChange={update} required />
       <Input
@@ -182,7 +236,10 @@ export default function EmployeeForm({
         {stickyActions && onCancel ? (
           <Button type="button" variant="secondary" onClick={onCancel} disabled={loading}>Cancel</Button>
         ) : null}
-        <Button className={stickyActions ? 'ml-auto min-w-36' : ''} disabled={loading}>
+        <Button
+          className={stickyActions ? 'ml-auto min-w-36' : ''}
+          disabled={loading || checkingEmail || Boolean(emailAvailabilityError)}
+        >
           {loading ? 'Saving...' : submitLabel}
         </Button>
       </div>

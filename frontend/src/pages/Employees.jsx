@@ -156,6 +156,11 @@ export default function Employees() {
     ]);
   };
 
+  const checkEmployeeEmailAvailability = async (email) => {
+    const response = await employeeApi.emailAvailability(email);
+    return response.data;
+  };
+
   const create = async (payload) => {
     setSaving(true);
     setFormError('');
@@ -544,6 +549,7 @@ export default function Employees() {
                 : '',
             }}
             onErrorClear={() => setFormError('')}
+            checkEmailAvailability={checkEmployeeEmailAvailability}
           />
         </div>
 

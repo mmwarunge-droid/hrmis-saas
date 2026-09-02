@@ -7,6 +7,7 @@ from sqlalchemy.orm import selectinload
 
 from app.extensions import db
 from app.models import Department, Employee, JobHistory, Role, User, UserRole
+from app.schemas.common_schema import EmailAvailabilitySchema
 from app.schemas.employee_schema import (
     BulkDepartmentTransferSchema,
     DepartmentArchiveSchema,
@@ -22,11 +23,13 @@ from app.services.access_provisioning_service import (
     AccessProvisioningError,
     provision_employee_access,
 )
-from app.services.account_recovery_service import (
-    EmailChangeConflictError,
+from app.services.account_recovery_service import EmailChangeConflictError
+from app.services.audit_service import log_event
+from app.services.email_identity_service import (
+    EmailAlreadyRegisteredError,
+    ensure_employee_email_available,
     normalize_email_address,
 )
-from app.services.audit_service import log_event
 from app.services.department_service import (
     archive_department,
     create_department as create_department_record,
@@ -305,6 +308,43 @@ def employee_summary():
     })
 
 
+@employee_bp.get('/email-availability')
+@jwt_required()
+@permission_required('employee:create')
+def email_availability():
+    try:
+        payload = EmailAvailabilitySchema().load(request.args)
+    except ValidationError as err:
+        return fail('VALIDATION_ERROR', err.messages, 422)
+
+    tenant_payload = {
+        'tenant_id': payload.get('tenant_id'),
+    }
+    tenant_id = _request_tenant_id(tenant_payload)
+    if not tenant_id:
+        return fail('TENANT_REQUIRED', 'tenant_id is required', 422)
+
+    try:
+        normalized = ensure_employee_email_available(
+            tenant_id,
+            payload['email'],
+        )
+    except EmailAlreadyRegisteredError as exc:
+        return success({
+            'email': payload['email'],
+            'available': False,
+            'code': exc.code,
+            'message': str(exc),
+        })
+
+    return success({
+        'email': normalized,
+        'available': True,
+        'code': None,
+        'message': '',
+    })
+
+
 @employee_bp.post('')
 @jwt_required()
 @permission_required('employee:create')
@@ -322,6 +362,24 @@ def create():
         return fail(
             'DUPLICATE_JOB_TITLE_CONFIRMATION_REQUIRED',
             str(exc),
+            409,
+        )
+    except EmailAlreadyRegisteredError as exc:
+        db.session.rollback()
+        return fail(exc.code, str(exc), exc.status_code)
+    except IntegrityError:
+        db.session.rollback()
+        try:
+            ensure_employee_email_available(
+                tenant_id,
+                payload['email'],
+                linked_user_id=payload.get('user_id'),
+            )
+        except EmailAlreadyRegisteredError as exc:
+            return fail(exc.code, str(exc), exc.status_code)
+        return fail(
+            'EMPLOYEE_CREATE_CONFLICT',
+            'Employee number or another employee identifier is already in use',
             409,
         )
     except Exception as exc:
@@ -863,6 +921,10 @@ def patch_employee(employee_id):
             str(exc),
             409,
         )
+
+    except EmailAlreadyRegisteredError as exc:
+        db.session.rollback()
+        return fail(exc.code, str(exc), exc.status_code)
 
     except EmailChangeConflictError as exc:
         db.session.rollback()

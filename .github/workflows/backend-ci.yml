@@ -57,4 +57,8 @@ jobs:
       - name: Run PostgreSQL concurrency tests
         env:
           HRMIS_PG_TEST_URL: ${{ env.DATABASE_URL }}
-        run: pytest app/tests/test_account_token_postgres_concurrency.py -vv
+        run: >-
+          pytest
+          app/tests/test_account_token_postgres_concurrency.py
+          app/tests/test_email_uniqueness_postgres_concurrency.py
+          -vv

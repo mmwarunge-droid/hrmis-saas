@@ -20,6 +20,7 @@ from app.services.account_recovery_service import (
 )
 from app.services.auth_service import register_invited_user
 from app.services.audit_service import log_event
+from app.services.email_identity_service import EmailAlreadyRegisteredError
 from app.services.mfa_policy_service import (
     configure_tenant_mfa_policy,
     tenant_mfa_compliance,
@@ -379,14 +380,19 @@ def provision_organization():
     except ValidationError as err:
         db.session.rollback()
         return fail('VALIDATION_ERROR', err.messages, 422)
-    except (ValueError, IntegrityError) as exc:
+    except EmailAlreadyRegisteredError as exc:
         db.session.rollback()
-        message = (
-            'Organization name, slug or administrator email is already in use'
-            if isinstance(exc, IntegrityError)
-            else str(exc)
+        return fail(exc.code, str(exc), exc.status_code)
+    except IntegrityError:
+        db.session.rollback()
+        return fail(
+            'ORGANIZATION_PROVISION_CONFLICT',
+            'Organization name, slug or administrator email is already in use',
+            409,
         )
-        return fail('ORGANIZATION_PROVISION_FAILED', message, 400)
+    except ValueError as exc:
+        db.session.rollback()
+        return fail('ORGANIZATION_PROVISION_FAILED', str(exc), 400)
     except Exception:
         db.session.rollback()
         raise

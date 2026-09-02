@@ -7,6 +7,7 @@ from sqlalchemy.exc import IntegrityError
 from app.extensions import db
 from app.models import AccountToken, Employee, Role, Tenant, User, UserRole
 from app.models.base import utcnow
+from app.schemas.common_schema import EmailAvailabilitySchema
 from app.schemas.user_schema import (
     MfaAdminResetSchema,
     UserCreateSchema,
@@ -22,6 +23,10 @@ from app.services.account_recovery_service import (
 )
 from app.services.auth_service import register_invited_user
 from app.services.audit_service import log_event
+from app.services.email_identity_service import (
+    EmailAlreadyRegisteredError,
+    ensure_user_registration_email_available,
+)
 from app.services.employee_service import create_employee
 from app.services.mfa_policy_service import (
     administrative_reset_mfa,
@@ -215,6 +220,42 @@ def user_summary():
     })
 
 
+@user_bp.get('/email-availability')
+@jwt_required()
+@permission_required('user:create')
+def email_availability():
+    try:
+        payload = EmailAvailabilitySchema().load(request.args)
+    except ValidationError as err:
+        return fail('VALIDATION_ERROR', err.messages, 422)
+
+    tenant_id = (
+        payload.get('tenant_id')
+        if current_user.has_role('SUPER_ADMIN')
+        else current_user.tenant_id
+    )
+
+    try:
+        normalized = ensure_user_registration_email_available(
+            payload['email'],
+            tenant_id,
+        )
+    except EmailAlreadyRegisteredError as exc:
+        return success({
+            'email': payload['email'],
+            'available': False,
+            'code': exc.code,
+            'message': str(exc),
+        })
+
+    return success({
+        'email': normalized,
+        'available': True,
+        'code': None,
+        'message': '',
+    })
+
+
 @user_bp.post('')
 @jwt_required()
 @permission_required('user:create')
@@ -229,6 +270,10 @@ def create_user():
         payload['tenant_id'] = current_user.tenant_id
 
     try:
+        payload['email'] = ensure_user_registration_email_available(
+            payload['email'],
+            payload.get('tenant_id'),
+        )
         validate_role_assignment(
             current_user,
             payload['roles'],
@@ -278,14 +323,26 @@ def create_user():
             tenant_id=user.tenant_id,
         )
         db.session.commit()
-    except (ValueError, IntegrityError) as exc:
+    except EmailAlreadyRegisteredError as exc:
         db.session.rollback()
-        message = (
-            'User or employee identifier is already in use'
-            if isinstance(exc, IntegrityError)
-            else str(exc)
+        return fail(exc.code, str(exc), exc.status_code)
+    except IntegrityError:
+        db.session.rollback()
+        try:
+            ensure_user_registration_email_available(
+                payload['email'],
+                payload.get('tenant_id'),
+            )
+        except EmailAlreadyRegisteredError as exc:
+            return fail(exc.code, str(exc), exc.status_code)
+        return fail(
+            'USER_CREATE_CONFLICT',
+            'User or employee identifier is already in use',
+            409,
         )
-        return fail('USER_CREATE_FAILED', message, 400)
+    except ValueError as exc:
+        db.session.rollback()
+        return fail('USER_CREATE_FAILED', str(exc), 400)
     except Exception:
         db.session.rollback()
         raise

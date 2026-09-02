@@ -6,6 +6,10 @@ from flask import current_app
 from app.extensions import db
 from app.models import User
 from app.models.base import utcnow
+from app.services.email_identity_service import (
+    ensure_user_email_available,
+    normalize_email_address,
+)
 from app.services.rbac_service import seed_roles_permissions, set_user_roles
 from app.utils.security import hash_password, verify_password
 
@@ -32,12 +36,12 @@ def claims_for(user: User) -> dict:
 
 
 def register_user(payload: dict, actor=None, commit: bool = True) -> User:
-    if User.query.filter_by(email=payload['email'].lower()).first():
-        raise ValueError('Email is already registered')
+    normalized_email = normalize_email_address(payload['email'])
+    ensure_user_email_available(normalized_email)
     seed_roles_permissions(commit=False)
     user = User(
         tenant_id=payload.get('tenant_id'),
-        email=payload['email'].lower(),
+        email=normalized_email,
         first_name=payload['first_name'],
         last_name=payload['last_name'],
         password_hash=hash_password(payload['password']),

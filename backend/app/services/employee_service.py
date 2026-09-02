@@ -8,11 +8,14 @@ from app.models.base import utcnow
 from app.services.account_recovery_service import (
     ensure_identity_email_available,
     issue_account_token,
-    normalize_email_address,
     send_account_invitation_email,
     send_email_verification_email,
 )
 from app.services.audit_service import log_event
+from app.services.email_identity_service import (
+    ensure_employee_email_available,
+    normalize_email_address,
+)
 
 
 class DuplicateJobTitleConfirmationRequired(Exception):
@@ -228,6 +231,12 @@ def create_employee(payload, tenant_id, commit: bool = True):
     if 'job_title' in payload:
         payload['job_title'] = _normalize_job_title(payload.get('job_title'))
 
+    payload['email'] = ensure_employee_email_available(
+        tenant_id,
+        payload['email'],
+        linked_user_id=payload.get('user_id'),
+    )
+
     _assert_tenant_fk(User, payload.get('user_id'), tenant_id, 'user_id')
     _assert_tenant_fk(Department, payload.get('department_id'), tenant_id, 'department_id')
     _assert_valid_manager(None, payload.get('manager_id'), tenant_id)
@@ -266,6 +275,19 @@ def _consume_active_account_tokens(user):
 def _update_employee_email(employee, requested_email):
     normalized = normalize_email_address(requested_email)
     user = employee.user
+
+    if user:
+        ensure_identity_email_available(
+            user,
+            normalized,
+        )
+
+    normalized = ensure_employee_email_available(
+        employee.tenant_id,
+        normalized,
+        linked_user_id=user.id if user else None,
+        exclude_employee_id=employee.id,
+    )
 
     if not user:
         employee.email = normalized

@@ -1,5 +1,7 @@
 from marshmallow import Schema, ValidationError, fields, validate, validates_schema
 
+from app.schemas.common_schema import NormalizedEmail
+
 
 class TenantCreateSchema(Schema):
     name = fields.Str(required=True, validate=validate.Length(min=2, max=160))
@@ -36,7 +38,7 @@ class EmployeeAccountProfileSchema(Schema):
 
 class UserCreateSchema(Schema):
     tenant_id = fields.UUID(required=False, allow_none=True)
-    email = fields.Email(required=True)
+    email = NormalizedEmail(required=True)
     first_name = fields.Str(required=True, validate=validate.Length(min=1, max=120))
     last_name = fields.Str(required=True, validate=validate.Length(min=1, max=120))
     # Backward-compatible input only. Invite provisioning never uses this as
@@ -52,7 +54,7 @@ class UserCreateSchema(Schema):
 
 
 class OrganizationAdminSchema(Schema):
-    email = fields.Email(required=True)
+    email = NormalizedEmail(required=True)
     first_name = fields.Str(required=True, validate=validate.Length(min=1, max=120))
     last_name = fields.Str(required=True, validate=validate.Length(min=1, max=120))
     # Accepted only for compatibility with older clients and deliberately

@@ -10,6 +10,10 @@ from sqlalchemy import select
 from app.extensions import db
 from app.models import AccountToken, Employee, User
 from app.models.base import to_utc_naive, utcnow
+from app.services.email_identity_service import (
+    normalize_email_address,
+    normalized_email_expression,
+)
 from app.services.session_service import revoke_all_user_sessions
 from app.utils.email import send_email
 from app.utils.security import hash_password, verify_password
@@ -30,10 +34,6 @@ class EmailChangeConflictError(ValueError):
     )
 
 
-def normalize_email_address(value: str) -> str:
-    return value.strip().lower()
-
-
 def ensure_identity_email_available(
     user: User,
     target_email: str,
@@ -41,7 +41,7 @@ def ensure_identity_email_available(
     normalized = normalize_email_address(target_email)
 
     duplicate_user = User.query.filter(
-        db.func.lower(User.email) == normalized,
+        normalized_email_expression(User.email) == normalized,
         User.id != user.id,
     ).first()
     if duplicate_user:
@@ -53,7 +53,7 @@ def ensure_identity_email_available(
     if employee:
         duplicate_employee = Employee.query.filter(
             Employee.tenant_id == employee.tenant_id,
-            db.func.lower(Employee.email) == normalized,
+            normalized_email_expression(Employee.email) == normalized,
             Employee.id != employee.id,
         ).first()
         if duplicate_employee:

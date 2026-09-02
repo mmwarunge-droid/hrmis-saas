@@ -1,9 +1,10 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import {
   BriefcaseBusiness,
   MailCheck,
   UserRoundPlus,
 } from 'lucide-react';
+import { userApi } from '../../api/userApi.js';
 import Button from '../ui/Button.jsx';
 import Input from '../ui/Input.jsx';
 import Select from '../ui/Select.jsx';
@@ -28,6 +29,9 @@ export default function UserProvisionForm({
   tenants = [],
 }) {
   const [form, setForm] = useState(defaultForm);
+  const [emailError, setEmailError] = useState('');
+  const [checkingEmail, setCheckingEmail] = useState(false);
+  const emailCheckSequence = useRef(0);
   const isEmployeeAccount = form.role !== 'CLIENT_ADMIN';
   const roleOptions = useMemo(
     () => (
@@ -38,18 +42,62 @@ export default function UserProvisionForm({
     [isSuperAdmin],
   );
 
-  const update = (event) => setForm((current) => ({
-    ...current,
-    [event.target.name]: event.target.value,
-  }));
+  const update = (event) => {
+    const { name, value } = event.target;
+    setForm((current) => ({
+      ...current,
+      [name]: value,
+    }));
+    if (name === 'email') {
+      emailCheckSequence.current += 1;
+      setEmailError('');
+      setCheckingEmail(false);
+    }
+  };
+
+  const checkEmailAvailability = async () => {
+    const normalized = form.email.trim().toLowerCase();
+    if (!normalized) return;
+
+    setForm((current) => ({
+      ...current,
+      email: normalized,
+    }));
+
+    const sequence = emailCheckSequence.current + 1;
+    emailCheckSequence.current = sequence;
+    setCheckingEmail(true);
+
+    try {
+      const response = await userApi.emailAvailability(
+        normalized,
+        form.tenant_id,
+      );
+      if (emailCheckSequence.current !== sequence) return;
+      setEmailError(
+        response.data.available
+          ? ''
+          : response.data.message || 'This email is already registered.',
+      );
+    } catch {
+      // The backend create endpoint remains authoritative if this optional
+      // preflight check cannot be completed.
+    } finally {
+      if (emailCheckSequence.current === sequence) {
+        setCheckingEmail(false);
+      }
+    }
+  };
 
   const submit = (event) => {
     event.preventDefault();
+    if (emailError) return;
+
     const payload = {
       tenant_id: form.tenant_id || undefined,
       first_name: form.first_name,
       last_name: form.last_name,
-      email: form.email,
+      email: form.email.trim().toLowerCase(),
       roles: [form.role],
     };
     if (isEmployeeAccount) {
@@ -131,6 +179,9 @@ export default function UserProvisionForm({
             name="email"
             value={form.email}
             onChange={update}
+            onBlur={checkEmailAvailability}
+            error={emailError}
+            hint={checkingEmail ? 'Checking email availability…' : undefined}
             required
           />
         </div>
@@ -200,7 +251,10 @@ export default function UserProvisionForm({
           Kinetic will email a secure, single-use invitation. The user creates
           their own private password before they can sign in.
         </p>
-        <Button variant="accent" disabled={loading}>
+        <Button
+          variant="accent"
+          disabled={loading || checkingEmail || Boolean(emailError)}
+        >
           {loading ? 'Creating...' : 'Create account'}
         </Button>
       </div>

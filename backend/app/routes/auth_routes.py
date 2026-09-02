@@ -48,6 +48,10 @@ from app.services.auth_service import (
     record_successful_login,
     register_invited_user,
 )
+from app.services.email_identity_service import (
+    EmailAlreadyRegisteredError,
+    ensure_user_registration_email_available,
+)
 from app.services.mfa_service import (
     MfaError,
     confirm_mfa_enrollment,
@@ -97,6 +101,10 @@ def register():
         payload = RegisterSchema().load(request.get_json() or {})
         if not current_user.has_role('SUPER_ADMIN'):
             payload['tenant_id'] = current_user.tenant_id
+        payload['email'] = ensure_user_registration_email_available(
+            payload['email'],
+            payload.get('tenant_id'),
+        )
         validate_role_assignment(
             current_user,
             payload.get('roles') or ['EMPLOYEE'],
@@ -122,6 +130,23 @@ def register():
         db.session.commit()
     except ValidationError as err:
         return fail('VALIDATION_ERROR', err.messages, 422)
+    except EmailAlreadyRegisteredError as exc:
+        db.session.rollback()
+        return fail(exc.code, str(exc), exc.status_code)
+    except IntegrityError:
+        db.session.rollback()
+        try:
+            ensure_user_registration_email_available(
+                payload['email'],
+                payload.get('tenant_id'),
+            )
+        except EmailAlreadyRegisteredError as exc:
+            return fail(exc.code, str(exc), exc.status_code)
+        return fail(
+            'REGISTRATION_CONFLICT',
+            'The requested account conflicts with an existing record',
+            409,
+        )
     except ValueError as exc:
         db.session.rollback()
         return fail('REGISTRATION_FAILED', str(exc), 400)

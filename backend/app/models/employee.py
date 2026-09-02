@@ -57,6 +57,12 @@ class Employee(db.Model, TenantMixin, TimestampMixin, SoftDeleteMixin, ReprMixin
         db.UniqueConstraint('user_id', name='uq_employees_user_id'),
         db.UniqueConstraint('tenant_id', 'employee_number', name='uq_employees_tenant_employee_number'),
         db.UniqueConstraint('tenant_id', 'email', name='uq_employees_tenant_email'),
+        db.Index(
+            'uq_employees_tenant_email_normalized',
+            'tenant_id',
+            db.func.lower(db.func.trim(email)),
+            unique=True,
+        ),
         db.CheckConstraint("employment_status IN ('active','probation','inactive','suspended','terminated')", name='ck_employees_status'),
         db.CheckConstraint("employment_type IN ('full_time','part_time','contractor','intern','temporary')", name='ck_employees_type'),
         db.CheckConstraint(
