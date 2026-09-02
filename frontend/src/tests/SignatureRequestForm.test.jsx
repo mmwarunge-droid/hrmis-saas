@@ -10,6 +10,17 @@ import {
   vi,
 } from 'vitest';
 
+vi.mock(
+  '../components/documents/SignatureFieldPlacement.jsx',
+  () => ({
+    default: () => (
+      <div data-testid="signature-field-placement">
+        PDF field editor
+      </div>
+    ),
+  }),
+);
+
 import SignatureRequestForm from '../components/documents/SignatureRequestForm.jsx';
 
 function futureLocalDate(days = 7) {
@@ -57,6 +68,27 @@ const employees = [
 ];
 
 describe('SignatureRequestForm', () => {
+  it('defaults PDF signing to direct document preparation', () => {
+    render(
+      <SignatureRequestForm
+        document={document}
+        employees={employees}
+        onSubmit={vi.fn()}
+      />,
+    );
+
+    expect(
+      screen.getByRole(
+        'radio',
+        { name: /Prepare fields on PDF/i },
+      ),
+    ).toBeChecked();
+
+    expect(
+      screen.getByTestId('signature-field-placement'),
+    ).toBeInTheDocument();
+  });
+
   it('uses separate date and time controls for the completion deadline', () => {
     render(
       <SignatureRequestForm
@@ -90,6 +122,13 @@ describe('SignatureRequestForm', () => {
         isSuperAdmin
         onSubmit={onSubmit}
       />,
+    );
+
+    fireEvent.click(
+      screen.getByRole(
+        'radio',
+        { name: /Signing record page/i },
+      ),
     );
 
     expect(
@@ -171,6 +210,14 @@ describe('SignatureRequestForm', () => {
       screen.getByLabelText('Signature assurance'),
       { target: { value: 'standard' } },
     );
+
+    fireEvent.click(
+      screen.getByRole(
+        'radio',
+        { name: /Signing record page/i },
+      ),
+    );
+
     fireEvent.click(
       screen.getByRole('button', { name: 'Add signatory' }),
     );
@@ -244,7 +291,7 @@ describe('SignatureRequestForm', () => {
     expect(
       screen.getByRole(
         'radio',
-        { name: /Place fields on PDF/i },
+        { name: /Prepare fields on PDF/i },
       ),
     ).toBeDisabled();
 

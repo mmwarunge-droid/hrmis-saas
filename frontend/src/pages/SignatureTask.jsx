@@ -21,6 +21,14 @@ import SignatureDiscussionPanel from '../components/signatures/SignatureDiscussi
 import Alert from '../components/ui/Alert.jsx';
 import Badge from '../components/ui/Badge.jsx';
 import Button from '../components/ui/Button.jsx';
+import {
+  buildSigningFieldValues,
+  editableSigningField,
+  isSigningFieldReady,
+  missingRequiredSigningFields,
+  recipientSigningFields,
+  signingFieldSubmission,
+} from '../utils/signingFields.js';
 
 const HANDWRITTEN_SIGNATURE_STYLE = {
   fontFamily: [
@@ -81,6 +89,8 @@ export default function SignatureTask() {
   const [showDecline, setShowDecline] = useState(false);
   const [consent, setConsent] = useState(false);
   const [signatureStyle, setSignatureStyle] = useState('calligraphy_1');
+  const [fieldValues, setFieldValues] = useState({});
+  const [activeFieldId, setActiveFieldId] = useState(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
@@ -91,15 +101,67 @@ export default function SignatureTask() {
   );
 
   const currentFields = useMemo(
-    () => (task?.fields || []).filter((field) => (
-      field.is_current_recipient && !field.completed_at
-    )),
-    [task?.fields],
+    () => recipientSigningFields(task),
+    [task],
+  );
+
+  const missingRequiredFields = useMemo(
+    () => missingRequiredSigningFields(
+      currentFields,
+      fieldValues,
+    ),
+    [
+      currentFields,
+      fieldValues,
+    ],
+  );
+
+  const requiredFields = useMemo(
+    () => currentFields.filter(
+      (field) => field.required,
+    ),
+    [currentFields],
+  );
+
+  const requiredReadyCount = useMemo(
+    () => requiredFields.filter(
+      (field) => isSigningFieldReady(
+        field,
+        fieldValues,
+      ),
+    ).length,
+    [
+      requiredFields,
+      fieldValues,
+    ],
   );
 
   const load = useCallback(async () => {
-    const taskResponse = await signatureApi.recipient(recipientId);
-    setTask(taskResponse.data);
+    const taskResponse = await signatureApi.recipient(
+      recipientId,
+    );
+
+    const nextTask = taskResponse.data;
+    const nextFields = recipientSigningFields(
+      nextTask,
+    );
+
+    setTask(nextTask);
+    setFieldValues(
+      buildSigningFieldValues(nextTask),
+    );
+
+    setActiveFieldId(
+      nextFields.find((field) => (
+        field.required
+        && editableSigningField(field)
+      ))?.id
+      || nextFields.find(
+        (field) => field.required,
+      )?.id
+      || nextFields[0]?.id
+      || null,
+    );
   }, [recipientId]);
 
   useEffect(() => {
@@ -171,13 +233,32 @@ export default function SignatureTask() {
   }, [documentUrl, recipientId, task?.external_signing_required, task?.status]);
 
   const sign = async () => {
-    setBusy(true);
     setError('');
     setSuccess('');
+
+    if (missingRequiredFields.length) {
+      const firstMissing = missingRequiredFields[0];
+
+      setActiveFieldId(firstMissing.id);
+      setError(
+        `Complete the required field: ${
+          firstMissing.label
+          || firstMissing.field_type
+        }.`,
+      );
+      return;
+    }
+
+    setBusy(true);
+
     try {
       await signatureApi.submit(recipientId, {
         consent,
         signature_style: signatureStyle,
+        fields: signingFieldSubmission(
+          currentFields,
+          fieldValues,
+        ),
       });
       setSuccess('Your signature was submitted with the authoritative server timestamp.');
       setConsent(false);
@@ -267,7 +348,13 @@ export default function SignatureTask() {
             </div>
             <div className="max-h-[calc(100vh-150px)] overflow-auto">
               {documentUrl ? (
-                <PdfSigningViewer url={documentUrl} fields={currentFields} />
+                <PdfSigningViewer
+                  url={documentUrl}
+                  fields={currentFields}
+                  activeFieldId={activeFieldId}
+                  fieldValues={fieldValues}
+                  onFieldSelect={setActiveFieldId}
+                />
               ) : (
                 <div className="grid min-h-[70vh] place-items-center text-sm text-slate-500">Preparing document…</div>
               )}
@@ -287,8 +374,14 @@ export default function SignatureTask() {
                 />
                 <Step
                   number="2"
-                  title="Confirm signature"
-                  description={signed ? 'Your electronic signature is complete.' : 'Kinetic generates it from your official employee name.'}
+                  title="Complete fields & sign"
+                  description={
+                    signed
+                      ? 'Your electronic signature is complete.'
+                      : missingRequiredFields.length
+                        ? `${missingRequiredFields.length} required field${missingRequiredFields.length === 1 ? '' : 's'} remaining.`
+                        : 'All required fields are ready. Confirm your Kinetic signature.'
+                  }
                   complete={signed}
                   active={reviewComplete && !signed}
                 />
@@ -301,6 +394,203 @@ export default function SignatureTask() {
                 />
               </div>
             </section>
+
+            {!task.external_signing_required && !closed && currentFields.length > 0 && (
+              <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-xs font-bold uppercase tracking-[0.16em] text-slate-500">
+                      Required fields
+                    </p>
+                    <p className="mt-1 text-sm font-semibold text-slate-950">
+                      {requiredReadyCount} of {requiredFields.length} ready
+                    </p>
+                    <p className="mt-1 text-xs leading-5 text-slate-500">
+                      Select any field to jump to its location on the PDF.
+                    </p>
+                  </div>
+
+                  <Badge
+                    tone={
+                      missingRequiredFields.length
+                        ? 'amber'
+                        : 'green'
+                    }
+                  >
+                    {missingRequiredFields.length
+                      ? `${missingRequiredFields.length} remaining`
+                      : 'Ready'}
+                  </Badge>
+                </div>
+
+                <div className="mt-4 flex gap-2">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="secondary"
+                    aria-label="Previous incomplete field"
+                    disabled={missingRequiredFields.length === 0}
+                    onClick={() => {
+                      if (!missingRequiredFields.length) return;
+
+                      const index = missingRequiredFields.findIndex(
+                        (field) => (
+                          String(field.id)
+                          === String(activeFieldId)
+                        ),
+                      );
+
+                      const nextIndex = (
+                        index <= 0
+                          ? missingRequiredFields.length - 1
+                          : index - 1
+                      );
+
+                      setActiveFieldId(
+                        missingRequiredFields[nextIndex].id,
+                      );
+                    }}
+                  >
+                    Previous
+                  </Button>
+
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="secondary"
+                    aria-label="Next incomplete field"
+                    disabled={missingRequiredFields.length === 0}
+                    onClick={() => {
+                      if (!missingRequiredFields.length) return;
+
+                      const index = missingRequiredFields.findIndex(
+                        (field) => (
+                          String(field.id)
+                          === String(activeFieldId)
+                        ),
+                      );
+
+                      const nextIndex = (
+                        index < 0
+                          ? 0
+                          : (
+                            index + 1
+                          ) % missingRequiredFields.length
+                      );
+
+                      setActiveFieldId(
+                        missingRequiredFields[nextIndex].id,
+                      );
+                    }}
+                  >
+                    Next
+                  </Button>
+                </div>
+
+                <div className="mt-4 space-y-3">
+                  {currentFields.map((field) => {
+                    const fieldId = String(field.id);
+                    const selected = (
+                      fieldId
+                      === String(activeFieldId)
+                    );
+                    const editable = (
+                      editableSigningField(field)
+                    );
+                    const ready = isSigningFieldReady(
+                      field,
+                      fieldValues,
+                    );
+
+                    return (
+                      <div
+                        key={fieldId}
+                        className={`rounded-xl border p-3 ${
+                          selected
+                            ? 'border-blue-500 bg-blue-50'
+                            : 'border-slate-200 bg-white'
+                        }`}
+                      >
+                        <button
+                          type="button"
+                          className="flex w-full items-start justify-between gap-3 text-left"
+                          onClick={() => setActiveFieldId(fieldId)}
+                        >
+                          <span>
+                            <span className="block text-xs font-semibold text-slate-900">
+                              {field.label || field.field_type}
+                            </span>
+                            <span className="mt-0.5 block text-[10px] text-slate-500">
+                              Page {field.page_number}
+                              {' · '}
+                              {field.required
+                                ? 'Required'
+                                : 'Optional'}
+                            </span>
+                          </span>
+
+                          <span className={`text-[10px] font-bold uppercase ${
+                            ready
+                              ? 'text-emerald-700'
+                              : 'text-amber-700'
+                          }`}
+                          >
+                            {ready ? 'Ready' : 'Complete'}
+                          </span>
+                        </button>
+
+                        {editableSigningField(field) ? (
+                          <input
+                            aria-label={
+                              field.label
+                              || field.field_type
+                            }
+                            value={
+                              fieldValues[fieldId] || ''
+                            }
+                            maxLength={
+                              field.field_type === 'initials'
+                                ? 32
+                                : 2000
+                            }
+                            placeholder={
+                              field.placeholder
+                              || (
+                                field.field_type === 'initials'
+                                  ? 'Enter initials'
+                                  : 'Enter text'
+                              )
+                            }
+                            onFocus={() => setActiveFieldId(fieldId)}
+                            onChange={(event) => {
+                              setFieldValues((current) => ({
+                                ...current,
+                                [fieldId]: event.target.value,
+                              }));
+                            }}
+                            className="mt-3 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+                          />
+                        ) : (
+                          <p className="mt-3 rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-600">
+                            {field.field_type === 'signature'
+                              ? 'Generated from your official Kinetic profile name.'
+                              : field.field_type === 'date'
+                                ? 'Set by the authoritative server timestamp when you submit.'
+                                : 'Filled from your official Kinetic profile name.'}
+                          </p>
+                        )}
+
+                        {editable && field.prefill_key && (
+                          <p className="mt-1 text-[10px] text-slate-500">
+                            Prefilled from Kinetic profile data. Review before submitting.
+                          </p>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </section>
+            )}
 
             {!task.external_signing_required && !closed && (
               <section className="rounded-2xl border border-blue-200 bg-white p-5 shadow-sm">
@@ -382,7 +672,12 @@ export default function SignatureTask() {
                 <Button
                   className="mt-4 w-full"
                   size="lg"
-                  disabled={busy || !consent || !reviewComplete}
+                  disabled={
+                    busy
+                    || !consent
+                    || !reviewComplete
+                    || missingRequiredFields.length > 0
+                  }
                   onClick={sign}
                 >
                   <Send size={16} /> Sign &amp; submit

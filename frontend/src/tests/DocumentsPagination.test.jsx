@@ -12,6 +12,13 @@ import { tenantApi } from '../api/tenantApi.js';
 import usePermissions from '../hooks/usePermissions.js';
 import Documents from '../pages/Documents.jsx';
 
+vi.mock(
+  '../components/documents/SignatureFieldPlacement.jsx',
+  () => ({
+    default: () => null,
+  }),
+);
+
 vi.mock('../api/documentApi.js', () => ({
   documentApi: {
     list: vi.fn(),

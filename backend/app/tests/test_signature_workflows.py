@@ -1192,6 +1192,17 @@ def test_client_admin_resends_expired_signature_request_with_history(
                         'width': 0.25,
                         'height': 0.05,
                     },
+                    {
+                        'field_type': 'text',
+                        'label': 'Work location',
+                        'placeholder': 'Enter work location',
+                        'prefill_key': 'employee.email',
+                        'page_number': 1,
+                        'x': 0.1,
+                        'y': 0.62,
+                        'width': 0.35,
+                        'height': 0.05,
+                    },
                 ],
             }],
             'reminder': {
@@ -1254,7 +1265,24 @@ def test_client_admin_resends_expired_signature_request_with_history(
         signer['employee_id'],
     )
     assert replacement['recipients'][0]['email'] == signer['email']
-    assert len(replacement['fields']) == 2
+    assert len(replacement['fields']) == 3
+
+    replacement_text_field = next(
+        field
+        for field in replacement['fields']
+        if field['field_type'] == 'text'
+    )
+
+    assert replacement_text_field['label'] == 'Work location'
+    assert (
+        replacement_text_field['placeholder']
+        == 'Enter work location'
+    )
+    assert (
+        replacement_text_field['prefill_key']
+        == 'employee.email'
+    )
+
     assert replacement['reminder']['first_reminder_after_days'] == 3
     assert replacement['reminder']['reminder_interval_days'] == 4
     assert replacement['reminder']['escalation_days_before_due'] == 2
