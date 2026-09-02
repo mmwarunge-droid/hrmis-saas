@@ -18,12 +18,28 @@ def _utc_naive(value):
 class SignatureFieldCreateSchema(Schema):
     field_type = fields.Str(
         required=True,
-        validate=validate.OneOf(['signature', 'date']),
+        validate=validate.OneOf([
+            'signature',
+            'date',
+            'text',
+            'name',
+            'initials',
+        ]),
     )
     label = fields.Str(
         required=False,
         allow_none=True,
         validate=validate.Length(max=160),
+    )
+    placeholder = fields.Str(
+        required=False,
+        allow_none=True,
+        validate=validate.Length(max=240),
+    )
+    prefill_key = fields.Str(
+        required=False,
+        allow_none=True,
+        validate=validate.Length(max=80),
     )
     page_number = fields.Int(
         required=True,
@@ -84,12 +100,19 @@ class SignatureRecipientCreateSchema(Schema):
         signing_fields = data.get('fields') or []
         if not signing_fields:
             return
-        types = [field['field_type'] for field in signing_fields]
-        if len(signing_fields) != 2 or sorted(types) != ['date', 'signature']:
+        types = [
+            field['field_type']
+            for field in signing_fields
+        ]
+
+        if (
+            'signature' not in types
+            or 'date' not in types
+        ):
             raise ValidationError({
                 'fields': [
-                    'Custom placement requires exactly one signature field '
-                    'and one date field.',
+                    'Custom placement requires at least one '
+                    'signature field and one date field.',
                 ],
             })
 
@@ -237,6 +260,16 @@ class SignatureSignSchema(Schema):
     )
 
 
+class SignatureFieldValueSchema(Schema):
+    field_id = fields.UUID(required=True)
+    value = fields.Str(
+        required=False,
+        allow_none=True,
+        load_default=None,
+        validate=validate.Length(max=2000),
+    )
+
+
 class SignatureSubmitSchema(Schema):
     consent = fields.Bool(required=True)
     signature_style = fields.Str(
@@ -247,13 +280,32 @@ class SignatureSubmitSchema(Schema):
             'calligraphy_2',
         ]),
     )
+    fields = fields.List(
+        fields.Nested(SignatureFieldValueSchema),
+        required=False,
+        load_default=list,
+        validate=validate.Length(max=20),
+    )
 
     @validates_schema
-    def validate_consent(self, data, **kwargs):
+    def validate_submission(self, data, **kwargs):
         if data.get('consent') is not True:
             raise ValidationError({
                 'consent': [
-                    'You must consent to use the generated electronic signature.',
+                    'You must consent to use the generated '
+                    'electronic signature.',
+                ],
+            })
+
+        field_ids = [
+            str(item['field_id'])
+            for item in data.get('fields') or []
+        ]
+
+        if len(field_ids) != len(set(field_ids)):
+            raise ValidationError({
+                'fields': [
+                    'Each signing field may only be submitted once.',
                 ],
             })
 

@@ -1405,6 +1405,7 @@ def mark_recipient_signed(
     *,
     consent=True,
     signature_style=DEFAULT_SIGNATURE_STYLE,
+    field_values=None,
     consent_version=CONSENT_VERSION,
 ):
     """Record an internal signature using authoritative profile identity.
@@ -1454,6 +1455,7 @@ def mark_recipient_signed(
         recipient,
         now,
         generated_signature,
+        field_values=field_values,
     )
 
     source_artifact = SignatureArtifact.query.filter_by(
