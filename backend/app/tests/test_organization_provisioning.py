@@ -269,7 +269,10 @@ def test_provisioning_rolls_back_when_admin_creation_fails(
         },
     )
 
-    assert response.status_code == 400
+    assert response.status_code == 409
+
+    error = response.get_json()['error']
+    assert error['code'] == 'EMAIL_ALREADY_REGISTERED'
 
     with app.app_context():
         tenant = Tenant.query.filter_by(

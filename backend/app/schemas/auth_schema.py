@@ -1,9 +1,11 @@
 from marshmallow import Schema, fields, validate
 
+from app.schemas.common_schema import NormalizedEmail
+
 
 class RegisterSchema(Schema):
     tenant_id = fields.UUID(required=False, allow_none=True)
-    email = fields.Email(required=True)
+    email = NormalizedEmail(required=True)
     first_name = fields.Str(required=True, validate=validate.Length(min=1, max=120))
     last_name = fields.Str(required=True, validate=validate.Length(min=1, max=120))
     # Deprecated compatibility input. The secure invite flow ignores it.
@@ -17,7 +19,7 @@ class RegisterSchema(Schema):
 
 
 class LoginSchema(Schema):
-    email = fields.Email(required=True)
+    email = NormalizedEmail(required=True)
     password = fields.Str(required=True, load_only=True)
 
 
@@ -26,7 +28,7 @@ class RefreshSchema(Schema):
 
 
 class ForgotPasswordSchema(Schema):
-    email = fields.Email(required=True)
+    email = NormalizedEmail(required=True)
 
 
 class ResetPasswordSchema(Schema):

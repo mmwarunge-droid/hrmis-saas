@@ -4,6 +4,12 @@ export const userApi = {
   list: (params = {}) => apiClient.get('/users', { params }),
   summary: (params = {}) => apiClient.get('/users/summary', { params }),
   options: (params = {}) => apiClient.get('/users/options', { params }),
+  emailAvailability: (email, tenantId) => apiClient.get('/users/email-availability', {
+    params: {
+      email,
+      tenant_id: tenantId || undefined,
+    },
+  }),
   create: (payload) => apiClient.post('/users', payload),
   update: (id, payload) => apiClient.patch(`/users/${id}`, payload),
   updateRoles: (id, roles) => apiClient.patch(`/users/${id}/roles`, { roles }),

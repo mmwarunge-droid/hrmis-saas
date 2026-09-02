@@ -4,6 +4,9 @@ export const employeeApi = {
   list: (params = {}) => apiClient.get('/employees', { params }),
   accessDirectory: (params = {}) => apiClient.get('/employees/access-directory', { params }),
   summary: () => apiClient.get('/employees/summary'),
+  emailAvailability: (email) => apiClient.get('/employees/email-availability', {
+    params: { email },
+  }),
   get: (id) => apiClient.get(`/employees/${id}`),
   history: (id) => apiClient.get(`/employees/${id}/job-history`),
   provisionAccess: (id, payload) => apiClient.post(`/employees/${id}/provision-access`, payload),

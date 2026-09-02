@@ -7,6 +7,10 @@ from app.services.account_recovery_service import (
 )
 from app.services.audit_service import log_event
 from app.services.auth_service import register_invited_user
+from app.services.email_identity_service import (
+    EmailAlreadyRegisteredError,
+    ensure_access_identity_email_available,
+)
 from app.services.rbac_service import validate_role_assignment
 from app.utils.email import EmailDeliveryError
 
@@ -53,13 +57,17 @@ def provision_employee_access(
 
     validate_role_assignment(actor, roles, employee.tenant_id)
 
-    email = employee.email.strip().lower()
-    if User.query.filter_by(email=email).first():
-        raise AccessProvisioningError(
-            'EMAIL_ALREADY_REGISTERED',
-            'A user account with this employee email already exists',
-            409,
+    try:
+        email = ensure_access_identity_email_available(
+            employee.email,
+            employee.id,
         )
+    except EmailAlreadyRegisteredError as exc:
+        raise AccessProvisioningError(
+            exc.code,
+            str(exc),
+            exc.status_code,
+        ) from exc
 
     user = register_invited_user(
         {

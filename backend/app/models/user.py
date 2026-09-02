@@ -124,6 +124,14 @@ class User(db.Model, TimestampMixin, SoftDeleteMixin, ReprMixin):
         foreign_keys=[mfa_reset_by_user_id],
     )
 
+    __table_args__ = (
+        db.Index(
+            'uq_users_email_normalized',
+            db.func.lower(db.func.trim(email)),
+            unique=True,
+        ),
+    )
+
     @property
     def account_status(self):
         if not self.is_active:
