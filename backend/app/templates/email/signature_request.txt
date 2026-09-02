@@ -4,6 +4,10 @@ Hi {{ recipient_name }},
 
 Document: {{ document_title }}
 Due: {{ due_text }}
+{% if request_message %}
+Message from {{ organization_name }}:
+{{ request_message }}
+{% endif %}
 
 Review and sign your document:
 {{ action_url }}

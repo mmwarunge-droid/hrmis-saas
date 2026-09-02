@@ -1133,3 +1133,365 @@ def test_signature_expiry_cli_expires_overdue_internal_requests(
         }
 
         assert 'signature.request_expired' in event_types
+
+
+def test_client_admin_resends_expired_signature_request_with_history(
+    client,
+    app,
+    tenant,
+    admin_user,
+    auth_headers,
+):
+    signer = _create_employee_signer(
+        app,
+        tenant.id,
+        number='SIGN-RESEND-001',
+        email='resend.signer@acme.test',
+        password='StrongResendSignerPass123!',
+        first_name='Resend',
+    )
+    document_id = _create_document(
+        app,
+        tenant.id,
+        admin_user,
+    )
+
+    initial_due_at = (
+        datetime.utcnow() + timedelta(days=7)
+    ).replace(microsecond=0)
+
+    create_response = client.post(
+        '/api/signature-requests',
+        headers=auth_headers,
+        json={
+            'document_id': str(document_id),
+            'subject': 'Employment contract signature',
+            'message': 'Original signing message.',
+            'signing_mode': 'sequential',
+            'due_at': initial_due_at.isoformat(),
+            'recipients': [{
+                'employee_id': str(signer['employee_id']),
+                'role_label': 'Employee',
+                'sequence': 1,
+                'fields': [
+                    {
+                        'field_type': 'signature',
+                        'label': 'Employee signature',
+                        'page_number': 1,
+                        'x': 0.1,
+                        'y': 0.7,
+                        'width': 0.35,
+                        'height': 0.06,
+                    },
+                    {
+                        'field_type': 'date',
+                        'label': 'Date signed',
+                        'page_number': 1,
+                        'x': 0.55,
+                        'y': 0.7,
+                        'width': 0.25,
+                        'height': 0.05,
+                    },
+                ],
+            }],
+            'reminder': {
+                'first_reminder_after_days': 3,
+                'reminder_interval_days': 4,
+                'escalation_days_before_due': 2,
+            },
+        },
+    )
+
+    assert create_response.status_code == 201
+    initial_data = create_response.get_json()['data']
+    initial_request_id = initial_data['id']
+
+    expired_due_at = (
+        datetime.utcnow() - timedelta(days=1)
+    ).replace(microsecond=0)
+
+    with app.app_context():
+        initial_request = db.session.get(
+            SignatureRequest,
+            initial_request_id,
+        )
+        initial_request.due_at = expired_due_at
+        for recipient in initial_request.recipients:
+            recipient.due_at = expired_due_at
+        db.session.commit()
+
+    resend_due_at = (
+        datetime.utcnow() + timedelta(days=10)
+    ).replace(microsecond=0)
+    resend_message = (
+        'Please review the same employment contract and complete '
+        'your signature as soon as possible.'
+    )
+    outbox_before = len(app.extensions['mail_outbox'])
+
+    resend_response = client.post(
+        f'/api/signature-requests/{initial_request_id}/resend',
+        headers=auth_headers,
+        json={
+            'due_at': resend_due_at.isoformat(),
+            'message': resend_message,
+        },
+    )
+
+    assert resend_response.status_code == 201, (
+        resend_response.get_json()
+    )
+    replacement = resend_response.get_json()['data']
+
+    assert replacement['id'] != initial_request_id
+    assert replacement['document_id'] == str(document_id)
+    assert replacement['subject'] == 'Employment contract signature'
+    assert replacement['message'] == resend_message
+    assert replacement['status'] == 'sent'
+    assert replacement['resend_of_request_id'] == initial_request_id
+    assert replacement['resend_attempt'] == 1
+    assert replacement['recipients'][0]['employee_id'] == str(
+        signer['employee_id'],
+    )
+    assert replacement['recipients'][0]['email'] == signer['email']
+    assert len(replacement['fields']) == 2
+    assert replacement['reminder']['first_reminder_after_days'] == 3
+    assert replacement['reminder']['reminder_interval_days'] == 4
+    assert replacement['reminder']['escalation_days_before_due'] == 2
+
+    assert len(app.extensions['mail_outbox']) == outbox_before + 1
+    resend_email = app.extensions['mail_outbox'][-1]
+    assert resend_email['to'] == signer['email']
+    assert resend_message in resend_email['text']
+    assert resend_message in resend_email['html']
+    assert replacement['recipients'][0]['id'] in resend_email['text']
+
+    with app.app_context():
+        initial_request = db.session.get(
+            SignatureRequest,
+            initial_request_id,
+        )
+        replacement_request = db.session.get(
+            SignatureRequest,
+            replacement['id'],
+        )
+        document = db.session.get(Document, document_id)
+
+        assert initial_request.status == 'expired'
+        assert replacement_request.resend_of_request_id == (
+            initial_request.id
+        )
+        assert replacement_request.resend_attempt == 1
+        assert document.signature_status == 'pending'
+
+        resend_notification = Notification.query.filter_by(
+            user_id=signer['user_id'],
+        ).order_by(
+            Notification.created_at.desc(),
+        ).first()
+        assert resend_notification is not None
+        assert resend_message in resend_notification.body
+
+        initial_events = {
+            event.event_type
+            for event in SignatureEvent.query.filter_by(
+                signature_request_id=initial_request.id,
+            ).all()
+        }
+        replacement_events = {
+            event.event_type
+            for event in SignatureEvent.query.filter_by(
+                signature_request_id=replacement_request.id,
+            ).all()
+        }
+
+        assert 'signature.request_expired' in initial_events
+        assert 'signature.request_resent' in initial_events
+        assert 'signature.request_resend_created' in replacement_events
+
+    duplicate_response = client.post(
+        f'/api/signature-requests/{initial_request_id}/resend',
+        headers=auth_headers,
+        json={
+            'due_at': (
+                datetime.utcnow() + timedelta(days=12)
+            ).replace(microsecond=0).isoformat(),
+            'message': resend_message,
+        },
+    )
+    assert duplicate_response.status_code == 400
+    assert 'active signature request' in (
+        duplicate_response.get_json()['error']['message']
+    ).lower()
+
+    employee_headers = _login(
+        client,
+        signer['email'],
+        signer['password'],
+    )
+    forbidden_response = client.post(
+        f'/api/signature-requests/{initial_request_id}/resend',
+        headers=employee_headers,
+        json={
+            'due_at': (
+                datetime.utcnow() + timedelta(days=14)
+            ).replace(microsecond=0).isoformat(),
+            'message': resend_message,
+        },
+    )
+    assert forbidden_response.status_code == 403
+
+
+def test_super_admin_resends_signature_request_in_selected_tenant(
+    client,
+    app,
+    tenant,
+    admin_user,
+    auth_headers,
+):
+    signer = _create_employee_signer(
+        app,
+        tenant.id,
+        number='SIGN-RESEND-SA-001',
+        email='resend.super.signer@acme.test',
+        password='StrongResendSuperSignerPass123!',
+        first_name='PlatformResend',
+    )
+    document_id = _create_document(
+        app,
+        tenant.id,
+        admin_user,
+    )
+
+    initial_response = client.post(
+        '/api/signature-requests',
+        headers=auth_headers,
+        json={
+            'document_id': str(document_id),
+            'subject': 'Platform resend contract',
+            'signing_mode': 'sequential',
+            'due_at': (
+                datetime.utcnow() + timedelta(days=7)
+            ).replace(microsecond=0).isoformat(),
+            'recipients': [{
+                'employee_id': str(signer['employee_id']),
+                'role_label': 'Employee',
+                'sequence': 1,
+            }],
+        },
+    )
+    assert initial_response.status_code == 201
+    request_id = initial_response.get_json()['data']['id']
+
+    with app.app_context():
+        request_obj = db.session.get(SignatureRequest, request_id)
+        request_obj.status = 'cancelled'
+        request_obj.cancelled_at = utcnow()
+        for recipient in request_obj.recipients:
+            recipient.status = 'skipped'
+        db.session.commit()
+
+        register_user({
+            'email': 'signature-platform-admin@example.test',
+            'first_name': 'Signature',
+            'last_name': 'Platform Admin',
+            'password': 'StrongSignaturePlatformPass123!',
+            'roles': ['SUPER_ADMIN'],
+        })
+
+    platform_client = app.test_client()
+    login = platform_client.post(
+        '/api/auth/login',
+        json={
+            'email': 'signature-platform-admin@example.test',
+            'password': 'StrongSignaturePlatformPass123!',
+        },
+    )
+    assert login.status_code == 200
+    platform_headers = _csrf_header(platform_client)
+
+    response = platform_client.post(
+        f'/api/signature-requests/{request_id}/resend'
+        f'?tenant_id={tenant.id}',
+        headers=platform_headers,
+        json={
+            'due_at': (
+                datetime.utcnow() + timedelta(days=9)
+            ).replace(microsecond=0).isoformat(),
+            'message': 'Please complete the replacement request.',
+        },
+    )
+
+    assert response.status_code == 201, response.get_json()
+    data = response.get_json()['data']
+    assert data['tenant_id'] == str(tenant.id)
+    assert data['resend_of_request_id'] == request_id
+    assert data['resend_attempt'] == 1
+
+
+def test_completed_signature_request_cannot_be_resent(
+    client,
+    app,
+    tenant,
+    admin_user,
+    auth_headers,
+):
+    signer = _create_employee_signer(
+        app,
+        tenant.id,
+        number='SIGN-RESEND-DONE-001',
+        email='resend.completed.signer@acme.test',
+        password='StrongResendCompletedPass123!',
+        first_name='CompletedResend',
+    )
+    document_id = _create_document(
+        app,
+        tenant.id,
+        admin_user,
+    )
+
+    response = client.post(
+        '/api/signature-requests',
+        headers=auth_headers,
+        json={
+            'document_id': str(document_id),
+            'subject': 'Completed contract',
+            'signing_mode': 'sequential',
+            'due_at': (
+                datetime.utcnow() + timedelta(days=7)
+            ).replace(microsecond=0).isoformat(),
+            'recipients': [{
+                'employee_id': str(signer['employee_id']),
+                'role_label': 'Employee',
+                'sequence': 1,
+            }],
+        },
+    )
+    assert response.status_code == 201
+    request_id = response.get_json()['data']['id']
+
+    with app.app_context():
+        request_obj = db.session.get(SignatureRequest, request_id)
+        request_obj.status = 'completed'
+        request_obj.completed_at = utcnow()
+        request_obj.document.signature_status = 'signed'
+        for recipient in request_obj.recipients:
+            recipient.status = 'signed'
+            recipient.signed_at = utcnow()
+        db.session.commit()
+
+    resend_response = client.post(
+        f'/api/signature-requests/{request_id}/resend',
+        headers=auth_headers,
+        json={
+            'due_at': (
+                datetime.utcnow() + timedelta(days=10)
+            ).replace(microsecond=0).isoformat(),
+            'message': 'This should not be allowed.',
+        },
+    )
+
+    assert resend_response.status_code == 400
+    assert 'completed' in (
+        resend_response.get_json()['error']['message']
+    ).lower()

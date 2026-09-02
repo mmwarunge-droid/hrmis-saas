@@ -20,7 +20,7 @@ const request = {
   status: 'in_progress',
   signing_mode: 'sequential',
   current_sequence: 2,
-  due_at: '2026-08-20T17:00:00Z',
+  due_at: '2099-08-20T17:00:00Z',
   recipient_count: 2,
   signed_count: 1,
   document: {
@@ -35,7 +35,7 @@ const request = {
       role_label: 'Employee',
       sequence: 1,
       status: 'signed',
-      due_at: '2026-08-20T17:00:00Z',
+      due_at: '2099-08-20T17:00:00Z',
       signed_at: '2026-08-12T10:00:00Z',
     },
     {
@@ -45,7 +45,7 @@ const request = {
       role_label: 'Manager',
       sequence: 2,
       status: 'notified',
-      due_at: '2026-08-20T17:00:00Z',
+      due_at: '2099-08-20T17:00:00Z',
       signed_at: null,
     },
   ],
@@ -65,6 +65,7 @@ describe('SignatureRequestDetails', () => {
       <SignatureRequestDetails
         request={request}
         onRemind={vi.fn()}
+        onResend={vi.fn()}
         onUpdateDeadline={vi.fn()}
         onCancel={vi.fn()}
       />,
@@ -102,6 +103,7 @@ describe('SignatureRequestDetails', () => {
       <SignatureRequestDetails
         request={request}
         onRemind={onRemind}
+        onResend={vi.fn()}
         onUpdateDeadline={onUpdateDeadline}
         onCancel={onCancel}
       />,
@@ -163,4 +165,113 @@ describe('SignatureRequestDetails', () => {
       'The document requires revision.',
     );
   });
+  it('prefills and submits a terminal request resend', () => {
+    const onResend = vi.fn();
+    const expiredRequest = {
+      ...request,
+      status: 'expired',
+      current_sequence: 1,
+      due_at: '2026-08-20T17:00:00Z',
+      signed_count: 0,
+      recipients: request.recipients.map((recipient) => ({
+        ...recipient,
+        status: 'expired',
+        signed_at: null,
+      })),
+    };
+
+    render(
+      <SignatureRequestDetails
+        request={expiredRequest}
+        onRemind={vi.fn()}
+        onResend={onResend}
+        onUpdateDeadline={vi.fn()}
+        onCancel={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: 'Resend for signature',
+      }),
+    );
+
+    const message = screen.getByLabelText('Resend message');
+    const resendForm = message.closest('form');
+
+    expect(resendForm).not.toBeNull();
+    expect(
+      within(resendForm).getByText('Employment contract'),
+    ).toBeInTheDocument();
+    expect(
+      within(resendForm).getByText(
+        /Amina Otieno · amina@acme.test/,
+      ),
+    ).toBeInTheDocument();
+    expect(
+      within(resendForm).getByText(
+        /Brian Kimani · brian@acme.test/,
+      ),
+    ).toBeInTheDocument();
+    expect(message).toHaveValue(
+      'We noticed that you have not yet signed this document. '
+      + 'Please review it and complete your signature at your '
+      + 'earliest convenience.',
+    );
+
+    fireEvent.change(
+      screen.getByLabelText('New signing deadline'),
+      { target: { value: '2026-09-15T17:00' } },
+    );
+    fireEvent.change(message, {
+      target: {
+        value: 'Please sign the replacement request.',
+      },
+    });
+
+    fireEvent.click(
+      screen.getAllByRole('button', {
+        name: 'Resend for signature',
+      }).at(-1),
+    );
+
+    expect(onResend).toHaveBeenCalledWith(
+      'request-1',
+      {
+        due_at: new Date(
+          '2026-09-15T17:00',
+        ).toISOString(),
+        message: 'Please sign the replacement request.',
+      },
+    );
+  });
+
+  it('offers resend immediately for an overdue internal request', () => {
+    const overdueRequest = {
+      ...request,
+      due_at: '2020-08-20T17:00:00Z',
+    };
+
+    render(
+      <SignatureRequestDetails
+        request={overdueRequest}
+        onRemind={vi.fn()}
+        onResend={vi.fn()}
+        onUpdateDeadline={vi.fn()}
+        onCancel={vi.fn()}
+      />,
+    );
+
+    expect(
+      screen.getByRole('button', {
+        name: 'Resend for signature',
+      }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', {
+        name: 'Send reminder now',
+      }),
+    ).not.toBeInTheDocument();
+  });
+
 });

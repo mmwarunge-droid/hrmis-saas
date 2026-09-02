@@ -94,6 +94,11 @@ export const signatureApi = {
     `/signature-requests/${requestId}/remind`,
   ),
 
+  resend: (requestId, payload) => apiClient.post(
+    `/signature-requests/${requestId}/resend`,
+    payload,
+  ),
+
   updateDeadline: (requestId, dueAt) => apiClient.patch(
     `/signature-requests/${requestId}/deadline`,
     { due_at: dueAt },

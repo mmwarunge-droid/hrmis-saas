@@ -30,6 +30,20 @@ class SignatureRequest(
         nullable=True,
         index=True,
     )
+    resend_of_request_id = db.Column(
+        GUID(),
+        db.ForeignKey(
+            'signature_requests.id',
+            ondelete='SET NULL',
+        ),
+        nullable=True,
+        index=True,
+    )
+    resend_attempt = db.Column(
+        db.Integer,
+        nullable=False,
+        default=0,
+    )
 
     subject = db.Column(db.String(220), nullable=False)
     message = db.Column(db.Text)
@@ -131,6 +145,11 @@ class SignatureRequest(
         'User',
         foreign_keys=[created_by_id],
     )
+    resend_of_request = db.relationship(
+        'SignatureRequest',
+        remote_side='SignatureRequest.id',
+        foreign_keys=[resend_of_request_id],
+    )
     recipients = db.relationship(
         'SignatureRecipient',
         back_populates='signature_request',
@@ -183,6 +202,10 @@ class SignatureRequest(
         db.CheckConstraint(
             'current_sequence >= 1',
             name='ck_signature_requests_current_sequence',
+        ),
+        db.CheckConstraint(
+            'resend_attempt >= 0',
+            name='ck_signature_requests_resend_attempt',
         ),
         db.CheckConstraint(
             "assurance_level IS NULL OR "
@@ -239,6 +262,12 @@ class SignatureRequest(
                 if self.created_by_id
                 else None
             ),
+            'resend_of_request_id': (
+                str(self.resend_of_request_id)
+                if self.resend_of_request_id
+                else None
+            ),
+            'resend_attempt': self.resend_attempt,
             'subject': self.subject,
             'message': self.message,
             'signing_mode': self.signing_mode,

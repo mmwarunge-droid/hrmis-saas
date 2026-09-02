@@ -40,6 +40,7 @@ from app.services.native_signature_service import (
     create_signature_fields,
     create_signed_document_artifact,
     is_pdf_document,
+    source_page_count,
 )
 from app.services.signature_providers.registry import (
     get_signature_provider,
@@ -62,6 +63,17 @@ EXPIRABLE_INTERNAL_SIGNATURE_REQUEST_STATUSES = {
     'sent',
     'in_progress',
 }
+RESENDABLE_SIGNATURE_REQUEST_STATUSES = {
+    'expired',
+    'declined',
+    'cancelled',
+    'failed',
+}
+DEFAULT_RESEND_MESSAGE = (
+    'We noticed that you have not yet signed this document. '
+    'Please review it and complete your signature at your '
+    'earliest convenience.'
+)
 
 
 def _provider_backed(signature_request):
@@ -320,6 +332,11 @@ def _notify_recipient(
         f'Due: {_due_text(recipient.due_at)}'
     )
 
+    if signature_request.message:
+        notification_body += (
+            f'\n\n{signature_request.message}'
+        )
+
     email_subject = (
         f'[{organization_name}] Signature required: {document.title}'
     )
@@ -329,6 +346,7 @@ def _notify_recipient(
         'organization_name': organization_name,
         'document_title': document.title,
         'due_text': _due_text(recipient.due_at),
+        'request_message': signature_request.message,
         'action_url': action_url,
     }
     email_body = render_template(
@@ -462,6 +480,9 @@ def create_signature_request(
     payload,
     tenant_id,
     actor,
+    *,
+    resend_of_request_id=None,
+    resend_attempt=0,
 ):
     document = Document.query.filter_by(
         id=payload['document_id'],
@@ -617,6 +638,8 @@ def create_signature_request(
         tenant_id=tenant_id,
         document_id=document.id,
         created_by_id=actor.id,
+        resend_of_request_id=resend_of_request_id,
+        resend_attempt=resend_attempt,
         subject=payload['subject'],
         message=payload.get('message'),
         signing_mode=signing_mode,
@@ -715,6 +738,12 @@ def create_signature_request(
             'assurance_level': assurance_level,
             'recipient_count': len(resolved_recipients),
             'due_at': request_due_at.isoformat(),
+            'resend_of_request_id': (
+                str(resend_of_request_id)
+                if resend_of_request_id
+                else None
+            ),
+            'resend_attempt': resend_attempt,
         },
     )
 
@@ -879,6 +908,198 @@ def create_signature_request(
     db.session.commit()
     return signature_request
 
+
+
+
+def _resend_recipient_fields(signature_request, recipient):
+    if _provider_backed(signature_request) or not recipient.fields:
+        return []
+
+    source_pages = source_page_count(signature_request)
+
+    if any(
+        field.page_number > source_pages
+        for field in recipient.fields
+    ):
+        # These are Kinetic's generated signing-record fields. Let the
+        # replacement request generate a fresh record page rather than
+        # treating those fields as custom placements on the source PDF.
+        return []
+
+    return [
+        {
+            'field_type': field.field_type,
+            'label': field.label,
+            'page_number': field.page_number,
+            'x': field.x,
+            'y': field.y,
+            'width': field.width,
+            'height': field.height,
+            'required': field.required,
+        }
+        for field in recipient.fields
+    ]
+
+
+def resend_signature_request(
+    signature_request,
+    *,
+    due_at,
+    message,
+    actor,
+):
+    if signature_request.provider is None:
+        expire_overdue_internal_signature_requests(
+            tenant_id=signature_request.tenant_id,
+            document_id=signature_request.document_id,
+            now=utcnow(),
+            actor=actor,
+        )
+
+    if signature_request.status == 'completed':
+        raise ValueError(
+            'A completed signature request cannot be resent.',
+        )
+
+    if signature_request.status in OPEN_SIGNATURE_REQUEST_STATUSES:
+        raise ValueError(
+            'This signature request is still active. Send a reminder '
+            'or cancel it before creating a replacement request.',
+        )
+
+    if signature_request.status not in RESENDABLE_SIGNATURE_REQUEST_STATUSES:
+        raise ValueError(
+            'Only expired, declined, cancelled, or failed signature '
+            'requests can be resent.',
+        )
+
+    document = Document.query.filter_by(
+        id=signature_request.document_id,
+        tenant_id=signature_request.tenant_id,
+        deleted_at=None,
+    ).first()
+
+    if not document or document.status != 'active':
+        raise ValueError(
+            'The original document is no longer active and cannot '
+            'be resent for signature.',
+        )
+
+    root_request_id = (
+        signature_request.resend_of_request_id
+        or signature_request.id
+    )
+
+    latest_attempt = db.session.query(
+        db.func.max(SignatureRequest.resend_attempt),
+    ).filter(
+        SignatureRequest.tenant_id == signature_request.tenant_id,
+        SignatureRequest.resend_of_request_id == root_request_id,
+    ).scalar() or 0
+    next_attempt = int(latest_attempt) + 1
+
+    recipients = []
+
+    for recipient in signature_request.recipients:
+        if not recipient.employee_id:
+            raise ValueError(
+                f'{recipient.name} is no longer linked to an employee '
+                'record and cannot be resent automatically.',
+            )
+
+        recipients.append({
+            'employee_id': recipient.employee_id,
+            'role_label': recipient.role_label or 'Signatory',
+            'sequence': recipient.sequence,
+            'fields': _resend_recipient_fields(
+                signature_request,
+                recipient,
+            ),
+        })
+
+    reminder = signature_request.reminder_rule
+    resend_payload = {
+        'document_id': signature_request.document_id,
+        'subject': signature_request.subject,
+        'message': (
+            (message or '').strip()
+            or DEFAULT_RESEND_MESSAGE
+        ),
+        'signing_mode': signature_request.signing_mode,
+        'assurance_level': (
+            signature_request.assurance_level or 'standard'
+        ),
+        'due_at': due_at,
+        'recipients': recipients,
+        'reminder': {
+            'first_reminder_after_days': (
+                reminder.first_reminder_after_days
+                if reminder
+                else 2
+            ),
+            'reminder_interval_days': (
+                reminder.reminder_interval_days
+                if reminder
+                else 2
+            ),
+            'escalation_days_before_due': (
+                reminder.escalation_days_before_due
+                if reminder
+                else 1
+            ),
+            'is_active': True,
+        },
+    }
+
+    replacement = create_signature_request(
+        resend_payload,
+        signature_request.tenant_id,
+        actor,
+        resend_of_request_id=root_request_id,
+        resend_attempt=next_attempt,
+    )
+
+    _record_event(
+        signature_request,
+        'signature.request_resent',
+        actor=actor,
+        description='A replacement signature request was sent',
+        metadata={
+            'replacement_request_id': str(replacement.id),
+            'root_request_id': str(root_request_id),
+            'resend_attempt': next_attempt,
+            'new_due_at': replacement.due_at.isoformat(),
+            'message': replacement.message,
+        },
+    )
+    _record_event(
+        replacement,
+        'signature.request_resend_created',
+        actor=actor,
+        description='This request replaced an earlier signature request',
+        metadata={
+            'source_request_id': str(signature_request.id),
+            'root_request_id': str(root_request_id),
+            'resend_attempt': next_attempt,
+        },
+    )
+
+    log_event(
+        'signature.request_resend',
+        'SignatureRequest',
+        replacement.id,
+        tenant_id=replacement.tenant_id,
+        metadata={
+            'source_request_id': str(signature_request.id),
+            'root_request_id': str(root_request_id),
+            'document_id': str(replacement.document_id),
+            'resend_attempt': next_attempt,
+        },
+        actor=actor,
+    )
+
+    db.session.commit()
+    return replacement
 
 
 def can_access_signature_recipient(
