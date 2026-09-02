@@ -436,7 +436,21 @@ def _signature_font(field):
     return 'Times-Italic'
 
 
-def _draw_field(pdf_canvas, field, page_width, page_height):
+def _draw_field(
+    pdf_canvas,
+    field,
+    page_width,
+    page_height,
+    *,
+    supplemental=False,
+):
+    """Stamp one completed signing value into its configured PDF box.
+
+    Original source PDFs already own their labels, rules and typography.
+    Kinetic therefore stamps only the completed value on source pages.
+    Decorative labels and rules are retained solely for Kinetic-generated
+    supplemental signing-record pages.
+    """
     if not field.value:
         return
 
@@ -445,37 +459,179 @@ def _draw_field(pdf_canvas, field, page_width, page_height):
     field_width = field.width * page_width
     field_height = field.height * page_height
 
-    label = field.label or (
-        'Electronic signature'
-        if field.field_type == 'signature'
-        else 'Date signed'
+    # Keep a small inset so glyphs do not touch the configured field edges.
+    horizontal_padding = min(
+        2.0,
+        field_width * 0.04,
     )
-    pdf_canvas.setFont('Helvetica', 7)
-    pdf_canvas.drawString(x, y_top + 4, label)
+    available_width = max(
+        1.0,
+        field_width - (horizontal_padding * 2),
+    )
+
+    text = ' '.join(
+        str(field.value).split()
+    )
 
     if field.field_type == 'signature':
-        font_size = max(15, min(28, field_height * 0.55))
-        pdf_canvas.setFont(_signature_font(field), font_size)
+        font_name = _signature_font(field)
+        # Signatures need visual presence, but must still respect the
+        # administrator's actual field rectangle.
+        font_size = min(
+            24.0,
+            field_height * 0.62,
+        )
+        minimum_font_size = min(
+            font_size,
+            6.0,
+        )
     else:
-        font_size = max(9, min(12, field_height * 0.45))
-        pdf_canvas.setFont('Helvetica', font_size)
+        font_name = 'Helvetica'
+        font_size = min(
+            11.0,
+            field_height * 0.48,
+        )
+        minimum_font_size = min(
+            font_size,
+            5.0,
+        )
 
-    baseline = _field_baseline(field, page_height, font_size)
-    text = str(field.value)
-    # Avoid overflowing a recipient block. ReportLab's standard fonts do not
-    # provide automatic wrapping for signatures, so trim very long names.
-    while len(text) > 2 and pdf_canvas.stringWidth(
-        text,
-        _signature_font(field) if field.field_type == 'signature' else 'Helvetica',
+    # Degenerate boxes should not force text outside the configured area.
+    font_size = max(
+        1.0,
         font_size,
-    ) > field_width:
-        text = text[:-1]
-    if text != str(field.value):
-        text = text.rstrip() + '...'
+    )
+    minimum_font_size = max(
+        1.0,
+        minimum_font_size,
+    )
 
-    pdf_canvas.drawString(x, baseline, text)
-    pdf_canvas.setLineWidth(0.5)
-    pdf_canvas.line(x, baseline - 4, x + field_width, baseline - 4)
+    # Prefer shrinking over truncation. This is particularly important for
+    # names, dates and initials where the complete value normally fits with
+    # only a modest size reduction.
+    while (
+        font_size > minimum_font_size
+        and pdf_canvas.stringWidth(
+            text,
+            font_name,
+            font_size,
+        ) > available_width
+    ):
+        font_size = max(
+            minimum_font_size,
+            font_size - 0.5,
+        )
+
+    # If the configured rectangle is genuinely too narrow even at the minimum
+    # readable size, truncate inside the box instead of bleeding into adjacent
+    # document text.
+    if pdf_canvas.stringWidth(
+        text,
+        font_name,
+        font_size,
+    ) > available_width:
+        original_text = text
+        candidate = text
+        suffix = '...'
+
+        while (
+            candidate
+            and pdf_canvas.stringWidth(
+                candidate.rstrip() + suffix,
+                font_name,
+                font_size,
+            ) > available_width
+        ):
+            candidate = candidate[:-1]
+
+        if candidate:
+            text = candidate.rstrip() + suffix
+        elif pdf_canvas.stringWidth(
+            suffix,
+            font_name,
+            font_size,
+        ) <= available_width:
+            text = suffix
+        else:
+            text = ''
+
+        # Avoid manufacturing an ellipsis when no truncation happened.
+        if candidate == original_text:
+            text = original_text
+
+    pdf_canvas.setFont(
+        font_name,
+        font_size,
+    )
+
+    # Vertically centre the glyph box within the administrator-selected
+    # rectangle using the registered font's actual ascent/descent metrics.
+    y_bottom = y_top - field_height
+    ascent, descent = pdfmetrics.getAscentDescent(
+        font_name,
+        font_size,
+    )
+    text_height = ascent - descent
+
+    baseline = (
+        y_bottom
+        + max(
+            0.0,
+            (field_height - text_height) / 2,
+        )
+        - descent
+    )
+
+    if supplemental:
+        label = field.label or {
+            'signature': 'Electronic signature',
+            'date': 'Date signed',
+            'name': 'Name',
+            'text': 'Text',
+            'initials': 'Initials',
+        }.get(
+            field.field_type,
+            'Signing field',
+        )
+
+        pdf_canvas.setFont(
+            'Helvetica',
+            7,
+        )
+        pdf_canvas.drawString(
+            x,
+            y_top + 4,
+            label,
+        )
+
+        pdf_canvas.setFont(
+            font_name,
+            font_size,
+        )
+
+    if text:
+        pdf_canvas.drawString(
+            x + horizontal_padding,
+            baseline,
+            text,
+        )
+
+    # Only Kinetic's blank supplemental signing record needs its own rule.
+    # Drawing another line on an original form duplicates the source PDF's
+    # existing Signature/Name/Date lines and creates the overlap seen in
+    # production.
+    if supplemental:
+        rule_y = max(
+            y_bottom + 1,
+            baseline - 3,
+        )
+        pdf_canvas.setLineWidth(0.5)
+        pdf_canvas.line(
+            x,
+            rule_y,
+            x + field_width,
+            rule_y,
+        )
 
 
 def _draw_recipient_identity(pdf_canvas, recipient, signature_field, width, height):
@@ -561,7 +717,13 @@ def render_signature_pdf(signature_request):
                     )
 
         for field in page_fields:
-            _draw_field(overlay, field, page_width, page_height)
+            _draw_field(
+                overlay,
+                field,
+                page_width,
+                page_height,
+                supplemental=supplemental,
+            )
 
         if supplemental:
             overlay.setFont('Helvetica', 7)
