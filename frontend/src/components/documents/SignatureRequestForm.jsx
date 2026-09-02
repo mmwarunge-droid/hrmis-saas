@@ -49,7 +49,7 @@ export default function SignatureRequestForm({
     newRecipient(),
   ]);
   const [error, setError] = useState('');
-  const [fieldPlacementMode, setFieldPlacementMode] = useState('record');
+  const [fieldPlacementMode, setFieldPlacementMode] = useState('document');
 
   const isQes = form.assurance_level === 'qes';
 
@@ -79,6 +79,7 @@ export default function SignatureRequestForm({
 
   const usesDocumentFields = (
     !isQes
+    && isPdfDocument
     && !isDocxDocument
     && fieldPlacementMode === 'document'
   );
@@ -350,9 +351,10 @@ export default function SignatureRequestForm({
               : (
                 "Kinetic generates each signature from the signatory's "
                 + 'official profile name and stamps the signing date '
-                + 'from the server. Choose whether to use a clean '
-                + 'signing-record page or place the two required '
-                + 'fields directly on this PDF.'
+                + 'from the server. For PDF contracts and forms, prepare '
+                + 'signing fields directly on the original document. '
+                + 'The legacy signing-record page remains available '
+                + 'for simple workflows.'
               )}
           </p>
           <div className="mt-3 grid gap-2 md:grid-cols-2">
@@ -370,8 +372,8 @@ export default function SignatureRequestForm({
                   className="mt-0.5"
                 />
                 <span>
-                  <strong className="block text-xs">Signing record page</strong>
-                  <span className="mt-0.5 block text-[11px] leading-4 text-emerald-800">Recommended. Two signers appear side by side; larger groups use a two-column layout.</span>
+                  <strong className="block text-xs">Legacy signing record page</strong>
+                  <span className="mt-0.5 block text-[11px] leading-4 text-emerald-800">Use when a separate signing record is preferred instead of placing fields on the source PDF.</span>
                 </span>
               </span>
             </label>
@@ -390,11 +392,11 @@ export default function SignatureRequestForm({
                   className="mt-0.5"
                 />
                 <span>
-                  <strong className="block text-xs">Place fields on PDF</strong>
+                  <strong className="block text-xs">Prepare fields on PDF</strong>
                   <span className="mt-0.5 block text-[11px] leading-4 text-emerald-800">
                     {isDocxDocument
                       ? 'Available for PDF source documents only.'
-                      : 'Use existing signature/date areas in a contract or form.'}
+                      : 'Place signature, date, name, text and initials directly on the original PDF.'}
                   </span>
                 </span>
               </span>

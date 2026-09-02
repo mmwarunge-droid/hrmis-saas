@@ -930,6 +930,8 @@ def _resend_recipient_fields(signature_request, recipient):
         {
             'field_type': field.field_type,
             'label': field.label,
+            'placeholder': field.placeholder,
+            'prefill_key': field.prefill_key,
             'page_number': field.page_number,
             'x': field.x,
             'y': field.y,

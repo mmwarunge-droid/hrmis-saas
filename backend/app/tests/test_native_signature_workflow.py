@@ -814,3 +814,432 @@ def test_docx_conversion_failure_rolls_back_signature_request(
         assert request_count == 0
         assert artifact_count == 0
         assert document.signature_status == 'not_required'
+
+
+def test_submit_route_accepts_v2_fields_rejects_foreign_field_and_stamps_final_pdf(
+    client,
+    app,
+    tenant,
+    admin_user,
+    auth_headers,
+    tmp_path,
+):
+    app.config['SIGNATURE_EVIDENCE_STORAGE'] = 'local'
+    app.config['SIGNATURE_EVIDENCE_FOLDER'] = str(
+        tmp_path / 'signature-v2-evidence',
+    )
+
+    source_path = tmp_path / 'signature-v2-contract.pdf'
+    source_bytes = _make_pdf(source_path)
+
+    def create_signer(
+        *,
+        number,
+        email,
+        password,
+        first_name,
+    ):
+        user = register_user({
+            'tenant_id': tenant.id,
+            'email': email,
+            'first_name': first_name,
+            'last_name': 'Signer',
+            'password': password,
+            'roles': ['EMPLOYEE'],
+            'email_verified_at': utcnow(),
+        })
+
+        user_id = inspect(user).identity[0]
+
+        employee = Employee(
+            tenant_id=tenant.id,
+            user_id=user_id,
+            employee_number=number,
+            first_name=first_name,
+            last_name='Signer',
+            email=email,
+            hire_date=datetime.utcnow().date(),
+            employment_status='active',
+            employment_type='full_time',
+        )
+
+        db.session.add(employee)
+        db.session.flush()
+
+        return {
+            'employee_id': employee.id,
+            'email': email,
+            'password': password,
+        }
+
+    with app.app_context():
+        signer_a = create_signer(
+            number='SIGN-V2-HTTP-A',
+            email='signing.v2.http.a@acme.test',
+            password='StrongSigningV2AlphaPass123!',
+            first_name='Amina',
+        )
+
+        signer_b = create_signer(
+            number='SIGN-V2-HTTP-B',
+            email='signing.v2.http.b@acme.test',
+            password='StrongSigningV2BravoPass123!',
+            first_name='Brian',
+        )
+
+        admin_user_id = inspect(admin_user).identity[0]
+
+        document = Document(
+            tenant_id=tenant.id,
+            uploaded_by_id=admin_user_id,
+            title='Signing V2 HTTP Integration Contract',
+            document_type='contract',
+            original_filename='signature-v2-contract.pdf',
+            stored_filename='signature-v2-contract.pdf',
+            file_path=str(source_path),
+            mime_type='application/pdf',
+            size_bytes=len(source_bytes),
+            checksum_sha256=hashlib.sha256(
+                source_bytes,
+            ).hexdigest(),
+            signature_status='not_required',
+            access_level='employee',
+            status='active',
+        )
+
+        db.session.add(document)
+        db.session.commit()
+
+        document_id = document.id
+
+        signer_a_employee_id = signer_a[
+            'employee_id'
+        ]
+        signer_b_employee_id = signer_b[
+            'employee_id'
+        ]
+
+    due_at = (
+        datetime.utcnow()
+        + timedelta(days=7)
+    ).replace(microsecond=0)
+
+    def signing_fields(base_y):
+        return [
+            {
+                'field_type': 'signature',
+                'label': 'Electronic signature',
+                'page_number': 1,
+                'x': 0.08,
+                'y': base_y,
+                'width': 0.30,
+                'height': 0.07,
+                'required': True,
+            },
+            {
+                'field_type': 'date',
+                'label': 'Date signed',
+                'page_number': 1,
+                'x': 0.45,
+                'y': base_y,
+                'width': 0.19,
+                'height': 0.05,
+                'required': True,
+            },
+            {
+                'field_type': 'text',
+                'label': 'Work location',
+                'placeholder': 'Enter work location',
+                'page_number': 1,
+                'x': 0.08,
+                'y': base_y + 0.09,
+                'width': 0.30,
+                'height': 0.05,
+                'required': True,
+            },
+            {
+                'field_type': 'initials',
+                'label': 'Initials',
+                'placeholder': 'Enter initials',
+                'page_number': 1,
+                'x': 0.45,
+                'y': base_y + 0.09,
+                'width': 0.13,
+                'height': 0.05,
+                'required': True,
+            },
+        ]
+
+    create_response = client.post(
+        '/api/signature-requests',
+        headers=auth_headers,
+        json={
+            'document_id': str(document_id),
+            'subject': (
+                'Signing fields V2 HTTP integration'
+            ),
+            'signing_mode': 'parallel',
+            'assurance_level': 'standard',
+            'due_at': due_at.isoformat(),
+            'recipients': [
+                {
+                    'employee_id': str(
+                        signer_a_employee_id,
+                    ),
+                    'role_label': 'Employee',
+                    'sequence': 1,
+                    'fields': signing_fields(0.48),
+                },
+                {
+                    'employee_id': str(
+                        signer_b_employee_id,
+                    ),
+                    'role_label': 'Manager',
+                    'sequence': 1,
+                    'fields': signing_fields(0.70),
+                },
+            ],
+        },
+    )
+
+    assert create_response.status_code == 201
+
+    request_data = create_response.get_json()['data']
+    request_id = request_data['id']
+
+    with app.app_context():
+        recipient_a = (
+            SignatureRecipient.query.filter_by(
+                signature_request_id=request_id,
+                employee_id=signer_a_employee_id,
+            ).one()
+        )
+
+        recipient_b = (
+            SignatureRecipient.query.filter_by(
+                signature_request_id=request_id,
+                employee_id=signer_b_employee_id,
+            ).one()
+        )
+
+        recipient_a_id = str(recipient_a.id)
+        recipient_b_id = str(recipient_b.id)
+
+        fields = SignatureField.query.filter_by(
+            signature_request_id=request_id,
+        ).all()
+
+        def field_id(
+            recipient_id,
+            field_type,
+        ):
+            matches = [
+                field
+                for field in fields
+                if (
+                    str(field.recipient_id)
+                    == str(recipient_id)
+                    and field.field_type
+                    == field_type
+                )
+            ]
+
+            assert len(matches) == 1
+
+            return str(matches[0].id)
+
+        a_text_id = field_id(
+            recipient_a_id,
+            'text',
+        )
+
+        a_initials_id = field_id(
+            recipient_a_id,
+            'initials',
+        )
+
+        b_text_id = field_id(
+            recipient_b_id,
+            'text',
+        )
+
+        b_initials_id = field_id(
+            recipient_b_id,
+            'initials',
+        )
+
+    signer_a_headers = _login(
+        client,
+        signer_a['email'],
+        signer_a['password'],
+    )
+
+    viewed_a = client.patch(
+        (
+            '/api/signature-requests/recipients/'
+            f'{recipient_a_id}/viewed'
+        ),
+        headers=signer_a_headers,
+    )
+
+    assert viewed_a.status_code == 200
+
+    # The ID is real and belongs to the same request and
+    # tenant, but belongs to recipient B. Recipient A must
+    # still be unable to write it.
+    foreign_field_response = client.post(
+        (
+            '/api/signature-requests/recipients/'
+            f'{recipient_a_id}/submit'
+        ),
+        headers=signer_a_headers,
+        json={
+            'consent': True,
+            'signature_style': 'calligraphy_1',
+            'fields': [
+                {
+                    'field_id': b_text_id,
+                    'value': 'TAMPERED-FOREIGN-VALUE',
+                },
+            ],
+        },
+    )
+
+    assert foreign_field_response.status_code == 400
+
+    with app.app_context():
+        foreign_field = (
+            SignatureField.query.filter_by(
+                id=b_text_id,
+            ).one()
+        )
+
+        recipient_a = db.session.get(
+            SignatureRecipient,
+            recipient_a_id,
+        )
+
+        assert foreign_field.value is None
+        assert recipient_a.status != 'signed'
+
+    valid_a = client.post(
+        (
+            '/api/signature-requests/recipients/'
+            f'{recipient_a_id}/submit'
+        ),
+        headers=signer_a_headers,
+        json={
+            'consent': True,
+            'signature_style': 'calligraphy_1',
+            'fields': [
+                {
+                    'field_id': a_text_id,
+                    'value': 'Nairobi V2 Alpha',
+                },
+                {
+                    'field_id': a_initials_id,
+                    'value': 'AXV2',
+                },
+            ],
+        },
+    )
+
+    assert valid_a.status_code == 200
+
+    signer_b_headers = _login(
+        client,
+        signer_b['email'],
+        signer_b['password'],
+    )
+
+    viewed_b = client.patch(
+        (
+            '/api/signature-requests/recipients/'
+            f'{recipient_b_id}/viewed'
+        ),
+        headers=signer_b_headers,
+    )
+
+    assert viewed_b.status_code == 200
+
+    valid_b = client.post(
+        (
+            '/api/signature-requests/recipients/'
+            f'{recipient_b_id}/submit'
+        ),
+        headers=signer_b_headers,
+        json={
+            'consent': True,
+            'signature_style': 'calligraphy_1',
+            'fields': [
+                {
+                    'field_id': b_text_id,
+                    'value': 'Mombasa V2 Bravo',
+                },
+                {
+                    'field_id': b_initials_id,
+                    'value': 'BXV2',
+                },
+            ],
+        },
+    )
+
+    assert valid_b.status_code == 200
+
+    with app.app_context():
+        persisted_fields = {
+            str(field.id): field
+            for field in SignatureField.query.filter_by(
+                signature_request_id=request_id,
+            ).all()
+        }
+
+        assert (
+            persisted_fields[a_text_id].value
+            == 'Nairobi V2 Alpha'
+        )
+        assert (
+            persisted_fields[a_initials_id].value
+            == 'AXV2'
+        )
+        assert (
+            persisted_fields[b_text_id].value
+            == 'Mombasa V2 Bravo'
+        )
+        assert (
+            persisted_fields[b_initials_id].value
+            == 'BXV2'
+        )
+
+        completed_request = db.session.get(
+            SignatureRequest,
+            request_id,
+        )
+
+        assert completed_request.status == 'completed'
+        assert completed_request.completed_at is not None
+
+    signed_document = client.get(
+        (
+            '/api/signature-requests/recipients/'
+            f'{recipient_b_id}/signed-document'
+        ),
+        headers=signer_b_headers,
+    )
+
+    assert signed_document.status_code == 200
+    assert signed_document.data.startswith(b'%PDF')
+
+    reader = PdfReader(
+        BytesIO(signed_document.data)
+    )
+
+    rendered_text = '\n'.join(
+        page.extract_text() or ''
+        for page in reader.pages
+    )
+
+    assert 'Nairobi V2 Alpha' in rendered_text
+    assert 'AXV2' in rendered_text
+    assert 'Mombasa V2 Bravo' in rendered_text
+    assert 'BXV2' in rendered_text
