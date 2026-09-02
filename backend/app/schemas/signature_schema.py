@@ -292,6 +292,26 @@ class SignatureDeadlineUpdateSchema(Schema):
             })
 
 
+class SignatureResendSchema(Schema):
+    due_at = fields.DateTime(required=True)
+    message = fields.Str(
+        required=False,
+        allow_none=True,
+        validate=validate.Length(max=5000),
+    )
+
+    @validates_schema
+    def validate_due_at(self, data, **kwargs):
+        due_at = data.get('due_at')
+
+        if due_at and _utc_naive(due_at) <= datetime.utcnow():
+            raise ValidationError({
+                'due_at': [
+                    'The signature deadline must be in the future.',
+                ],
+            })
+
+
 class SignatureCancelSchema(Schema):
     reason = fields.Str(
         required=False,

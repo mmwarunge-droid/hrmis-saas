@@ -93,6 +93,7 @@ export default function EmployeeDetails() {
   const [success, setSuccess] = useState('');
 
   const canReadDocuments = hasPermission('document:read');
+  const canManageSignatures = hasPermission('document:approve');
   const canReadLeave = hasPermission('leave:create');
   const canReadAttendance = hasPermission('attendance:read');
   const canReadGoals = hasPermission('goal:read');
@@ -307,7 +308,30 @@ export default function EmployeeDetails() {
     { key: 'document_type', label: 'Type', sortable: true, render: (row) => <Badge tone="blue">{row.document_type}</Badge> },
     { key: 'signature_status', label: 'Signature', sortable: true, render: (row) => <Badge tone={toneForStatus(row.signature_status)}>{row.signature_status?.replaceAll('_', ' ') || 'Not required'}</Badge> },
     { key: 'expiry_date', label: 'Expiry', sortable: true, render: (row) => formatDate(row.expiry_date, '—') },
-    { key: 'download', label: '', render: (row) => <a href={`/documents/${row.id}/review`} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs font-semibold text-blue-700 hover:text-blue-900">Review</a> },
+    {
+      key: 'download',
+      label: '',
+      render: (row) => (
+        <div className="flex items-center justify-end gap-3">
+          <a
+            href={`/documents/${row.id}/review`}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex items-center gap-1 text-xs font-semibold text-blue-700 hover:text-blue-900"
+          >
+            Review
+          </a>
+          {canManageSignatures && row.signature_status !== 'signed' && (
+            <Link
+              to={`/signature-requests?document_id=${row.id}`}
+              className="text-xs font-semibold text-blue-700 hover:text-blue-900"
+            >
+              Manage signing
+            </Link>
+          )}
+        </div>
+      ),
+    },
   ];
 
   const goalColumns = [

@@ -228,6 +228,30 @@ export default function SignatureRequests() {
     }
   };
 
+  const resend = async (requestId, payload) => {
+    setActionLoading(true);
+    setError('');
+    setSuccess('');
+
+    try {
+      const response = await signatureApi.resend(
+        requestId,
+        payload,
+      );
+
+      setSuccess('Signature request resent successfully.');
+      setDetails(response.data);
+      await load();
+    } catch (err) {
+      setError(
+        err.error?.message
+        || 'Unable to resend signature request',
+      );
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
   const updateDeadline = async (requestId, dueAt) => {
     setActionLoading(true);
     setError('');
@@ -501,6 +525,7 @@ export default function SignatureRequests() {
             request={details}
             loading={actionLoading}
             onRemind={remind}
+            onResend={resend}
             onUpdateDeadline={updateDeadline}
             onCancel={cancel}
             evidence={evidence}

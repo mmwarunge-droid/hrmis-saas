@@ -18,6 +18,7 @@ from app.schemas.signature_schema import (
     SignatureSignSchema,
     SignatureSubmitSchema,
     SignatureRequestCreateSchema,
+    SignatureResendSchema,
 )
 from app.services.signature_evidence_service import (
     SignatureEvidenceValidationError,
@@ -46,6 +47,7 @@ from app.services.signature_service import (
     mark_recipient_viewed,
     serialize_signature_request,
     send_signature_reminder,
+    resend_signature_request,
     update_signature_deadline,
 )
 from app.utils.decorators import (
@@ -728,6 +730,59 @@ def remind_request(request_id):
             'recipient_count': recipient_count,
         },
         'Signing reminder sent',
+    )
+
+
+@signature_bp.post('/<request_id>/resend')
+@jwt_required()
+@permission_required('document:approve')
+def resend_request(request_id):
+    try:
+        payload = SignatureResendSchema().load(
+            request.get_json() or {},
+        )
+        signature_request = _manageable_request(request_id)
+        replacement = resend_signature_request(
+            signature_request,
+            due_at=payload['due_at'],
+            message=payload.get('message'),
+            actor=current_user,
+        )
+    except ValidationError as err:
+        return fail(
+            'VALIDATION_ERROR',
+            err.messages,
+            422,
+        )
+    except PermissionError as exc:
+        return fail('FORBIDDEN', str(exc), 403)
+    except SignatureProviderNotConfigured as exc:
+        return _provider_error(
+            'SIGNATURE_PROVIDER_NOT_CONFIGURED',
+            exc,
+            503,
+        )
+    except SignatureProviderError as exc:
+        return _provider_error(
+            'SIGNATURE_PROVIDER_FAILED',
+            exc,
+            502,
+        )
+    except ValueError as exc:
+        db.session.rollback()
+        return fail(
+            'SIGNATURE_RESEND_FAILED',
+            str(exc),
+            400,
+        )
+
+    return success(
+        serialize_signature_request(
+            replacement,
+            include_events=True,
+        ),
+        'Signature request resent',
+        201,
     )
 
 

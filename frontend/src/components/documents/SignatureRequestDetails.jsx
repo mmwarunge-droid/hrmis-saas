@@ -7,6 +7,7 @@ import {
   Clock3,
   FileSignature,
   History,
+  RefreshCcw,
   UserRoundCheck,
   XCircle,
 } from 'lucide-react';
@@ -22,6 +23,27 @@ const ACTIVE_REQUEST_STATUSES = new Set([
   'sent',
   'in_progress',
 ]);
+const RESENDABLE_REQUEST_STATUSES = new Set([
+  'expired',
+  'declined',
+  'cancelled',
+  'failed',
+]);
+const DEFAULT_RESEND_MESSAGE = (
+  'We noticed that you have not yet signed this document. '
+  + 'Please review it and complete your signature at your '
+  + 'earliest convenience.'
+);
+const RESEND_DEADLINE_DAYS = 7;
+
+function defaultResendDeadline() {
+  return toDateTimeLocal(
+    new Date(
+      Date.now()
+      + (RESEND_DEADLINE_DAYS * 24 * 60 * 60 * 1000),
+    ),
+  );
+}
 
 function formatDateTime(value) {
   if (!value) return '—';
@@ -82,6 +104,7 @@ export default function SignatureRequestDetails({
   request,
   loading = false,
   onRemind,
+  onResend,
   onUpdateDeadline,
   onCancel,
   evidence = null,
@@ -92,6 +115,13 @@ export default function SignatureRequestDetails({
   );
   const [showCancel, setShowCancel] = useState(false);
   const [cancelReason, setCancelReason] = useState('');
+  const [showResend, setShowResend] = useState(false);
+  const [resendDeadline, setResendDeadline] = useState(
+    defaultResendDeadline,
+  );
+  const [resendMessage, setResendMessage] = useState(
+    DEFAULT_RESEND_MESSAGE,
+  );
 
   const recipients = useMemo(
     () => [...(request?.recipients || [])].sort(
@@ -116,6 +146,20 @@ export default function SignatureRequestDetails({
 
   const isActive = ACTIVE_REQUEST_STATUSES.has(
     request.status,
+  );
+  const dueAt = request.due_at
+    ? new Date(request.due_at)
+    : null;
+  const isOverdueInternal = Boolean(
+    isActive
+    && !request.provider
+    && dueAt
+    && !Number.isNaN(dueAt.getTime())
+    && dueAt <= new Date(),
+  );
+  const canResend = (
+    RESENDABLE_REQUEST_STATUSES.has(request.status)
+    || isOverdueInternal
   );
 
   const recipientCount = (
@@ -164,6 +208,20 @@ export default function SignatureRequestDetails({
     onCancel(request.id, reason);
   };
 
+  const submitResend = (event) => {
+    event.preventDefault();
+
+    const parsed = new Date(resendDeadline);
+    const message = resendMessage.trim();
+
+    if (Number.isNaN(parsed.getTime()) || !message) return;
+
+    onResend(request.id, {
+      due_at: parsed.toISOString(),
+      message,
+    });
+  };
+
   return (
     <div className="space-y-6">
       <section className="rounded-xl bg-gradient-to-br from-slate-950 via-blue-950 to-blue-950 p-6 text-white">
@@ -182,6 +240,12 @@ export default function SignatureRequestDetails({
                 <Badge tone={statusTone(request.status)}>
                   {request.status.replaceAll('_', ' ')}
                 </Badge>
+
+                {request.resend_attempt > 0 && (
+                  <Badge tone="cyan">
+                    Resend #{request.resend_attempt}
+                  </Badge>
+                )}
               </div>
 
               <p className="mt-2 text-sm text-slate-300">
@@ -196,7 +260,7 @@ export default function SignatureRequestDetails({
             </div>
           </div>
 
-          {isActive && (
+          {isActive && !isOverdueInternal && (
             <Button
               type="button"
               variant="secondary"
@@ -280,7 +344,135 @@ export default function SignatureRequestDetails({
         />
       )}
 
-      {isActive && (
+      {canResend && (
+        <Card>
+          <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+            <div className="flex items-start gap-3">
+              <span className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-blue-50 text-blue-700">
+                <RefreshCcw size={18} />
+              </span>
+              <div>
+                <p className="text-xs font-bold uppercase tracking-wider text-blue-700">
+                  Replacement request
+                </p>
+                <h3 className="font-bold">
+                  Resend this document for signature
+                </h3>
+                <p className="mt-1 max-w-2xl text-sm leading-6 text-slate-500">
+                  Kinetic will reuse this document, signing mode,
+                  signatories and reminder settings. Recipient access
+                  is revalidated before the new request is sent.
+                </p>
+              </div>
+            </div>
+
+            {!showResend && (
+              <Button
+                type="button"
+                variant="secondary"
+                disabled={loading}
+                onClick={() => setShowResend(true)}
+              >
+                <RefreshCcw size={16} />
+                Resend for signature
+              </Button>
+            )}
+          </div>
+
+          {showResend && (
+            <form
+              onSubmit={submitResend}
+              className="mt-5 space-y-4 rounded-lg border border-blue-100 bg-blue-50/60 p-4"
+            >
+              <div className="grid gap-3 md:grid-cols-2">
+                <div>
+                  <p className="text-xs font-bold uppercase tracking-wider text-slate-500">
+                    Document
+                  </p>
+                  <p className="mt-1 font-semibold text-slate-950">
+                    {request.document?.title || 'Document'}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs font-bold uppercase tracking-wider text-slate-500">
+                    Original deadline
+                  </p>
+                  <p className="mt-1 font-semibold text-slate-950">
+                    {formatDateTime(request.due_at)}
+                  </p>
+                </div>
+              </div>
+
+              <div>
+                <p className="text-xs font-bold uppercase tracking-wider text-slate-500">
+                  Original recipients
+                </p>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {recipients.map((recipient) => (
+                    <Badge key={recipient.id} tone="slate">
+                      {recipient.name} · {recipient.email}
+                    </Badge>
+                  ))}
+                </div>
+                <p className="mt-2 text-xs text-slate-500">
+                  If an employee email changed, Kinetic uses the
+                  current active employee account when sending.
+                </p>
+              </div>
+
+              <Input
+                label="New signing deadline"
+                type="datetime-local"
+                value={resendDeadline}
+                onChange={(event) => setResendDeadline(
+                  event.target.value,
+                )}
+                required
+              />
+
+              <label className="block space-y-1">
+                <span className="text-sm font-medium text-slate-700">
+                  Resend message
+                </span>
+                <textarea
+                  aria-label="Resend message"
+                  rows={4}
+                  value={resendMessage}
+                  onChange={(event) => setResendMessage(
+                    event.target.value,
+                  )}
+                  className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-100"
+                  required
+                />
+              </label>
+
+              <div className="flex flex-wrap justify-end gap-2">
+                <Button
+                  type="button"
+                  variant="secondary"
+                  disabled={loading}
+                  onClick={() => setShowResend(false)}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="submit"
+                  disabled={
+                    loading
+                    || !resendDeadline
+                    || !resendMessage.trim()
+                  }
+                >
+                  <RefreshCcw size={16} />
+                  Resend for signature
+                </Button>
+              </div>
+            </form>
+          )}
+        </Card>
+      )}
+
+      {isActive && !isOverdueInternal && (
         <Card>
           <div className="flex items-center gap-3">
             <span className="grid h-10 w-10 place-items-center rounded-lg bg-blue-50 text-blue-700">
