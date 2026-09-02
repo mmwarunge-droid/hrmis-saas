@@ -227,6 +227,8 @@ def create_signature_fields(signature_request, recipient_fields=None):
                 recipient_id=recipient.id,
                 field_type=spec['field_type'],
                 label=spec.get('label'),
+                placeholder=spec.get('placeholder'),
+                prefill_key=spec.get('prefill_key'),
                 page_number=page_number,
                 x=x,
                 y=y,
@@ -241,26 +243,101 @@ def create_signature_fields(signature_request, recipient_fields=None):
     return created
 
 
-def complete_recipient_fields(recipient, signed_at, signature_text):
+def complete_recipient_fields(
+    recipient,
+    signed_at,
+    signature_text,
+    field_values=None,
+):
     if not recipient.fields:
         raise NativeSignatureError(
             'No signing fields are configured for this signatory.',
         )
 
+    submitted = {}
+
+    for item in field_values or []:
+        field_id = str(item.get('field_id'))
+
+        if field_id in submitted:
+            raise NativeSignatureError(
+                'A signing field was submitted more than once.',
+            )
+
+        submitted[field_id] = item.get('value')
+
+    owned_fields = {
+        str(field.id): field
+        for field in recipient.fields
+    }
+
+    if set(submitted) - set(owned_fields):
+        raise NativeSignatureError(
+            'One or more submitted signing fields do not belong '
+            'to this signatory.',
+        )
+
+    server_controlled = {
+        'signature',
+        'date',
+        'name',
+    }
+
+    for field_id in submitted:
+        field = owned_fields[field_id]
+
+        if field.field_type in server_controlled:
+            raise NativeSignatureError(
+                f'{field.field_type.title()} fields are '
+                'server-controlled and cannot be overridden.',
+            )
+
     for field in recipient.fields:
+        field_id = str(field.id)
+
         if field.field_type == 'signature':
             field.value = signature_text
+
         elif field.field_type == 'date':
-            field.value = signed_at.strftime('%d %b %Y')
-        else:
-            continue
-        field.completed_at = signed_at
+            field.value = signed_at.strftime(
+                '%d %b %Y'
+            )
+
+        elif field.field_type == 'name':
+            field.value = recipient.name
+
+        elif field.field_type in {
+            'text',
+            'initials',
+        }:
+            if field_id in submitted:
+                raw_value = submitted[field_id]
+
+                value = (
+                    str(raw_value).strip()
+                    if raw_value is not None
+                    else ''
+                )
+
+                if (
+                    field.field_type == 'initials'
+                    and len(value) > 32
+                ):
+                    raise NativeSignatureError(
+                        'Initials must not exceed 32 characters.',
+                    )
+
+                field.value = value or None
+
+        if field.value:
+            field.completed_at = signed_at
 
     missing = [
         field.label or field.field_type
         for field in recipient.fields
         if field.required and not field.value
     ]
+
     if missing:
         raise NativeSignatureError(
             'Required signing fields were not completed: '

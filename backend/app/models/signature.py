@@ -578,6 +578,8 @@ class SignatureField(
     )
     field_type = db.Column(db.String(30), nullable=False, index=True)
     label = db.Column(db.String(160), nullable=True)
+    placeholder = db.Column(db.String(240), nullable=True)
+    prefill_key = db.Column(db.String(80), nullable=True)
     page_number = db.Column(db.Integer, nullable=False, default=1)
     x = db.Column(db.Float, nullable=False)
     y = db.Column(db.Float, nullable=False)
@@ -598,7 +600,7 @@ class SignatureField(
 
     __table_args__ = (
         db.CheckConstraint(
-            "field_type IN ('signature','date')",
+            "field_type IN ('signature','date','text','name','initials')",
             name='ck_signature_fields_type',
         ),
         db.CheckConstraint(
@@ -627,6 +629,8 @@ class SignatureField(
             'recipient_id': str(self.recipient_id),
             'field_type': self.field_type,
             'label': self.label,
+            'placeholder': self.placeholder,
+            'prefill_key': self.prefill_key,
             'page_number': self.page_number,
             'x': self.x,
             'y': self.y,

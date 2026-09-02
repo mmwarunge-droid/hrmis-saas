@@ -368,6 +368,7 @@ def recipient_submit_signature(recipient_id):
             current_user,
             consent=payload['consent'],
             signature_style=payload['signature_style'],
+            field_values=payload.get('fields') or [],
         )
     except ValidationError as err:
         return fail('VALIDATION_ERROR', err.messages, 422)
