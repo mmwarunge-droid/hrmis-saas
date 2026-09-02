@@ -75,7 +75,7 @@ function Step({ complete, active, number, title, description }) {
 export default function SignatureTask() {
   const { recipientId } = useParams();
   const [task, setTask] = useState(null);
-  const [documentUrl, setDocumentUrl] = useState('');
+  const [documentUrl, setDocumentUrl] = useState(null);
   const [documentRefreshKey, setDocumentRefreshKey] = useState(0);
   const [declineReason, setDeclineReason] = useState('');
   const [showDecline, setShowDecline] = useState(false);
@@ -110,26 +110,34 @@ export default function SignatureTask() {
 
   useEffect(() => {
     let active = true;
-    let objectUrl = '';
     if (!task?.document?.id) return undefined;
+
+    setDocumentUrl(null);
 
     const request = task.external_signing_required
       ? documentApi.content(task.document.id)
       : signatureApi.signingDocument(recipientId);
 
     request
-      .then((blob) => {
+      .then(async (blob) => {
+        const documentData = new Uint8Array(
+          await blob.arrayBuffer(),
+        );
+
         if (!active) return;
-        objectUrl = URL.createObjectURL(blob);
-        setDocumentUrl(objectUrl);
+        setDocumentUrl(documentData);
       })
-      .catch((err) => setError(
-        err.error?.message || 'Unable to open the document for review.',
-      ));
+      .catch((err) => {
+        if (!active) return;
+
+        setError(
+          err.error?.message
+            || 'Unable to open the document for review.',
+        );
+      });
 
     return () => {
       active = false;
-      if (objectUrl) URL.revokeObjectURL(objectUrl);
     };
   }, [
     recipientId,

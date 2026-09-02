@@ -168,17 +168,18 @@ export default function SignatureFieldPlacement({
 
   useEffect(() => {
     let active = true;
-    let objectUrl = '';
     let loadingTask;
 
     documentApi.content(documentId)
-      .then((blob) => {
+      .then(async (blob) => {
+        const pdfData = new Uint8Array(
+          await blob.arrayBuffer(),
+        );
+
         if (!active) return;
 
-        objectUrl = URL.createObjectURL(blob);
-
         loadingTask = getDocument({
-          url: objectUrl,
+          data: pdfData,
           isEvalSupported: false,
           enableScripting: false,
         });
@@ -216,10 +217,6 @@ export default function SignatureFieldPlacement({
     return () => {
       active = false;
       loadingTask?.destroy?.();
-
-      if (objectUrl) {
-        URL.revokeObjectURL(objectUrl);
-      }
     };
   }, [documentId]);
 

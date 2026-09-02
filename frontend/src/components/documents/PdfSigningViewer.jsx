@@ -71,21 +71,28 @@ function PdfPage({ pdf, pageNumber, fields }) {
 
 export default function PdfSigningViewer({ url, fields = [] }) {
   const [loadState, setLoadState] = useState({
-    url: '',
+    source: null,
     pdf: null,
     error: '',
   });
 
-  const pdf = loadState.url === url ? loadState.pdf : null;
-  const error = loadState.url === url ? loadState.error : '';
+  const pdf = loadState.source === url ? loadState.pdf : null;
+  const error = loadState.source === url ? loadState.error : '';
 
   useEffect(() => {
     if (!url) return undefined;
 
     let active = true;
+    const source = (
+      typeof url === 'string'
+        ? url
+        : new Uint8Array(url)
+    );
 
     const loadingTask = getDocument({
-      url,
+      ...(typeof source === 'string'
+        ? { url: source }
+        : { data: source }),
       isEvalSupported: false,
       enableScripting: false,
     });
@@ -94,7 +101,7 @@ export default function PdfSigningViewer({ url, fields = [] }) {
       .then((loaded) => {
         if (active) {
           setLoadState({
-            url,
+            source: url,
             pdf: loaded,
             error: '',
           });
@@ -103,7 +110,7 @@ export default function PdfSigningViewer({ url, fields = [] }) {
       .catch(() => {
         if (active) {
           setLoadState({
-            url,
+            source: url,
             pdf: null,
             error: 'Unable to render the signing PDF.',
           });
