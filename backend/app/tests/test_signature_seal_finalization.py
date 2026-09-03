@@ -177,6 +177,7 @@ def test_finalization_service_contract_uses_signed_artifact():
     required_fragments = (
         "artifact_type='signed_document'",
         "artifact_type='sealed_document'",
+        '.with_for_update()',
         'artifact_content(signed_artifact)',
         'save_signature_artifact(',
         "'source_signed_document_sha256':",
@@ -194,6 +195,67 @@ def test_finalization_service_contract_uses_signed_artifact():
 
     for fragment in required_fragments:
         assert fragment in source
+
+    lock_start = source.index(
+        'def _lock_signature_request_for_seal('
+    )
+    lock_end = source.index(
+        'def require_seal_ready(',
+        lock_start,
+    )
+    lock_source = source[lock_start:lock_end]
+
+    assert '.with_for_update()' in lock_source
+
+    apply_start = source.index(
+        'def apply_signature_seal('
+    )
+    apply_source = source[apply_start:]
+
+    assert (
+        apply_source.index(
+            '_lock_signature_request_for_seal('
+        )
+        < apply_source.index(
+            'save_signature_artifact('
+        )
+    )
+
+    upload_start = source.index(
+        'def upload_signature_seal_image('
+    )
+    upload_end = source.index(
+        'def update_signature_seal_placement(',
+        upload_start,
+    )
+    upload_source = source[
+        upload_start:upload_end
+    ]
+
+    assert (
+        upload_source.index(
+            '_lock_signature_request_for_seal('
+        )
+        < upload_source.index(
+            'save_signature_seal_image('
+        )
+    )
+
+    placement_start = source.index(
+        'def update_signature_seal_placement('
+    )
+    placement_end = source.index(
+        'def require_complete_seal_placement(',
+        placement_start,
+    )
+    placement_source = source[
+        placement_start:placement_end
+    ]
+
+    assert (
+        '_lock_signature_request_for_seal('
+        in placement_source
+    )
 
 
 def test_apply_route_requires_document_approve():

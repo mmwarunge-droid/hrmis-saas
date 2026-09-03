@@ -8,7 +8,7 @@ from reportlab.lib.utils import ImageReader
 from reportlab.pdfgen import canvas
 
 from app.extensions import db
-from app.models import SignatureArtifact, SignatureSeal
+from app.models import SignatureArtifact, SignatureRequest, SignatureSeal
 from app.models.base import utcnow
 from app.utils.signature_evidence_storage import (
     save_signature_artifact,
@@ -71,6 +71,20 @@ def seal_ready(signature_request):
         and signature_request.seal_status
         == SEAL_STATUS_PENDING
     )
+
+
+def _lock_signature_request_for_seal(signature_request):
+    locked_request = (
+        SignatureRequest.query.filter_by(
+            id=signature_request.id,
+            tenant_id=signature_request.tenant_id,
+        )
+        .with_for_update()
+        .one()
+    )
+
+    db.session.refresh(locked_request)
+    return locked_request
 
 
 def require_seal_ready(signature_request):
@@ -259,16 +273,12 @@ def upload_signature_seal_image(
     file,
     actor,
 ):
-    require_seal_ready(
+    signature_request = _lock_signature_request_for_seal(
         signature_request
     )
 
-    stored = save_signature_seal_image(
-        file,
-        tenant_id=signature_request.tenant_id,
-        signature_request_id=(
-            signature_request.id
-        ),
+    require_seal_ready(
+        signature_request
     )
 
     seal = SignatureSeal.query.filter_by(
@@ -278,19 +288,24 @@ def upload_signature_seal_image(
         ),
     ).first()
 
-    now = utcnow()
-
     if seal and (
         seal.applied_at
         or seal.sealed_artifact_id
     ):
-        delete_signature_seal_image(
-            stored['file_path']
-        )
         raise SignatureSealError(
             'The applied company seal cannot '
             'be replaced.'
         )
+
+    stored = save_signature_seal_image(
+        file,
+        tenant_id=signature_request.tenant_id,
+        signature_request_id=(
+            signature_request.id
+        ),
+    )
+
+    now = utcnow()
 
     previous_path = (
         seal.image_file_path
@@ -386,6 +401,10 @@ def update_signature_seal_placement(
     width,
     height,
 ):
+    signature_request = _lock_signature_request_for_seal(
+        signature_request
+    )
+
     require_seal_ready(
         signature_request
     )
@@ -609,6 +628,10 @@ def apply_signature_seal(
     signature_request,
     actor,
 ):
+    signature_request = _lock_signature_request_for_seal(
+        signature_request
+    )
+
     require_seal_ready(
         signature_request
     )
@@ -631,6 +654,7 @@ def apply_signature_seal(
         )
 
     existing_sealed = SignatureArtifact.query.filter_by(
+        tenant_id=signature_request.tenant_id,
         signature_request_id=signature_request.id,
         artifact_type='sealed_document',
     ).first()
@@ -642,6 +666,7 @@ def apply_signature_seal(
         )
 
     signed_artifact = SignatureArtifact.query.filter_by(
+        tenant_id=signature_request.tenant_id,
         signature_request_id=signature_request.id,
         artifact_type='signed_document',
     ).first()
