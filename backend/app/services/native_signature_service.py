@@ -229,6 +229,7 @@ def create_signature_fields(signature_request, recipient_fields=None):
                 label=spec.get('label'),
                 placeholder=spec.get('placeholder'),
                 prefill_key=spec.get('prefill_key'),
+                mark_style=spec.get('mark_style'),
                 page_number=page_number,
                 x=x,
                 y=y,
@@ -283,7 +284,12 @@ def complete_recipient_fields(
         'name',
     }
 
-    for field_id in submitted:
+    normalized_submitted = {}
+
+    # Validate the entire client-controlled submission before mutating
+    # any field. This preserves all-or-nothing semantics even outside a
+    # database-backed request context.
+    for field_id, raw_value in submitted.items():
         field = owned_fields[field_id]
 
         if field.field_type in server_controlled:
@@ -291,6 +297,58 @@ def complete_recipient_fields(
                 f'{field.field_type.title()} fields are '
                 'server-controlled and cannot be overridden.',
             )
+
+        if field.field_type in {
+            'text',
+            'initials',
+        }:
+            value = (
+                str(raw_value).strip()
+                if raw_value is not None
+                else ''
+            )
+
+            if (
+                field.field_type == 'initials'
+                and len(value) > 32
+            ):
+                raise NativeSignatureError(
+                    'Initials must not exceed 32 characters.',
+                )
+
+            normalized_submitted[field_id] = value
+            continue
+
+        if field.field_type == 'checkbox':
+            value = (
+                str(raw_value).strip().lower()
+                if raw_value is not None
+                else ''
+            )
+
+            mark_style = (
+                getattr(field, 'mark_style', None)
+                or 'tick'
+            )
+
+            allowed_marks = (
+                {'tick', 'cross'}
+                if mark_style == 'either'
+                else {mark_style}
+            )
+
+            if value and value not in allowed_marks:
+                raise NativeSignatureError(
+                    'The selected checkbox mark is not allowed '
+                    'for this field.',
+                )
+
+            normalized_submitted[field_id] = value
+            continue
+
+        raise NativeSignatureError(
+            'The submitted signing field type is not editable.',
+        )
 
     for field in recipient.fields:
         field_id = str(field.id)
@@ -309,25 +367,13 @@ def complete_recipient_fields(
         elif field.field_type in {
             'text',
             'initials',
+            'checkbox',
         }:
-            if field_id in submitted:
-                raw_value = submitted[field_id]
-
-                value = (
-                    str(raw_value).strip()
-                    if raw_value is not None
-                    else ''
+            if field_id in normalized_submitted:
+                field.value = (
+                    normalized_submitted[field_id]
+                    or None
                 )
-
-                if (
-                    field.field_type == 'initials'
-                    and len(value) > 32
-                ):
-                    raise NativeSignatureError(
-                        'Initials must not exceed 32 characters.',
-                    )
-
-                field.value = value or None
 
         if field.value:
             field.completed_at = signed_at
@@ -343,6 +389,8 @@ def complete_recipient_fields(
             'Required signing fields were not completed: '
             + ', '.join(missing),
         )
+
+    return recipient.fields
 
 
 def _page_dimensions(page):
@@ -436,6 +484,75 @@ def _signature_font(field):
     return 'Times-Italic'
 
 
+def _draw_checkbox_mark(
+    pdf_canvas,
+    field,
+    page_width,
+    page_height,
+):
+    mark = str(field.value or '').strip().lower()
+
+    if not mark:
+        return
+
+    if mark not in {'tick', 'cross'}:
+        raise NativeSignatureError(
+            'Unsupported checkbox mark stored for rendering.',
+        )
+
+    x = field.x * page_width
+    y_top = page_height - (field.y * page_height)
+    width = field.width * page_width
+    height = field.height * page_height
+    y_bottom = y_top - height
+
+    inset = max(
+        1.5,
+        min(width, height) * 0.18,
+    )
+
+    left = x + inset
+    right = x + width - inset
+    bottom = y_bottom + inset
+    top = y_top - inset
+
+    pdf_canvas.setLineWidth(
+        max(
+            1.0,
+            min(width, height) * 0.06,
+        )
+    )
+
+    if mark == 'tick':
+        middle_x = left + ((right - left) * 0.38)
+        middle_y = bottom + ((top - bottom) * 0.36)
+
+        pdf_canvas.line(
+            left,
+            middle_y,
+            middle_x,
+            bottom,
+        )
+        pdf_canvas.line(
+            middle_x,
+            bottom,
+            right,
+            top,
+        )
+        return
+
+    pdf_canvas.line(
+        left,
+        bottom,
+        right,
+        top,
+    )
+    pdf_canvas.line(
+        left,
+        top,
+        right,
+        bottom,
+    )
 def _draw_field(
     pdf_canvas,
     field,
@@ -444,6 +561,14 @@ def _draw_field(
     *,
     supplemental=False,
 ):
+    if field.field_type == 'checkbox':
+        _draw_checkbox_mark(
+            pdf_canvas,
+            field,
+            page_width,
+            page_height,
+        )
+        return
     """Stamp one completed signing value into its configured PDF box.
 
     Original source PDFs already own their labels, rules and typography.

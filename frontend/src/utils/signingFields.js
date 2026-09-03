@@ -1,6 +1,7 @@
 const EDITABLE_FIELD_TYPES = new Set([
   'text',
   'initials',
+  'checkbox',
 ]);
 
 const SERVER_CONTROLLED_FIELD_TYPES = new Set([
@@ -8,10 +9,6 @@ const SERVER_CONTROLLED_FIELD_TYPES = new Set([
   'date',
   'name',
 ]);
-
-function normalizedValue(value) {
-  return String(value ?? '').trim();
-}
 
 function employeeInitials(name) {
   return String(name || '')
@@ -89,26 +86,34 @@ export function buildSigningFieldValues(task) {
 
 export function isSigningFieldReady(
   field,
-  values,
+  fieldValues = {},
 ) {
-  if (!field?.required) {
-    return true;
-  }
-
-  if (serverControlledSigningField(field)) {
-    return true;
-  }
+  if (!field?.required) return true;
 
   if (!editableSigningField(field)) {
-    return false;
+    return true;
   }
 
-  return Boolean(
-    normalizedValue(
-      values?.[String(field.id)]
-      ?? field.value,
-    ),
+  const rawValue = (
+    fieldValues?.[String(field.id)]
+    ?? field.value
+    ?? ''
   );
+
+  const value = String(rawValue).trim();
+
+  if (field.field_type === 'checkbox') {
+    const mark = value.toLowerCase();
+    const markStyle = field.mark_style || 'tick';
+
+    if (markStyle === 'either') {
+      return ['tick', 'cross'].includes(mark);
+    }
+
+    return mark === markStyle;
+  }
+
+  return Boolean(value);
 }
 
 export function missingRequiredSigningFields(
@@ -123,16 +128,43 @@ export function missingRequiredSigningFields(
 
 export function signingFieldSubmission(
   fields,
-  values,
+  fieldValues = {},
 ) {
   return (fields || [])
-    .filter(editableSigningField)
-    .map((field) => ({
-      field_id: String(field.id),
-      value: normalizedValue(
-        values?.[String(field.id)]
-        ?? field.value,
-      ),
-    }))
-    .filter((item) => item.value);
+    .filter((field) => editableSigningField(field))
+    .map((field) => {
+      const rawValue = (
+        fieldValues?.[String(field.id)]
+        ?? ''
+      );
+
+      const value = String(rawValue).trim();
+
+      if (!value) return null;
+
+      if (field.field_type === 'checkbox') {
+        const mark = value.toLowerCase();
+        const markStyle = field.mark_style || 'tick';
+        const allowed = (
+          markStyle === 'either'
+            ? ['tick', 'cross']
+            : [markStyle]
+        );
+
+        if (!allowed.includes(mark)) {
+          return null;
+        }
+
+        return {
+          field_id: String(field.id),
+          value: mark,
+        };
+      }
+
+      return {
+        field_id: String(field.id),
+        value,
+      };
+    })
+    .filter(Boolean);
 }

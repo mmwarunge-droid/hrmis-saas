@@ -66,6 +66,7 @@ const FIELD_TYPES = [
     height: 0.05,
     required: true,
   },
+  { type: 'checkbox', label: 'Checkbox' },
 ];
 
 const FIELD_META = Object.fromEntries(
@@ -785,11 +786,20 @@ export default function SignatureFieldPlacement({
       recipients[recipientIndex]?.fields || []
     );
 
+    const normalizedField = (
+      field.field_type === 'checkbox'
+        ? {
+          ...field,
+          mark_style: field.mark_style || 'tick',
+        }
+        : field
+    );
+
     onFieldsChange(
       recipientIndex,
       [
         ...current,
-        field,
+        normalizedField,
       ],
     );
 
@@ -799,7 +809,7 @@ export default function SignatureFieldPlacement({
     });
 
     if (
-      field.field_type === 'signature'
+      normalizedField.field_type === 'signature'
       && !current.some(
         (item) => item.field_type === 'date',
       )
@@ -1197,6 +1207,42 @@ export default function SignatureFieldPlacement({
 
                     Required field
                   </label>
+
+                  {selectedFieldData.field_type === 'checkbox' && (
+                    <label className="block space-y-1">
+                      <span className="text-xs font-medium text-slate-700">
+                        Checkbox mark
+                      </span>
+
+                      <select
+                        aria-label="Checkbox mark style"
+                        value={
+                          selectedFieldData.mark_style
+                          || 'tick'
+                        }
+                        onChange={(event) => (
+                          updateField(
+                            selectedField.recipientIndex,
+                            selectedField.fieldIndex,
+                            {
+                              mark_style: event.target.value,
+                            },
+                          )
+                        )}
+                        className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-blue-400 focus:ring-4 focus:ring-blue-100"
+                      >
+                        <option value="tick">
+                          Tick (✓)
+                        </option>
+                        <option value="cross">
+                          Cross (X)
+                        </option>
+                        <option value="either">
+                          Signer chooses tick or cross
+                        </option>
+                      </select>
+                    </label>
+                  )}
 
                   {[
                     'text',

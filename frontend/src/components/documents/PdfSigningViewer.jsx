@@ -25,6 +25,8 @@ function fieldLabel(field) {
       return 'Full name';
     case 'initials':
       return 'Initials';
+    case 'checkbox':
+      return 'Checkbox';
     default:
       return 'Text';
   }
@@ -39,8 +41,22 @@ function fieldPreview(
     ?? field.value
   );
 
-  if (String(value ?? '').trim()) {
-    return String(value).trim();
+  const normalizedValue = (
+    String(value ?? '').trim()
+  );
+
+  if (
+    field.field_type === 'checkbox'
+    && normalizedValue
+  ) {
+    const mark = normalizedValue.toLowerCase();
+
+    if (mark === 'tick') return '✓';
+    if (mark === 'cross') return '✕';
+  }
+
+  if (normalizedValue) {
+    return normalizedValue;
   }
 
   switch (field.field_type) {
@@ -52,6 +68,17 @@ function fieldPreview(
 
     case 'name':
       return 'Official profile name';
+
+    case 'checkbox':
+      if (field.mark_style === 'cross') {
+        return 'Choose X';
+      }
+
+      if (field.mark_style === 'either') {
+        return 'Choose ✓ or X';
+      }
+
+      return 'Choose ✓';
 
     default:
       return (
