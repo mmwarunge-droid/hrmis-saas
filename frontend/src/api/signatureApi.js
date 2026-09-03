@@ -137,6 +137,10 @@ export const signatureApi = {
     );
   },
 
+  applySeal: (requestId) => apiClient.post(
+    `/signature-requests/${requestId}/seal/apply`,
+  ),
+
   updateSealPlacement: (requestId, placement) => apiClient.patch(
     `/signature-requests/${requestId}/seal/placement`,
     placement,

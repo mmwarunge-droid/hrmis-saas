@@ -5,12 +5,15 @@ import {
   CheckCircle2,
   CircleDashed,
   Clock3,
+  Download,
   FileSignature,
   History,
   RefreshCcw,
   UserRoundCheck,
   XCircle,
 } from 'lucide-react';
+
+import { signatureApi } from '../../api/signatureApi.js';
 
 import SignatureEvidencePanel from './SignatureEvidencePanel.jsx';
 import SignatureSealPlacement from './SignatureSealPlacement.jsx';
@@ -36,6 +39,20 @@ const DEFAULT_RESEND_MESSAGE = (
   + 'earliest convenience.'
 );
 const RESEND_DEADLINE_DAYS = 7;
+
+function sealReadyToApply(seal) {
+  return Boolean(
+    seal?.image_original_filename
+    && Number.isInteger(seal.page_number)
+    && seal.page_number > 0
+    && Number.isFinite(seal.x)
+    && Number.isFinite(seal.y)
+    && Number.isFinite(seal.width)
+    && seal.width > 0
+    && Number.isFinite(seal.height)
+    && seal.height > 0
+  );
+}
 
 function defaultResendDeadline() {
   return toDateTimeLocal(
@@ -108,6 +125,7 @@ export default function SignatureRequestDetails({
   onResend,
   onUpdateDeadline,
   onCancel,
+  onApplySeal,
   evidence = null,
   onRetryEvidence,
 }) {
@@ -395,6 +413,17 @@ export default function SignatureRequestDetails({
                   loading={loading}
                 />
               </div>
+              {onApplySeal && sealReadyToApply(request.seal) && (
+                <div className="mt-4 flex justify-end">
+                  <Button
+                    type="button"
+                    disabled={loading}
+                    onClick={() => onApplySeal(request.id)}
+                  >
+                    Apply Company Seal
+                  </Button>
+                </div>
+              )}
             </div>
           )}
 
@@ -406,6 +435,18 @@ export default function SignatureRequestDetails({
               <p className="mt-1 text-sm text-emerald-900">
                 Applied on {formatDateTime(request.sealed_at)}.
               </p>
+              {request.sealed_document?.id && (
+                <a
+                  href={signatureApi.artifactDownloadUrl(
+                    request.id,
+                    request.sealed_document.id,
+                  )}
+                  className="mt-4 inline-flex items-center justify-center gap-2 rounded-xl border border-emerald-300 bg-white px-3 py-2 text-xs font-semibold text-emerald-900 transition hover:bg-emerald-50"
+                >
+                  <Download size={14} />
+                  Download sealed document
+                </a>
+              )}
             </div>
           )}
         </Card>

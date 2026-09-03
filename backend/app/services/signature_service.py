@@ -1199,6 +1199,17 @@ def serialize_signature_request(
         else None
     )
 
+    sealed_artifact = next((
+        artifact
+        for artifact in signature_request.artifacts
+        if artifact.artifact_type == 'sealed_document'
+    ), None)
+    data['sealed_document'] = (
+        sealed_artifact.to_dict()
+        if sealed_artifact
+        else None
+    )
+
     data['seal'] = (
         signature_request.seal.to_dict()
         if signature_request.seal

@@ -295,6 +295,25 @@ export default function SignatureRequests() {
     }
   };
 
+  const applySeal = async (requestId) => {
+    setActionLoading(true);
+    setError('');
+    setSuccess('');
+
+    try {
+      await signatureApi.applySeal(requestId);
+      setSuccess('Company seal applied successfully.');
+      await refreshDetails(requestId);
+    } catch (err) {
+      setError(
+        err.error?.message
+        || 'Unable to apply company seal',
+      );
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
   const retryEvidence = async (requestId) => {
     setActionLoading(true);
     setError('');
@@ -528,6 +547,7 @@ export default function SignatureRequests() {
             onResend={resend}
             onUpdateDeadline={updateDeadline}
             onCancel={cancel}
+            onApplySeal={applySeal}
             evidence={evidence}
             onRetryEvidence={retryEvidence}
           />

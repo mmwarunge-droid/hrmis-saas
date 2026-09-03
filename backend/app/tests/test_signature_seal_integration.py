@@ -656,6 +656,23 @@ def test_apply_signature_seal_persists_complete_artifact_lineage(
             == 1
         )
 
+    details = client.get(
+        f'/api/signature-requests/{request_id}',
+        headers=auth_headers,
+    )
+
+    assert details.status_code == 200
+
+    payload = details.get_json()['data']
+
+    assert payload['sealed_document']['id'] == str(
+        sealed_artifact_id
+    )
+    assert (
+        payload['sealed_document']['artifact_type']
+        == 'sealed_document'
+   )
+
 
 def test_failed_seal_render_leaves_request_pending(
     client,

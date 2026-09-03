@@ -84,6 +84,14 @@ describe('signature seal API', () => {
     expect(payload.get('file')).toBe(file);
   });
 
+  it('applies the company seal explicitly', () => {
+    signatureApi.applySeal('request-1');
+
+    expect(mocks.post).toHaveBeenCalledWith(
+      '/signature-requests/request-1/seal/apply',
+    );
+  });
+
   it('persists normalized company seal placement', () => {
     const placement = {
       page_number: 2,
