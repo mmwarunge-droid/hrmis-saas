@@ -235,9 +235,32 @@ def recipient_details(recipient_id):
         'fields': [
             {
                 **field.to_dict(),
+                # A recipient may know that another signer has
+                # assigned fields, but must not receive that
+                # signer's entered data or completion timestamp.
+                'value': (
+                    field.value
+                    if (
+                        str(field.recipient_id)
+                        == str(recipient.id)
+                    )
+                    else None
+                ),
+                'completed_at': (
+                    field.completed_at.isoformat()
+                    if (
+                        str(field.recipient_id)
+                        == str(recipient.id)
+                        and field.completed_at
+                    )
+                    else None
+                ),
                 'recipient_name': field.recipient.name,
                 'recipient_status': field.recipient.status,
-                'is_current_recipient': str(field.recipient_id) == str(recipient.id),
+                'is_current_recipient': (
+                    str(field.recipient_id)
+                    == str(recipient.id)
+                ),
             }
             for field in signature_request.fields
         ],
@@ -248,7 +271,11 @@ def recipient_details(recipient_id):
                 'role_label': item.role_label,
                 'sequence': item.sequence,
                 'status': item.status,
-                'signature_name': item.signature_name,
+                'signature_name': (
+                    item.signature_name
+                    if str(item.id) == str(recipient.id)
+                    else None
+                ),
                 'signed_at': item.signed_at.isoformat() if item.signed_at else None,
             }
             for item in signature_request.recipients

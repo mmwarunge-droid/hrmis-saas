@@ -932,6 +932,7 @@ def _resend_recipient_fields(signature_request, recipient):
             'label': field.label,
             'placeholder': field.placeholder,
             'prefill_key': field.prefill_key,
+            'mark_style': field.mark_style,
             'page_number': field.page_number,
             'x': field.x,
             'y': field.y,
@@ -1418,6 +1419,37 @@ def mark_recipient_signed(
     """
     _require_recipient_actor(recipient, actor)
 
+    # Serialize all mutations for one signature request.
+    #
+    # Parallel recipients use separate rows, so without locking
+    # the parent request two transactions can each mark their own
+    # recipient signed, both observe the other recipient as still
+    # unsigned, and both commit without finalizing the request.
+    #
+    # PostgreSQL's row lock makes the second signer wait until the
+    # first transaction commits. The second transaction can then
+    # observe the first signature and become the sole finalizer.
+    signature_request = (
+        SignatureRequest.query.filter_by(
+            id=recipient.signature_request_id,
+        )
+        .with_for_update()
+        .one()
+    )
+
+    # The recipient may have been loaded before waiting for the
+    # request lock. Refresh it after lock acquisition so duplicate
+    # or concurrent submissions are validated against committed
+    # state rather than a stale ORM instance.
+    db.session.refresh(recipient)
+
+    # Force the completion decision to load recipient statuses
+    # after the request lock has been acquired.
+    db.session.expire(
+        signature_request,
+        ['recipients'],
+    )
+
     if recipient.status not in {
         'notified',
         'viewed',
@@ -1425,8 +1457,6 @@ def mark_recipient_signed(
         raise ValueError(
             'This signature task cannot currently be signed.',
         )
-
-    signature_request = recipient.signature_request
 
     if _provider_backed(signature_request):
         raise ValueError(

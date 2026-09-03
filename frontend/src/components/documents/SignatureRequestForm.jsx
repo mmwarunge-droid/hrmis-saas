@@ -10,6 +10,7 @@ import Button from '../ui/Button.jsx';
 import Input from '../ui/Input.jsx';
 
 const DAY_MS = 86400000;
+const MAX_STANDARD_SIGNATORIES = 4;
 
 function newRecipient() {
   return {
@@ -130,13 +131,22 @@ export default function SignatureRequestForm({
   };
 
   const addRecipient = () => {
-    setRecipients((current) => [
-      ...current,
-      {
-        ...newRecipient(),
-        sequence: current.length + 1,
-      },
-    ]);
+    setRecipients((current) => {
+      if (
+        current.length
+        >= MAX_STANDARD_SIGNATORIES
+      ) {
+        return current;
+      }
+
+      return [
+        ...current,
+        {
+          ...newRecipient(),
+          sequence: current.length + 1,
+        },
+      ];
+    });
   };
 
   const removeRecipient = (index) => {
@@ -151,6 +161,17 @@ export default function SignatureRequestForm({
 
     if (!document) {
       setError('Select a document before creating a request.');
+      return;
+    }
+
+    if (
+      !isQes
+      && recipients.length
+        > MAX_STANDARD_SIGNATORIES
+    ) {
+      setError(
+        'Standard signing supports up to four signatories.',
+      );
       return;
     }
 
@@ -500,6 +521,10 @@ export default function SignatureRequestForm({
               variant="secondary"
               size="sm"
               onClick={addRecipient}
+              disabled={
+                recipients.length
+                >= MAX_STANDARD_SIGNATORIES
+              }
             >
               <Plus size={15} />
               Add signatory

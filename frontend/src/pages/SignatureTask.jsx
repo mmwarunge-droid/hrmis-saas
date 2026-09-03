@@ -539,7 +539,107 @@ export default function SignatureTask() {
                           </span>
                         </button>
 
-                        {editableSigningField(field) ? (
+                        {field.field_type === 'checkbox' ? (
+                          <div className="mt-3 space-y-2">
+                            <div className="flex flex-wrap gap-2">
+                              {[
+                                'tick',
+                                'either',
+                              ].includes(
+                                field.mark_style || 'tick',
+                              ) && (
+                                <button
+                                  type="button"
+                                  aria-label={`Tick ${field.label || 'checkbox'}`}
+                                  aria-pressed={
+                                    fieldValues[fieldId]
+                                    === 'tick'
+                                  }
+                                  onClick={() => {
+                                    setActiveFieldId(fieldId);
+
+                                    setFieldValues(
+                                      (current) => ({
+                                        ...current,
+                                        [fieldId]: 'tick',
+                                      }),
+                                    );
+                                  }}
+                                  className={`rounded-lg border px-3 py-2 text-sm font-semibold ${
+                                    fieldValues[fieldId]
+                                    === 'tick'
+                                      ? 'border-blue-600 bg-blue-600 text-white'
+                                      : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50'
+                                  }`}
+                                >
+                                  ✓ Tick
+                                </button>
+                              )}
+
+                              {[
+                                'cross',
+                                'either',
+                              ].includes(
+                                field.mark_style || 'tick',
+                              ) && (
+                                <button
+                                  type="button"
+                                  aria-label={`Cross ${field.label || 'checkbox'}`}
+                                  aria-pressed={
+                                    fieldValues[fieldId]
+                                    === 'cross'
+                                  }
+                                  onClick={() => {
+                                    setActiveFieldId(fieldId);
+
+                                    setFieldValues(
+                                      (current) => ({
+                                        ...current,
+                                        [fieldId]: 'cross',
+                                      }),
+                                    );
+                                  }}
+                                  className={`rounded-lg border px-3 py-2 text-sm font-semibold ${
+                                    fieldValues[fieldId]
+                                    === 'cross'
+                                      ? 'border-blue-600 bg-blue-600 text-white'
+                                      : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50'
+                                  }`}
+                                >
+                                  ✕ Cross
+                                </button>
+                              )}
+
+                              {fieldValues[fieldId] && (
+                                <button
+                                  type="button"
+                                  aria-label={`Clear ${field.label || 'checkbox'}`}
+                                  onClick={() => {
+                                    setActiveFieldId(fieldId);
+
+                                    setFieldValues(
+                                      (current) => ({
+                                        ...current,
+                                        [fieldId]: '',
+                                      }),
+                                    );
+                                  }}
+                                  className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-500 hover:bg-slate-50"
+                                >
+                                  Clear
+                                </button>
+                              )}
+                            </div>
+
+                            <p className="text-[10px] leading-4 text-slate-500">
+                              {field.mark_style === 'cross'
+                                ? 'Select the X mark for this field.'
+                                : field.mark_style === 'either'
+                                  ? 'Choose either a tick or an X mark.'
+                                  : 'Select the tick for this field.'}
+                            </p>
+                          </div>
+                        ) : editableSigningField(field) ? (
                           <input
                             aria-label={
                               field.label

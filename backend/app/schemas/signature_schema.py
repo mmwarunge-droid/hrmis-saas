@@ -24,6 +24,7 @@ class SignatureFieldCreateSchema(Schema):
             'text',
             'name',
             'initials',
+            'checkbox',
         ]),
     )
     label = fields.Str(
@@ -40,6 +41,16 @@ class SignatureFieldCreateSchema(Schema):
         required=False,
         allow_none=True,
         validate=validate.Length(max=80),
+    )
+
+    mark_style = fields.Str(
+        required=False,
+        allow_none=True,
+        validate=validate.OneOf([
+            'tick',
+            'cross',
+            'either',
+        ]),
     )
     page_number = fields.Int(
         required=True,
@@ -65,6 +76,17 @@ class SignatureFieldCreateSchema(Schema):
 
     @validates_schema
     def validate_page_bounds(self, data, **kwargs):
+        field_type = data.get('field_type')
+        mark_style = data.get('mark_style')
+
+        if field_type == 'checkbox':
+            data['mark_style'] = mark_style or 'tick'
+        elif mark_style is not None:
+            raise ValidationError({
+                'mark_style': [
+                    'Mark style is only valid for checkbox fields.',
+                ],
+            })
         if data.get('x', 0) + data.get('width', 0) > 1:
             raise ValidationError({
                 'width': ['The field extends beyond the PDF page width.'],
@@ -173,7 +195,7 @@ class SignatureRequestCreateSchema(Schema):
     recipients = fields.List(
         fields.Nested(SignatureRecipientCreateSchema),
         required=True,
-        validate=validate.Length(min=1, max=50),
+        validate=validate.Length(min=1, max=4),
     )
 
     reminder = fields.Nested(

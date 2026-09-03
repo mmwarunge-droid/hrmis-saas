@@ -580,6 +580,11 @@ class SignatureField(
     label = db.Column(db.String(160), nullable=True)
     placeholder = db.Column(db.String(240), nullable=True)
     prefill_key = db.Column(db.String(80), nullable=True)
+
+    mark_style = db.Column(
+        db.String(12),
+        nullable=True,
+    )
     page_number = db.Column(db.Integer, nullable=False, default=1)
     x = db.Column(db.Float, nullable=False)
     y = db.Column(db.Float, nullable=False)
@@ -600,8 +605,18 @@ class SignatureField(
 
     __table_args__ = (
         db.CheckConstraint(
-            "field_type IN ('signature','date','text','name','initials')",
+            "field_type IN ('signature','date','text','name','initials','checkbox')",
             name='ck_signature_fields_type',
+        ),
+        db.CheckConstraint(
+            "("
+            "field_type = 'checkbox' AND "
+            "mark_style IN ('tick','cross','either')"
+            ") OR ("
+            "field_type <> 'checkbox' AND "
+            "mark_style IS NULL"
+            ")",
+            name='ck_signature_fields_mark_style',
         ),
         db.CheckConstraint(
             'page_number >= 1',
@@ -631,6 +646,7 @@ class SignatureField(
             'label': self.label,
             'placeholder': self.placeholder,
             'prefill_key': self.prefill_key,
+            'mark_style': self.mark_style,
             'page_number': self.page_number,
             'x': self.x,
             'y': self.y,
