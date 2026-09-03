@@ -173,7 +173,7 @@ class SignatureRequestCreateSchema(Schema):
     recipients = fields.List(
         fields.Nested(SignatureRecipientCreateSchema),
         required=True,
-        validate=validate.Length(min=1, max=50),
+        validate=validate.Length(min=1, max=4),
     )
 
     reminder = fields.Nested(

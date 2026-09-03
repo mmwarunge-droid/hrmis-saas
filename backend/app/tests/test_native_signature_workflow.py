@@ -1219,6 +1219,87 @@ def test_submit_route_accepts_v2_fields_rejects_foreign_field_and_stamps_final_p
         assert completed_request.status == 'completed'
         assert completed_request.completed_at is not None
 
+    # SIGNER PRIVACY: another recipient's completed field
+    # values and generated signature identity must not leak
+    # through this recipient's task endpoint.
+    #
+    # _login() uses the shared Flask test client's auth
+    # cookies. Signer B authenticated most recently, so
+    # restore signer A's session before requesting A's task.
+    signer_a_headers = _login(
+        client,
+        signer_a['email'],
+        signer_a['password'],
+    )
+
+    recipient_a_details = client.get(
+        (
+            '/api/signature-requests/recipients/'
+            f'{recipient_a_id}'
+        ),
+        headers=signer_a_headers,
+    )
+
+    assert recipient_a_details.status_code == 200
+
+    recipient_a_task = (
+        recipient_a_details.get_json()['data']
+    )
+
+    own_fields = [
+        field
+        for field in recipient_a_task['fields']
+        if field['is_current_recipient']
+    ]
+
+    foreign_fields = [
+        field
+        for field in recipient_a_task['fields']
+        if not field['is_current_recipient']
+    ]
+
+    assert own_fields
+    assert foreign_fields
+
+    assert any(
+        field['field_type'] == 'text'
+        and field['value'] == 'Nairobi V2 Alpha'
+        for field in own_fields
+    )
+
+    assert all(
+        field['value'] is None
+        for field in foreign_fields
+    )
+
+    assert all(
+        field['completed_at'] is None
+        for field in foreign_fields
+    )
+
+    other_signers = [
+        signer
+        for signer in recipient_a_task['signers']
+        if str(signer['id']) != str(recipient_a_id)
+    ]
+
+    assert other_signers
+
+    assert all(
+        signer['signature_name'] is None
+        for signer in other_signers
+    )
+
+    # Restore signer B's auth cookie before downloading B's
+    # signed-document view. The shared Flask test client was
+    # most recently authenticated as signer A for the privacy
+    # assertions above.
+    signer_b_headers = _login(
+        client,
+        signer_b['email'],
+        signer_b['password'],
+    )
+
     signed_document = client.get(
         (
             '/api/signature-requests/recipients/'

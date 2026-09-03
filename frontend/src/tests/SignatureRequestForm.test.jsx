@@ -363,4 +363,52 @@ describe('SignatureRequestForm', () => {
     ).toBeInTheDocument();
   });
 
+
+  it('caps standard requests at four signatories', () => {
+    const eligible = Array.from(
+      { length: 5 },
+      (_, index) => ({
+        id: `employee-limit-${index + 1}`,
+        tenant_id: 'tenant-1',
+        full_name: `Signer ${index + 1}`,
+      }),
+    );
+
+    render(
+      <SignatureRequestForm
+        document={document}
+        employees={eligible}
+        isSuperAdmin
+        onSubmit={vi.fn()}
+      />,
+    );
+
+    const addButton = screen.getByRole(
+      'button',
+      { name: 'Add signatory' },
+    );
+
+    // One signatory exists initially. Three additions reach
+    // the supported maximum of four.
+    fireEvent.click(addButton);
+    fireEvent.click(addButton);
+    fireEvent.click(addButton);
+
+    expect(
+      screen.getAllByLabelText(
+        /^Signatory \d+$/,
+      ),
+    ).toHaveLength(4);
+
+    expect(addButton).toBeDisabled();
+
+    fireEvent.click(addButton);
+
+    expect(
+      screen.getAllByLabelText(
+        /^Signatory \d+$/,
+      ),
+    ).toHaveLength(4);
+  });
+
 });
