@@ -344,6 +344,65 @@ export default function SignatureRequestDetails({
         />
       )}
 
+      {request.seal_required && (
+        <Card>
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <p className="text-xs font-bold uppercase tracking-wider text-blue-700">
+                Finalization
+              </p>
+              <h3 className="mt-1 font-bold">
+                Company seal
+              </h3>
+            </div>
+
+            <Badge
+              tone={
+                request.seal_status === 'applied'
+                  ? 'green'
+                  : request.seal_status === 'pending'
+                    ? 'amber'
+                    : 'slate'
+              }
+            >
+              {request.seal_status
+                ? request.seal_status.replaceAll('_', ' ')
+                : 'not available'}
+            </Badge>
+          </div>
+
+          {request.seal_status === 'awaiting_signatures' && (
+            <p className="mt-4 text-sm leading-6 text-slate-600">
+              Waiting for all signatories to complete the request before
+              the company seal can be applied.
+            </p>
+          )}
+
+          {request.seal_status === 'pending' && (
+            <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-4">
+              <p className="font-semibold text-amber-950">
+                Pending company seal
+              </p>
+              <p className="mt-1 text-sm leading-6 text-amber-900">
+                Signing is complete. The company seal is ready for
+                authorized review and placement.
+              </p>
+            </div>
+          )}
+
+          {request.seal_status === 'applied' && (
+            <div className="mt-4 rounded-lg border border-emerald-200 bg-emerald-50 p-4">
+              <p className="font-semibold text-emerald-950">
+                Company seal applied
+              </p>
+              <p className="mt-1 text-sm text-emerald-900">
+                Applied on {formatDateTime(request.sealed_at)}.
+              </p>
+            </div>
+          )}
+        </Card>
+      )}
+
       {canResend && (
         <Card>
           <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
