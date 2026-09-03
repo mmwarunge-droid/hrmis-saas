@@ -86,7 +86,8 @@ class SignatureArtifact(
         db.CheckConstraint(
             "artifact_type IN ("
             "'original_document','signed_document',"
-            "'audit_trail','completion_certificate'"
+            "'sealed_document','audit_trail',"
+            "'completion_certificate'"
             ")",
             name='ck_signature_artifacts_type',
         ),

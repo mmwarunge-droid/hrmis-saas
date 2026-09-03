@@ -643,6 +643,7 @@ def create_signature_request(
         subject=payload['subject'],
         message=payload.get('message'),
         signing_mode=signing_mode,
+        seal_required=payload.get('seal_required', False),
         status='draft' if is_qes else 'sent',
         current_sequence=first_sequence,
         due_at=request_due_at,
@@ -666,6 +667,13 @@ def create_signature_request(
             else {}
         ),
     )
+
+    from app.services.signature_seal_service import (
+        initialize_seal_lifecycle,
+    )
+
+    initialize_seal_lifecycle(signature_request)
+
     db.session.add(signature_request)
 
     try:
@@ -1541,6 +1549,13 @@ def mark_recipient_signed(
 
         signature_request.status = 'completed'
         signature_request.completed_at = now
+
+        from app.services.signature_seal_service import (
+            initialize_seal_lifecycle,
+        )
+
+        initialize_seal_lifecycle(signature_request)
+
         signature_request.document.signature_status = 'signed'
 
         if signature_request.reminder_rule:

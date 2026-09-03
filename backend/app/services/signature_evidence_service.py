@@ -624,6 +624,12 @@ def process_signature_evidence(request_id):
             signature_request.completed_at or utcnow()
         )
 
+        from app.services.signature_seal_service import (
+            initialize_seal_lifecycle,
+        )
+
+        initialize_seal_lifecycle(signature_request)
+
         from app.services.signature_service import (
             refresh_document_signature_status,
         )

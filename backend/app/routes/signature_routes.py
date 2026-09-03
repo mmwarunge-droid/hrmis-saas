@@ -35,6 +35,12 @@ from app.services.signature_providers.base import (
     SignatureProviderError,
     SignatureProviderNotConfigured,
 )
+from app.services.signature_seal_service import (
+    SignatureSealError,
+    apply_signature_seal,
+    update_signature_seal_placement,
+    upload_signature_seal_image,
+)
 from app.services.signature_service import (
     can_access_signature_recipient,
     can_access_signature_request,
@@ -632,6 +638,141 @@ def _manageable_request(request_id):
         )
 
     return signature_request
+
+
+@signature_bp.post('/<request_id>/seal/image')
+@jwt_required()
+@permission_required('document:approve')
+def upload_company_seal_image(request_id):
+    try:
+        signature_request = _manageable_request(
+            request_id
+        )
+        seal = upload_signature_seal_image(
+            signature_request,
+            request.files.get('file'),
+            current_user,
+        )
+        db.session.commit()
+
+    except PermissionError as exc:
+        return fail(
+            'FORBIDDEN',
+            str(exc),
+            403,
+        )
+
+    except (
+        SignatureSealError,
+        ValueError,
+    ) as exc:
+        db.session.rollback()
+        return fail(
+            'SIGNATURE_SEAL_UPLOAD_FAILED',
+            str(exc),
+            422,
+        )
+
+    return success(
+        seal.to_dict(),
+        'Company seal image uploaded',
+    )
+
+
+@signature_bp.patch('/<request_id>/seal/placement')
+@jwt_required()
+@permission_required('document:approve')
+def update_company_seal_placement(request_id):
+    payload = request.get_json(
+        silent=True
+    ) or {}
+
+    try:
+        signature_request = _manageable_request(
+            request_id
+        )
+
+        seal = update_signature_seal_placement(
+            signature_request,
+            page_number=payload.get(
+                'page_number'
+            ),
+            x=payload.get('x'),
+            y=payload.get('y'),
+            width=payload.get('width'),
+            height=payload.get('height'),
+        )
+
+        db.session.commit()
+
+    except PermissionError as exc:
+        return fail(
+            'FORBIDDEN',
+            str(exc),
+            403,
+        )
+
+    except SignatureSealError as exc:
+        db.session.rollback()
+        return fail(
+            'SIGNATURE_SEAL_PLACEMENT_FAILED',
+            str(exc),
+            422,
+        )
+
+    return success(
+        seal.to_dict(),
+        'Company seal placement updated',
+    )
+
+
+@signature_bp.post('/<request_id>/seal/apply')
+@jwt_required()
+@permission_required('document:approve')
+def apply_company_seal(request_id):
+    try:
+        signature_request = _manageable_request(
+            request_id
+        )
+        sealed_artifact = apply_signature_seal(
+            signature_request,
+            current_user,
+        )
+
+        db.session.commit()
+
+    except PermissionError as exc:
+        return fail(
+            'FORBIDDEN',
+            str(exc),
+            403,
+        )
+
+    except SignatureSealError as exc:
+        db.session.rollback()
+        return fail(
+            'SIGNATURE_SEAL_APPLY_FAILED',
+            str(exc),
+            422,
+        )
+
+    return success(
+        {
+            'request': serialize_signature_request(
+                signature_request,
+                include_events=True,
+            ),
+            'seal': (
+                signature_request.seal.to_dict()
+                if signature_request.seal
+                else None
+            ),
+            'sealed_document': (
+                sealed_artifact.to_dict()
+            ),
+        },
+        'Company seal applied',
+    )
 
 
 @signature_bp.get('/<request_id>/evidence')

@@ -69,6 +69,28 @@ class SignatureRequest(
     completed_at = db.Column(db.DateTime, nullable=True)
     cancelled_at = db.Column(db.DateTime, nullable=True)
 
+    seal_required = db.Column(
+        db.Boolean,
+        nullable=False,
+        default=False,
+    )
+    seal_status = db.Column(
+        db.String(30),
+        nullable=False,
+        default='not_required',
+        index=True,
+    )
+    sealed_at = db.Column(
+        db.DateTime,
+        nullable=True,
+    )
+    sealed_by_id = db.Column(
+        GUID(),
+        db.ForeignKey('users.id', ondelete='SET NULL'),
+        nullable=True,
+        index=True,
+    )
+
     provider = db.Column(db.String(60), nullable=True)
     provider_request_id = db.Column(
         db.String(255),
@@ -145,6 +167,10 @@ class SignatureRequest(
         'User',
         foreign_keys=[created_by_id],
     )
+    sealed_by = db.relationship(
+        'User',
+        foreign_keys=[sealed_by_id],
+    )
     resend_of_request = db.relationship(
         'SignatureRequest',
         remote_side='SignatureRequest.id',
@@ -186,6 +212,12 @@ class SignatureRequest(
         cascade='all, delete-orphan',
         order_by='SignatureField.page_number',
     )
+    seal = db.relationship(
+        'SignatureSeal',
+        back_populates='signature_request',
+        cascade='all, delete-orphan',
+        uselist=False,
+    )
 
     __table_args__ = (
         db.CheckConstraint(
@@ -198,6 +230,35 @@ class SignatureRequest(
             "'declined','expired','cancelled','failed'"
             ")",
             name='ck_signature_requests_status',
+        ),
+        db.CheckConstraint(
+            "seal_status IN ("
+            "'not_required','awaiting_signatures',"
+            "'pending','applied'"
+            ")",
+            name='ck_signature_requests_seal_status',
+        ),
+        db.CheckConstraint(
+            "("
+            "seal_required = false "
+            "AND seal_status = 'not_required'"
+            ") OR ("
+            "seal_required = true "
+            "AND seal_status IN ("
+            "'awaiting_signatures','pending','applied'"
+            ")"
+            ")",
+            name='ck_signature_requests_seal_required_status',
+        ),
+        db.CheckConstraint(
+            "("
+            "seal_status = 'applied' "
+            "AND sealed_at IS NOT NULL"
+            ") OR ("
+            "seal_status <> 'applied' "
+            "AND sealed_at IS NULL"
+            ")",
+            name='ck_signature_requests_sealed_at',
         ),
         db.CheckConstraint(
             'current_sequence >= 1',
@@ -272,6 +333,18 @@ class SignatureRequest(
             'message': self.message,
             'signing_mode': self.signing_mode,
             'status': self.status,
+            'seal_required': self.seal_required,
+            'seal_status': self.seal_status,
+            'sealed_at': (
+                self.sealed_at.isoformat()
+                if self.sealed_at
+                else None
+            ),
+            'sealed_by_id': (
+                str(self.sealed_by_id)
+                if self.sealed_by_id
+                else None
+            ),
             'current_sequence': self.current_sequence,
             'recipient_count': self.recipient_count,
             'signed_count': self.signed_count,
