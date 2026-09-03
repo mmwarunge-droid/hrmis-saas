@@ -274,4 +274,179 @@ describe('SignatureRequestDetails', () => {
     ).not.toBeInTheDocument();
   });
 
+  it('does not show company seal controls when sealing is not required', () => {
+    render(
+      <SignatureRequestDetails
+        request={request}
+        onRemind={vi.fn()}
+        onResend={vi.fn()}
+        onUpdateDeadline={vi.fn()}
+        onCancel={vi.fn()}
+      />,
+    );
+
+    expect(
+      screen.queryByRole('heading', {
+        name: 'Company seal',
+      }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('shows a waiting seal state while signatures are incomplete', () => {
+    const sealRequest = {
+      ...request,
+      seal_required: true,
+      seal_status: 'awaiting_signatures',
+    };
+
+    render(
+      <SignatureRequestDetails
+        request={sealRequest}
+        onRemind={vi.fn()}
+        onResend={vi.fn()}
+        onUpdateDeadline={vi.fn()}
+        onCancel={vi.fn()}
+      />,
+    );
+
+    expect(
+      screen.getByRole('heading', {
+        name: 'Company seal',
+      }),
+    ).toBeInTheDocument();
+
+    expect(
+      screen.getByText(/waiting for all signatories/i),
+    ).toBeInTheDocument();
+
+    expect(
+      screen.queryByRole('button', {
+        name: /apply company seal/i,
+      }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('shows a pending seal state and applies it explicitly', () => {
+    const onApplySeal = vi.fn();
+    const completedRequest = {
+      ...request,
+      status: 'completed',
+      current_sequence: 2,
+      recipient_count: 2,
+      signed_count: 2,
+      seal_required: true,
+      seal_status: 'pending',
+      seal: {
+        id: 'seal-1',
+        image_original_filename: 'company-seal.png',
+        page_number: 2,
+        x: 0.68,
+        y: 0.78,
+        width: 0.22,
+        height: 0.12,
+      },
+      recipients: request.recipients.map((recipient) => ({
+        ...recipient,
+        status: 'signed',
+        signed_at: recipient.signed_at
+          || '2026-09-03T09:00:00Z',
+      })),
+    };
+
+    render(
+      <SignatureRequestDetails
+        request={completedRequest}
+        onRemind={vi.fn()}
+        onResend={vi.fn()}
+        onUpdateDeadline={vi.fn()}
+        onCancel={vi.fn()}
+        onApplySeal={onApplySeal}
+      />,
+    );
+
+    expect(
+      screen.getByRole('heading', {
+        name: 'Company seal',
+      }),
+    ).toBeInTheDocument();
+
+    expect(
+      screen.getByText(/pending company seal/i),
+    ).toBeInTheDocument();
+
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: 'Apply Company Seal',
+      }),
+    );
+
+    expect(onApplySeal).toHaveBeenCalledWith(
+      'request-1',
+    );
+  });
+
+
+  it('shows an applied company seal as read only with final download', () => {
+    const appliedRequest = {
+      ...request,
+      status: 'completed',
+      recipient_count: 2,
+      signed_count: 2,
+      seal_required: true,
+      seal_status: 'applied',
+      sealed_at: '2026-09-03T09:30:00Z',
+      sealed_by_id: 'user-1',
+      sealed_document: {
+        id: 'sealed-artifact-1',
+        artifact_type: 'sealed_document',
+      },
+    };
+
+    render(
+      <SignatureRequestDetails
+        request={appliedRequest}
+        onRemind={vi.fn()}
+        onResend={vi.fn()}
+        onUpdateDeadline={vi.fn()}
+        onCancel={vi.fn()}
+        onApplySeal={vi.fn()}
+      />,
+    );
+
+    const heading = screen.getByRole('heading', {
+      name: 'Company seal',
+    });
+    const sealSection = heading.closest('section');
+
+    expect(sealSection).not.toBeNull();
+
+    expect(
+      within(sealSection).getByText(
+        /company seal applied/i,
+      ),
+   ).toBeInTheDocument();
+
+    expect(
+      within(sealSection).getByText(/applied on/i),
+    ).toBeInTheDocument();
+
+    expect(
+      within(sealSection).queryByRole('button', {
+        name: /apply company seal/i,
+      }),
+    ).not.toBeInTheDocument();
+
+    const download = within(sealSection).getByRole(
+      'link',
+      {
+        name: /download sealed document/i,
+      },
+    );
+
+    expect(download.getAttribute('href')).toContain(
+      '/signature-requests/request-1/artifacts/sealed-artifact-1/download',
+    );
+  });
+
+
 });

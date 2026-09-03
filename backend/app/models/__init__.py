@@ -28,6 +28,7 @@ from app.models.signature_provider import (
     SignatureArtifact,
     SignatureProviderEvent,
 )
+from app.models.signature_seal import SignatureSeal
 from app.models.leave import (
     LeaveBalance,
     LeaveLedgerEntry,
@@ -57,4 +58,5 @@ __all__ = [
     'SignatureArtifact', 'SignatureProviderEvent',
     'LeaveType', 'LeaveBalance', 'LeaveRequest', 'LeaveLedgerEntry',
     'AttendanceRecord', 'OnboardingTemplate', 'OnboardingResource', 'OnboardingTask', 'EmployeeOnboardingTask', 'OnboardingTrainingAttempt', 'AuditLog', 'Notification', 'Goal', 'GoalCheckIn',
+    'SignatureSeal',
 ]

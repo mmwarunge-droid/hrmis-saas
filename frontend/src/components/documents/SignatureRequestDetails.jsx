@@ -5,6 +5,7 @@ import {
   CheckCircle2,
   CircleDashed,
   Clock3,
+  Download,
   FileSignature,
   History,
   RefreshCcw,
@@ -12,7 +13,10 @@ import {
   XCircle,
 } from 'lucide-react';
 
+import { signatureApi } from '../../api/signatureApi.js';
+
 import SignatureEvidencePanel from './SignatureEvidencePanel.jsx';
+import SignatureSealPlacement from './SignatureSealPlacement.jsx';
 import Badge from '../ui/Badge.jsx';
 import Button from '../ui/Button.jsx';
 import Card from '../ui/Card.jsx';
@@ -35,6 +39,20 @@ const DEFAULT_RESEND_MESSAGE = (
   + 'earliest convenience.'
 );
 const RESEND_DEADLINE_DAYS = 7;
+
+function sealReadyToApply(seal) {
+  return Boolean(
+    seal?.image_original_filename
+    && Number.isInteger(seal.page_number)
+    && seal.page_number > 0
+    && Number.isFinite(seal.x)
+    && Number.isFinite(seal.y)
+    && Number.isFinite(seal.width)
+    && seal.width > 0
+    && Number.isFinite(seal.height)
+    && seal.height > 0
+  );
+}
 
 function defaultResendDeadline() {
   return toDateTimeLocal(
@@ -107,6 +125,7 @@ export default function SignatureRequestDetails({
   onResend,
   onUpdateDeadline,
   onCancel,
+  onApplySeal,
   evidence = null,
   onRetryEvidence,
 }) {
@@ -342,6 +361,95 @@ export default function SignatureRequestDetails({
           loading={loading}
           onRetry={onRetryEvidence}
         />
+      )}
+
+      {request.seal_required && (
+        <Card>
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <p className="text-xs font-bold uppercase tracking-wider text-blue-700">
+                Finalization
+              </p>
+              <h3 className="mt-1 font-bold">
+                Company seal
+              </h3>
+            </div>
+
+            <Badge
+              tone={
+                request.seal_status === 'applied'
+                  ? 'green'
+                  : request.seal_status === 'pending'
+                    ? 'amber'
+                    : 'slate'
+              }
+            >
+              {request.seal_status
+                ? request.seal_status.replaceAll('_', ' ')
+                : 'not available'}
+            </Badge>
+          </div>
+
+          {request.seal_status === 'awaiting_signatures' && (
+            <p className="mt-4 text-sm leading-6 text-slate-600">
+              Waiting for all signatories to complete the request before
+              the company seal can be applied.
+            </p>
+          )}
+
+          {request.seal_status === 'pending' && (
+            <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-4">
+              <p className="font-semibold text-amber-950">
+                Pending company seal
+              </p>
+              <p className="mt-1 text-sm leading-6 text-amber-900">
+                Signing is complete. The company seal is ready for
+                authorized review and placement.
+              </p>
+              <div className="mt-4">
+                <SignatureSealPlacement
+                  request={request}
+                  seal={request.seal}
+                  loading={loading}
+                />
+              </div>
+              {onApplySeal && sealReadyToApply(request.seal) && (
+                <div className="mt-4 flex justify-end">
+                  <Button
+                    type="button"
+                    disabled={loading}
+                    onClick={() => onApplySeal(request.id)}
+                  >
+                    Apply Company Seal
+                  </Button>
+                </div>
+              )}
+            </div>
+          )}
+
+          {request.seal_status === 'applied' && (
+            <div className="mt-4 rounded-lg border border-emerald-200 bg-emerald-50 p-4">
+              <p className="font-semibold text-emerald-950">
+                Company seal applied
+              </p>
+              <p className="mt-1 text-sm text-emerald-900">
+                Applied on {formatDateTime(request.sealed_at)}.
+              </p>
+              {request.sealed_document?.id && (
+                <a
+                  href={signatureApi.artifactDownloadUrl(
+                    request.id,
+                    request.sealed_document.id,
+                  )}
+                  className="mt-4 inline-flex items-center justify-center gap-2 rounded-xl border border-emerald-300 bg-white px-3 py-2 text-xs font-semibold text-emerald-900 transition hover:bg-emerald-50"
+                >
+                  <Download size={14} />
+                  Download sealed document
+                </a>
+              )}
+            </div>
+          )}
+        </Card>
       )}
 
       {canResend && (

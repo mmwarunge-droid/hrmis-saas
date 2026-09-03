@@ -182,6 +182,10 @@ class SignatureRequestCreateSchema(Schema):
             'parallel',
         ]),
     )
+    seal_required = fields.Bool(
+        required=False,
+        load_default=False,
+    )
     assurance_level = fields.Str(
         required=False,
         load_default='standard',

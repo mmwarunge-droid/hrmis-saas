@@ -40,6 +40,7 @@ export default function SignatureRequestForm({
     message: '',
     assurance_level: 'standard',
     signing_mode: 'sequential',
+    seal_required: false,
     due_date: '',
     due_time: '',
     first_reminder_after_days: 2,
@@ -244,6 +245,7 @@ export default function SignatureRequestForm({
       message: form.message.trim() || null,
       assurance_level: form.assurance_level,
       signing_mode: signingMode,
+      seal_required: form.seal_required,
       due_at: dueAt.toISOString(),
       recipients: recipients.map((recipient, index) => ({
         employee_id: recipient.employee_id,
@@ -310,6 +312,27 @@ export default function SignatureRequestForm({
           {error}
         </div>
       )}
+
+      <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-slate-200 bg-white p-4">
+        <input
+          type="checkbox"
+          aria-label="Require company seal after signing"
+          checked={form.seal_required}
+          onChange={(event) => setForm((current) => ({
+            ...current,
+            seal_required: event.target.checked,
+          }))}
+          className="mt-0.5 h-4 w-4 rounded border-slate-300 text-blue-700"
+        />
+        <span>
+          <span className="block text-sm font-semibold text-slate-950">
+            Require company seal after signing
+          </span>
+          <span className="mt-1 block text-xs leading-5 text-slate-500">
+            After all signatories complete, an authorized reviewer must place and apply the company seal.
+          </span>
+        </span>
+      </label>
 
       <label className="block space-y-1">
         <span className="text-sm font-medium text-slate-700">

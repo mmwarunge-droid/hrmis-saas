@@ -167,6 +167,7 @@ describe('SignatureRequestForm', () => {
       message: null,
       assurance_level: 'standard',
       signing_mode: 'sequential',
+      seal_required: false,
       due_at: new Date(deadline).toISOString(),
       recipients: [{
         employee_id: 'employee-1',
@@ -184,6 +185,62 @@ describe('SignatureRequestForm', () => {
     expect(
       screen.queryByText('Other Tenant Employee'),
     ).not.toBeInTheDocument();
+  });
+
+  it('can require a company seal after signing completes', () => {
+    const onSubmit = vi.fn();
+    const deadline = futureLocalDate();
+
+    render(
+      <SignatureRequestForm
+        document={document}
+        employees={employees}
+        isSuperAdmin
+        onSubmit={onSubmit}
+      />,
+    );
+
+    fireEvent.click(
+      screen.getByRole(
+        'radio',
+        { name: /Signing record page/i },
+      ),
+    );
+
+    const sealToggle = screen.getByRole(
+      'checkbox',
+      { name: /Require company seal after signing/i },
+    );
+
+    expect(sealToggle).not.toBeChecked();
+
+    fireEvent.click(sealToggle);
+
+    expect(sealToggle).toBeChecked();
+
+    setCompletionDeadline(deadline);
+
+    fireEvent.change(
+      screen.getByLabelText('Signatory 1'),
+      { target: { value: 'employee-1' } },
+    );
+
+    const submitButton = screen.getByRole(
+      'button',
+      { name: 'Send for signature' },
+    );
+
+    fireEvent.submit(
+      submitButton.closest('form'),
+    );
+
+    expect(onSubmit).toHaveBeenCalledTimes(1);
+
+    const payload = onSubmit.mock.calls[0][0];
+
+    expect(payload.seal_required).toBe(true);
+    expect(payload.assurance_level).toBe('standard');
+    expect(payload.signing_mode).toBe('sequential');
   });
 
   it('retains multi-signer controls for standard Kinetic signing', () => {
