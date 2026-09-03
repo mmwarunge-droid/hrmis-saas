@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 
 import SignatureEvidencePanel from './SignatureEvidencePanel.jsx';
+import SignatureSealPlacement from './SignatureSealPlacement.jsx';
 import Badge from '../ui/Badge.jsx';
 import Button from '../ui/Button.jsx';
 import Card from '../ui/Card.jsx';
@@ -387,6 +388,13 @@ export default function SignatureRequestDetails({
                 Signing is complete. The company seal is ready for
                 authorized review and placement.
               </p>
+              <div className="mt-4">
+                <SignatureSealPlacement
+                  request={request}
+                  seal={request.seal}
+                  loading={loading}
+                />
+              </div>
             </div>
           )}
 

@@ -224,6 +224,7 @@ def test_seal_management_routes_require_document_approve():
     ).read_text()
 
     for route in (
+        "@signature_bp.get('/<request_id>/seal/image')",
         "@signature_bp.post('/<request_id>/seal/image')",
         "@signature_bp.patch('/<request_id>/seal/placement')",
     ):
@@ -253,6 +254,16 @@ def test_unauthenticated_seal_upload_is_rejected(client):
             ),
         },
         content_type='multipart/form-data',
+    )
+
+    assert response.status_code == 401
+
+
+def test_unauthenticated_seal_image_download_is_rejected(client):
+    request_id = uuid4()
+
+    response = client.get(
+        f'/api/signature-requests/{request_id}/seal/image',
     )
 
     assert response.status_code == 401

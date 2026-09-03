@@ -218,6 +218,42 @@ def validate_seal_placement(
     }
 
 
+def signature_seal_image_content(signature_request):
+    seal = SignatureSeal.query.filter_by(
+        tenant_id=signature_request.tenant_id,
+        signature_request_id=signature_request.id,
+    ).first()
+
+    if seal is None:
+        raise SignatureSealError(
+            'No company seal image has been uploaded.'
+        )
+
+    try:
+        content = Path(
+            seal.image_file_path
+        ).read_bytes()
+    except OSError as exc:
+        raise SignatureSealError(
+            'The company seal image is unavailable.'
+        ) from exc
+
+    checksum = hashlib.sha256(
+        content
+    ).hexdigest()
+
+    if checksum != seal.image_sha256:
+        raise SignatureSealError(
+            'The company seal image failed its integrity check.'
+        )
+
+    return {
+        'content': content,
+        'mime_type': seal.image_mime_type,
+        'filename': seal.image_original_filename,
+    }
+
+
 def upload_signature_seal_image(
     signature_request,
     file,

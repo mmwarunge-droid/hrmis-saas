@@ -1199,6 +1199,12 @@ def serialize_signature_request(
         else None
     )
 
+    data['seal'] = (
+        signature_request.seal.to_dict()
+        if signature_request.seal
+        else None
+    )
+
     if include_events:
         data['events'] = [
             event.to_dict()

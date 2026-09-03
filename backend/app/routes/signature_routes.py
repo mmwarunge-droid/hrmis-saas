@@ -38,6 +38,7 @@ from app.services.signature_providers.base import (
 from app.services.signature_seal_service import (
     SignatureSealError,
     apply_signature_seal,
+    signature_seal_image_content,
     update_signature_seal_placement,
     upload_signature_seal_image,
 )
@@ -638,6 +639,40 @@ def _manageable_request(request_id):
         )
 
     return signature_request
+
+
+@signature_bp.get('/<request_id>/seal/image')
+@jwt_required()
+@permission_required('document:approve')
+def download_company_seal_image(request_id):
+    try:
+        signature_request = _manageable_request(
+            request_id
+        )
+        image = signature_seal_image_content(
+            signature_request
+        )
+
+    except PermissionError as exc:
+        return fail(
+            'FORBIDDEN',
+            str(exc),
+            403,
+        )
+
+    except SignatureSealError as exc:
+        return fail(
+            'SIGNATURE_SEAL_IMAGE_FAILED',
+            str(exc),
+            422,
+        )
+
+    return send_file(
+        BytesIO(image['content']),
+        mimetype=image['mime_type'],
+        download_name=image['filename'],
+        as_attachment=False,
+    )
 
 
 @signature_bp.post('/<request_id>/seal/image')

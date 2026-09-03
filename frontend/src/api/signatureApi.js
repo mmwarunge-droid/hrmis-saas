@@ -117,6 +117,31 @@ export const signatureApi = {
     `/signature-requests/${requestId}/evidence/retry`,
   ),
 
+  artifact: (requestId, artifactId) => apiClient.get(
+    `/signature-requests/${requestId}/artifacts/${artifactId}/download`,
+    { responseType: 'blob' },
+  ),
+
+  sealImage: (requestId) => apiClient.get(
+    `/signature-requests/${requestId}/seal/image`,
+    { responseType: 'blob' },
+  ),
+
+  uploadSealImage: (requestId, file) => {
+    const formData = new FormData();
+    formData.append('file', file);
+
+    return apiClient.post(
+      `/signature-requests/${requestId}/seal/image`,
+      formData,
+    );
+  },
+
+  updateSealPlacement: (requestId, placement) => apiClient.patch(
+    `/signature-requests/${requestId}/seal/placement`,
+    placement,
+  ),
+
   artifactDownloadUrl: (requestId, artifactId) => {
     const base = apiClient.defaults.baseURL || '/api';
 

@@ -280,6 +280,176 @@ def _prepare_pending_seal(
         }
 
 
+def test_management_details_expose_pending_seal_metadata(
+    client,
+    app,
+    tenant,
+    admin_user,
+    auth_headers,
+    tmp_path,
+):
+    app.config['UPLOAD_FOLDER'] = str(
+        tmp_path / 'uploads'
+    )
+    app.config['SIGNATURE_EVIDENCE_STORAGE'] = 'local'
+    app.config['SIGNATURE_EVIDENCE_FOLDER'] = str(
+        tmp_path / 'signature-evidence'
+    )
+
+    admin_user_id = inspect(
+        admin_user
+    ).identity[0]
+
+    request_id = _create_seal_required_request(
+        client,
+        app,
+        tenant,
+        admin_user,
+        auth_headers,
+        tmp_path,
+        suffix='details',
+    )
+
+    prepared = _prepare_pending_seal(
+        app,
+        request_id,
+        admin_user_id,
+        page_number=2,
+    )
+
+    response = client.get(
+        f'/api/signature-requests/{request_id}',
+        headers=auth_headers,
+    )
+
+    assert response.status_code == 200
+
+    payload = response.get_json()['data']
+
+    assert payload['seal']['id'] == str(
+        prepared['seal_id']
+    )
+    assert (
+        payload['seal']['image_original_filename']
+        == 'company-seal.png'
+    )
+    assert payload['seal']['page_number'] == 2
+    assert payload['seal']['x'] == 0.10
+    assert payload['seal']['y'] == 0.15
+    assert payload['seal']['width'] == 0.20
+    assert payload['seal']['height'] == 0.15
+
+    assert (
+        payload['signed_document']['id']
+        == str(prepared['signed_artifact_id'])
+    )
+
+
+def test_management_can_download_persisted_company_seal_image(
+    client,
+    app,
+    tenant,
+    admin_user,
+    auth_headers,
+    tmp_path,
+):
+    app.config['UPLOAD_FOLDER'] = str(
+        tmp_path / 'uploads'
+    )
+    app.config['SIGNATURE_EVIDENCE_STORAGE'] = 'local'
+    app.config['SIGNATURE_EVIDENCE_FOLDER'] = str(
+        tmp_path / 'signature-evidence'
+    )
+
+    admin_user_id = inspect(
+        admin_user
+    ).identity[0]
+
+    request_id = _create_seal_required_request(
+        client,
+        app,
+        tenant,
+        admin_user,
+        auth_headers,
+        tmp_path,
+        suffix='image-download',
+    )
+
+    _prepare_pending_seal(
+        app,
+        request_id,
+        admin_user_id,
+        page_number=1,
+    )
+
+    response = client.get(
+        f'/api/signature-requests/{request_id}/seal/image',
+        headers=auth_headers,
+    )
+
+    assert response.status_code == 200
+    assert response.mimetype == 'image/png'
+    assert response.data == _TINY_PNG
+
+
+def test_management_seal_image_download_rejects_tampered_bytes(
+    client,
+    app,
+    tenant,
+    admin_user,
+    auth_headers,
+    tmp_path,
+):
+    app.config['UPLOAD_FOLDER'] = str(
+        tmp_path / 'uploads'
+    )
+    app.config['SIGNATURE_EVIDENCE_STORAGE'] = 'local'
+    app.config['SIGNATURE_EVIDENCE_FOLDER'] = str(
+        tmp_path / 'signature-evidence'
+    )
+
+    admin_user_id = inspect(
+        admin_user
+    ).identity[0]
+
+    request_id = _create_seal_required_request(
+        client,
+        app,
+        tenant,
+        admin_user,
+        auth_headers,
+        tmp_path,
+        suffix='image-tamper',
+    )
+
+    _prepare_pending_seal(
+        app,
+        request_id,
+        admin_user_id,
+        page_number=1,
+    )
+
+    with app.app_context():
+        signature_request = db.session.get(
+            SignatureRequest,
+            request_id,
+        )
+        Path(
+            signature_request.seal.image_file_path
+        ).write_bytes(b'tampered-seal-image')
+
+    response = client.get(
+        f'/api/signature-requests/{request_id}/seal/image',
+        headers=auth_headers,
+    )
+
+    assert response.status_code == 422
+    assert (
+        response.get_json()['error']['code']
+        == 'SIGNATURE_SEAL_IMAGE_FAILED'
+    )
+
+
 def test_apply_signature_seal_persists_complete_artifact_lineage(
     client,
     app,
