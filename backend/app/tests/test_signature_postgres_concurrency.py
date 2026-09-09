@@ -63,7 +63,6 @@ def postgres_parallel_signing_app(tmp_path):
         tmp_path / 'signature-evidence'
     )
 
-    tenant_id = None
     user_ids = []
 
     try:
@@ -82,7 +81,6 @@ def postgres_parallel_signing_app(tmp_path):
             db.session.add(tenant)
             db.session.flush()
 
-            tenant_id = tenant.id
 
             users = []
 
@@ -302,25 +300,9 @@ def postgres_parallel_signing_app(tmp_path):
         with app.app_context():
             db.session.remove()
 
-            for user_id in user_ids:
-                user = db.session.get(
-                    User,
-                    user_id,
-                )
-
-                if user is not None:
-                    db.session.delete(user)
-
-            if tenant_id is not None:
-                tenant = db.session.get(
-                    Tenant,
-                    tenant_id,
-                )
-
-                if tenant is not None:
-                    db.session.delete(tenant)
-
-            db.session.commit()
+            # Executed evidence is retained by database triggers. Integration
+            # tests use UUID-isolated records in a disposable test database;
+            # the database owner drops that database after the test run.
 
         DevelopmentConfig.SQLALCHEMY_DATABASE_URI = (
             original_database_url

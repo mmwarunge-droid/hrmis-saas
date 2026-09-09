@@ -21,6 +21,7 @@ import { employeeApi } from '../api/employeeApi';
 import { signatureApi } from '../api/signatureApi';
 import { tenantApi } from '../api/tenantApi';
 import DocumentUpload from '../components/documents/DocumentUpload.jsx';
+import SignatureTemplatePicker from '../components/documents/SignatureTemplatePicker.jsx';
 import SignatureRequestForm from '../components/documents/SignatureRequestForm.jsx';
 import Alert from '../components/ui/Alert.jsx';
 import Badge from '../components/ui/Badge.jsx';
@@ -71,6 +72,7 @@ export default function Documents() {
   const [uploadOpen, setUploadOpen] = useState(false);
   const [signatureOpen, setSignatureOpen] = useState(false);
   const [selectedDocument, setSelectedDocument] = useState(null);
+  const [selectedTemplate, setSelectedTemplate] = useState(null);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [query, setQuery] = useState('');
@@ -174,11 +176,20 @@ export default function Documents() {
     }
   };
 
-  const openSignatureRequest = (document) => {
-    setSelectedDocument(document);
-    setSignatureOpen(true);
-    setError('');
-    setSuccess('');
+  const openSignatureRequest = async (document) => {
+    setSelectedTemplate(null);
+    setError(''); setSuccess('');
+    try {
+      let prepared = document;
+      if (document.original_filename?.toLowerCase().endsWith('.docx')) {
+        setSuccess('Preparing a PDF signing copy of the Word document…');
+        const response = await documentApi.prepareSigning(document.id);
+        prepared = response.data;
+      }
+      setSelectedDocument(prepared);
+      setSignatureOpen(true);
+      setSuccess('');
+    } catch (err) { setError(err.error?.message || 'Unable to prepare signing document.'); }
   };
 
   const manageSignatureRequest = (document) => {
@@ -205,7 +216,7 @@ export default function Documents() {
       setSignatureOpen(false);
       setSelectedDocument(null);
       setSuccess(
-        response.data.assurance_level === 'qes'
+        response.data.status === 'draft' ? `${response.data.subject} saved as a draft. Open Manage signing to review and send.` : response.data.assurance_level === 'qes'
           ? (
             `${response.data.subject} was submitted to Dropbox `
             + 'Sign. The signatory will receive a provider-hosted '
@@ -376,6 +387,9 @@ export default function Documents() {
 
       {error && <Alert type="error">{error}</Alert>}
       {success && <Alert type="success">{success}</Alert>}
+      {canManageSignatures && <SignatureTemplatePicker employees={employees} tenants={tenants} isSuperAdmin={isSuperAdmin}
+        onSelect={({ document, template }) => { setSelectedDocument(document); setSelectedTemplate(template); setSignatureOpen(true); }} />}
+
 
       <div className="grid gap-4 md:grid-cols-4">
         <StatCard
@@ -530,6 +544,8 @@ export default function Documents() {
         size="xl"
       >
         <SignatureRequestForm
+          key={selectedDocument?.id}
+          template={selectedTemplate}
           document={selectedDocument}
           employees={employees}
           isSuperAdmin={isSuperAdmin}

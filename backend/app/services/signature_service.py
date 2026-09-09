@@ -1,6 +1,6 @@
 from datetime import timedelta
 
-from flask import current_app, render_template
+from flask import current_app, render_template, has_request_context, request
 
 from sqlalchemy.exc import IntegrityError
 
@@ -235,6 +235,14 @@ def _record_event(
     description=None,
     metadata=None,
 ):
+    context = {
+        'document_id': str(signature_request.document_id),
+        'document_version': signature_request.document.version,
+        'version_id': str(signature_request.id),
+        'email': recipient.email if recipient else getattr(actor, 'email', None),
+        'ip_address': request.remote_addr if has_request_context() else None,
+        'user_agent': request.user_agent.string[:1000] if has_request_context() else None,
+    }
     event = SignatureEvent(
         tenant_id=signature_request.tenant_id,
         signature_request_id=signature_request.id,
@@ -250,7 +258,7 @@ def _record_event(
         ),
         event_type=event_type,
         description=description,
-        metadata_json=metadata or {},
+        metadata_json={**context, **(metadata or {})},
         occurred_at=utcnow(),
     )
     db.session.add(event)
@@ -445,6 +453,8 @@ def _notify_admin(
 
 
 def _active_recipients(signature_request):
+    if signature_request.status not in {'sent', 'in_progress'}:
+        return []
     if signature_request.signing_mode == 'parallel':
         return [
             recipient
@@ -495,6 +505,14 @@ def create_signature_request(
             'The selected document does not exist '
             'within this organization.',
         )
+
+    if document.executed_artifact_id:
+        raise ValueError('Executed documents are locked. Upload a new source version.')
+    if payload.get('filing_employee_id'):
+        owner = Employee.query.filter_by(id=payload['filing_employee_id'], tenant_id=tenant_id, deleted_at=None).first()
+        if not owner:
+            raise ValueError('The employee file must belong to this organization.')
+        document.employee_id = owner.id
 
     if document.status != 'active':
         raise ValueError(
@@ -644,10 +662,10 @@ def create_signature_request(
         message=payload.get('message'),
         signing_mode=signing_mode,
         seal_required=payload.get('seal_required', False),
-        status='draft' if is_qes else 'sent',
+        status='draft' if is_qes or payload.get('save_as_draft') else 'sent',
         current_sequence=first_sequence,
         due_at=request_due_at,
-        sent_at=None if is_qes else now,
+        sent_at=None if is_qes or payload.get('save_as_draft') else now,
         provider='dropbox_sign' if is_qes else None,
         provider_status='preparing' if is_qes else None,
         provider_test_mode=False if is_qes else None,
@@ -783,6 +801,13 @@ def create_signature_request(
         },
         actor=actor,
     )
+
+    if payload.get('save_as_draft'):
+        if is_qes:
+            raise ValueError('Draft preparation is available for native signing only.')
+        reminder_rule.next_run_at = None
+        db.session.commit()
+        return signature_request
 
     if is_qes:
         # Commit the local request before calling the provider. The
@@ -940,6 +965,8 @@ def _resend_recipient_fields(signature_request, recipient):
             'label': field.label,
             'placeholder': field.placeholder,
             'prefill_key': field.prefill_key,
+            'read_only': field.read_only,
+            'default_value': field.default_value,
             'mark_style': field.mark_style,
             'page_number': field.page_number,
             'x': field.x,
@@ -1435,6 +1462,9 @@ def mark_recipient_signed(
     signature_style=DEFAULT_SIGNATURE_STYLE,
     field_values=None,
     consent_version=CONSENT_VERSION,
+    signature_input='generated',
+    signature_text=None,
+    signature_image=None,
 ):
     """Record an internal signature using authoritative profile identity.
 
@@ -1496,11 +1526,23 @@ def mark_recipient_signed(
 
     now = utcnow()
     generated_signature = canonical_signature_text(recipient, actor)
+    normalized_image = None
+    if signature_input == 'typed':
+        generated_signature = (signature_text or '').strip()
+        if not 2 <= len(generated_signature) <= 240:
+            raise ValueError('Enter your signature between 2 and 240 characters.')
+    elif signature_input in ('drawn', 'uploaded'):
+        from app.services.signature_input_service import normalize_signature_image
+        normalized_image = normalize_signature_image(signature_image)
+    elif signature_input != 'generated':
+        raise ValueError('Unsupported signature input method.')
+
 
     recipient.status = 'signed'
     recipient.signed_at = now
     recipient.signature_name = generated_signature
-    recipient.signature_method = 'generated_typed'
+    recipient.signature_method = 'generated_typed' if signature_input == 'generated' else signature_input
+    recipient.signature_image = normalized_image
     recipient.signature_style = signature_style or DEFAULT_SIGNATURE_STYLE
     recipient.consented_at = now
     recipient.consent_version = consent_version or CONSENT_VERSION
@@ -1986,7 +2028,8 @@ def cancel_signature_request(
     actor,
     reason,
 ):
-    _require_active_signature_request(signature_request)
+    if signature_request.status != 'draft' or signature_request.provider:
+        _require_active_signature_request(signature_request)
 
     if signature_request.provider_status == 'cancellation_pending':
         raise ValueError(

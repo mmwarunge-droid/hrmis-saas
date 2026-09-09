@@ -16,6 +16,7 @@ import { Link, useParams } from 'react-router-dom';
 
 import { documentApi } from '../api/documentApi.js';
 import { signatureApi } from '../api/signatureApi.js';
+import SignatureInput from '../components/documents/SignatureInput.jsx';
 import PdfSigningViewer from '../components/documents/PdfSigningViewer.jsx';
 import SignatureDiscussionPanel from '../components/signatures/SignatureDiscussionPanel.jsx';
 import Alert from '../components/ui/Alert.jsx';
@@ -88,6 +89,7 @@ export default function SignatureTask() {
   const [declineReason, setDeclineReason] = useState('');
   const [showDecline, setShowDecline] = useState(false);
   const [consent, setConsent] = useState(false);
+  const [signatureInput, setSignatureInput] = useState({ signature_input: 'generated' });
   const [signatureStyle, setSignatureStyle] = useState('calligraphy_1');
   const [fieldValues, setFieldValues] = useState({});
   const [activeFieldId, setActiveFieldId] = useState(null);
@@ -255,6 +257,7 @@ export default function SignatureTask() {
       await signatureApi.submit(recipientId, {
         consent,
         signature_style: signatureStyle,
+        ...signatureInput,
         fields: signingFieldSubmission(
           currentFields,
           fieldValues,
@@ -301,7 +304,7 @@ export default function SignatureTask() {
   const reviewComplete = Boolean(task.viewed_at) || task.status === 'signed';
   const signed = task.status === 'signed';
   const requestComplete = task.request_status === 'completed';
-  const generatedSignature = task.signature_name || task.signature_preview;
+  const generatedSignature = task.signature_name || (signatureInput.signature_input === 'typed' ? signatureInput.signature_text : task.signature_preview);
   const signingDate = task.signed_at
     ? formatDay(task.signed_at)
     : 'Set by Kinetic at submission';
@@ -539,7 +542,7 @@ export default function SignatureTask() {
                           </span>
                         </button>
 
-                        {field.field_type === 'checkbox' ? (
+                        {field.field_type === 'checkbox' && editable ? (
                           <div className="mt-3 space-y-2">
                             <div className="flex flex-wrap gap-2">
                               {[
@@ -676,7 +679,7 @@ export default function SignatureTask() {
                               ? 'Generated from your official Kinetic profile name.'
                               : field.field_type === 'date'
                                 ? 'Set by the authoritative server timestamp when you submit.'
-                                : 'Filled from your official Kinetic profile name.'}
+                                : field.read_only ? `Read-only: ${field.value || 'Blank'}` : 'Filled from your official Kinetic profile name.'}
                           </p>
                         )}
 
@@ -698,10 +701,12 @@ export default function SignatureTask() {
                   <UserRoundCheck className="mt-0.5 shrink-0 text-blue-700" size={20} />
                   <div>
                     <h2 className="font-bold text-slate-950">Your electronic signature</h2>
-                    <p className="mt-1 text-xs leading-5 text-slate-500">Generated from the official name on your Kinetic employee profile. The signed identity cannot be typed over.</p>
+                    <p className="mt-1 text-xs leading-5 text-slate-500">Choose how to add your signature. Your authenticated employee identity is recorded with it.</p>
                   </div>
                 </div>
 
+                <SignatureInput value={signatureInput} name={task.name} onChange={(value) => { setSignatureInput(value); setConsent(false); }} />
+                {!['drawn', 'uploaded'].includes(signatureInput.signature_input) && <>
                 <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4">
                   <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Signature</p>
                   <p
@@ -751,6 +756,7 @@ export default function SignatureTask() {
                   </button>
                 </div>
 
+                </>}
                 <div className="mt-4 flex items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 p-3">
                   <CalendarDays size={18} className="text-slate-500" />
                   <div>
@@ -766,7 +772,7 @@ export default function SignatureTask() {
                     onChange={(event) => setConsent(event.target.checked)}
                     className="mt-1 h-4 w-4 rounded border-slate-300 text-blue-700"
                   />
-                  <span className="text-xs leading-5 text-blue-950">I have reviewed this document and intend <strong>{generatedSignature}</strong> to be my electronic signature.</span>
+                  <span className="text-xs leading-5 text-blue-950">I have reviewed this document and intend the signature I selected to be my electronic signature.</span>
                 </label>
 
                 <Button
@@ -775,6 +781,8 @@ export default function SignatureTask() {
                   disabled={
                     busy
                     || !consent
+                    || (signatureInput.signature_input === 'typed' && (signatureInput.signature_text || '').trim().length < 2)
+                    || (['drawn', 'uploaded'].includes(signatureInput.signature_input) && !signatureInput.signature_image)
                     || !reviewComplete
                     || missingRequiredFields.length > 0
                   }

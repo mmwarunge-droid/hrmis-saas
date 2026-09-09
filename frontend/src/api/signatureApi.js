@@ -1,6 +1,11 @@
 import apiClient from './apiClient';
 
 export const signatureApi = {
+  sendDraft: (id, payload = {}) => apiClient.post(`/signature-requests/${id}/send`, payload),
+  templates: (params = {}) => apiClient.get('/signature-requests/templates', { params }),
+  saveTemplate: (payload) => apiClient.post('/signature-requests/templates', payload),
+  useTemplate: (id, employeeId, tenantId) => apiClient.post(`/signature-requests/templates/${id}/instantiate`,
+    { employee_id: employeeId }, { params: tenantId ? { tenant_id: tenantId } : {} }),
   create: (payload) => apiClient.post('/signature-requests', payload),
 
   list: (params = {}) => apiClient.get(

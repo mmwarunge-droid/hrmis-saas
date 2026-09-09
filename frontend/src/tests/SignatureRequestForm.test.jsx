@@ -48,6 +48,7 @@ function setCompletionDeadline(deadline) {
 
 const document = {
   id: 'document-1',
+  employee_id: 'employee-1',
   tenant_id: 'tenant-1',
   title: 'Employment contract',
   original_filename: 'contract.pdf',
@@ -163,6 +164,8 @@ describe('SignatureRequestForm', () => {
     expect(onSubmit).toHaveBeenCalledWith({
       tenant_id: 'tenant-1',
       document_id: 'document-1',
+      filing_employee_id: 'employee-1',
+      save_as_draft: false,
       subject: 'Please sign: Employment contract',
       message: null,
       assurance_level: 'standard',

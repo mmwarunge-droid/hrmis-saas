@@ -21,6 +21,8 @@ class Document(db.Model, TenantMixin, TimestampMixin, SoftDeleteMixin, ReprMixin
     signature_status = db.Column(db.String(40), nullable=False, default='not_required')
     access_level = db.Column(db.String(40), nullable=False, default='hr_only')
     status = db.Column(db.String(40), nullable=False, default='active')
+    executed_artifact_id = db.Column(GUID(), db.ForeignKey('signature_artifacts.id', name='fk_documents_executed_artifact', ondelete='RESTRICT'), nullable=True)
+    executed_artifact = db.relationship('SignatureArtifact', foreign_keys=[executed_artifact_id])
     version = db.Column(db.Integer, nullable=False, default=1)
 
     employee = db.relationship('Employee', back_populates='documents')
@@ -43,4 +45,6 @@ class Document(db.Model, TenantMixin, TimestampMixin, SoftDeleteMixin, ReprMixin
             'issued_date': self.issued_date.isoformat() if self.issued_date else None,
             'signature_status': self.signature_status, 'access_level': self.access_level, 'status': self.status,
             'version': self.version,
+            'locked': bool(self.executed_artifact_id),
+            'version_id': str(self.executed_artifact_id) if self.executed_artifact_id else str(self.id),
         }

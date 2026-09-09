@@ -173,6 +173,8 @@ def download_document(document_id):
     document = tenant_query(Document).filter_by(id=document_id, deleted_at=None).first_or_404()
     if not can_access_document(current_user, document):
         return fail('FORBIDDEN', 'You cannot download this document', 403)
+    if document.executed_artifact_id:
+        return _executed_content(document, True)
     return send_stored_file(document.file_path, document.original_filename)
 
 
@@ -186,6 +188,8 @@ def view_document_content(document_id):
     ).first_or_404()
     if not can_access_document(current_user, document):
         return fail('FORBIDDEN', 'You cannot review this document', 403)
+    if document.executed_artifact_id:
+        return _executed_content(document, False)
     response = send_stored_file(
         document.file_path,
         document.original_filename,
@@ -205,6 +209,35 @@ def patch_document(document_id):
     try:
         payload = DocumentUpdateSchema().load(request.get_json() or {})
         document = update_document(document, payload)
+    except ValueError as exc:
+        return fail('DOCUMENT_LOCKED', str(exc), 409)
     except ValidationError as err:
         return fail('VALIDATION_ERROR', err.messages, 422)
     return success(document.to_dict(), 'Document updated')
+
+
+def _executed_content(document, attachment):
+    from io import BytesIO
+    from flask import send_file
+    from app.services.signature_evidence_service import artifact_content, SignatureEvidenceValidationError
+    try:
+        content = artifact_content(document.executed_artifact)
+    except (FileNotFoundError, SignatureEvidenceValidationError) as exc:
+        return fail('DOCUMENT_INTEGRITY_ERROR', str(exc), 409)
+    return send_file(BytesIO(content), mimetype='application/pdf',
+                     download_name=document.original_filename, as_attachment=attachment, max_age=0)
+
+
+@document_bp.post('/<document_id>/prepare-signing')
+@jwt_required()
+@permission_required('document:approve')
+def prepare_document_signing(document_id):
+    from app.services.document_service import prepare_signing_pdf
+    document = tenant_query(Document).filter_by(id=document_id, deleted_at=None).first_or_404()
+    if not can_access_document(current_user, document):
+        return fail('FORBIDDEN', 'You cannot prepare this document', 403)
+    try:
+        return success(prepare_signing_pdf(document).to_dict(), 'PDF signing copy prepared', 201)
+    except (ValueError, OSError) as exc:
+        db.session.rollback()
+        return fail('DOCUMENT_PREPARATION_FAILED', str(exc), 400)

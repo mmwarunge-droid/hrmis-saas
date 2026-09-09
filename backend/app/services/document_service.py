@@ -173,8 +173,36 @@ def create_document(payload, file, tenant_id):
 
 
 def update_document(document, payload):
+    if document.executed_artifact_id:
+        raise ValueError('Executed documents are locked. Upload a new version instead.')
     for key, value in payload.items():
         setattr(document, key, value)
     log_event('document.update', 'Document', document.id, tenant_id=document.tenant_id)
     db.session.commit()
     return document
+
+
+def prepare_signing_pdf(document):
+    """Convert once so preparation and execution use the exact same PDF bytes."""
+    from io import BytesIO
+    from pathlib import Path
+    from werkzeug.datastructures import FileStorage
+    from app.services.document_conversion_service import convert_docx_to_pdf, is_docx_document
+    if not is_docx_document(document) or document.executed_artifact_id:
+        raise ValueError('Select an unsigned Word document to prepare a PDF signing copy.')
+    source = Path(document.file_path).read_bytes()
+    if document.checksum_sha256 and hashlib.sha256(source).hexdigest() != document.checksum_sha256:
+        raise ValueError('The original Word document failed its integrity check.')
+    converted = convert_docx_to_pdf(source)
+    stored = save_document_file(FileStorage(stream=BytesIO(converted.content),
+        filename=f'{Path(document.original_filename).stem} - Signing.pdf', content_type='application/pdf'), document.tenant_id)
+    prepared = Document(tenant_id=document.tenant_id, employee_id=document.employee_id,
+        uploaded_by_id=current_user.id, title=document.title, document_type=document.document_type,
+        access_level=document.access_level, version=document.version,
+        checksum_sha256=hashlib.sha256(converted.content).hexdigest(), **stored)
+    db.session.add(prepared)
+    db.session.flush()
+    log_event('document.signing_pdf_prepared', 'Document', prepared.id, tenant_id=document.tenant_id,
+        metadata={'original_document_id': str(document.id), 'original_sha256': document.checksum_sha256})
+    db.session.commit()
+    return prepared

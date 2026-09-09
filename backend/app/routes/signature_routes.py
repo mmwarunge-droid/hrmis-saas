@@ -242,6 +242,7 @@ def recipient_details(recipient_id):
         'fields': [
             {
                 **field.to_dict(),
+                'default_value': field.default_value if str(field.recipient_id) == str(recipient.id) else None,
                 # A recipient may know that another signer has
                 # assigned fields, but must not receive that
                 # signer's entered data or completion timestamp.
@@ -402,6 +403,9 @@ def recipient_submit_signature(recipient_id):
             current_user,
             consent=payload['consent'],
             signature_style=payload['signature_style'],
+            signature_input=payload['signature_input'],
+            signature_text=payload.get('signature_text'),
+            signature_image=payload.get('signature_image'),
             field_values=payload.get('fields') or [],
         )
     except ValidationError as err:
@@ -1099,3 +1103,96 @@ def cancel_request(request_id):
             else 'Signature request cancelled'
         ),
     )
+
+
+@signature_bp.get('/templates')
+@jwt_required()
+@permission_required('document:approve')
+def list_templates():
+    from app.models.signature_template import SignatureTemplate
+    return success({'items': [t.to_dict() for t in tenant_query(SignatureTemplate).order_by(SignatureTemplate.name).all()]})
+
+
+@signature_bp.post('/templates')
+@jwt_required()
+@permission_required('document:approve')
+def save_template():
+    from app.models import Document
+    from app.models.signature_template import SignatureTemplate
+    from app.services.signature_template_service import TemplateCreateSchema, template_source
+    try:
+        payload = TemplateCreateSchema().load(request.get_json() or {})
+        tenant_id = request_tenant_id(payload)
+        document = Document.query.filter_by(id=payload['document_id'], tenant_id=tenant_id, deleted_at=None).first()
+        if not document:
+            return fail('NOT_FOUND', 'Source document not found', 404)
+        _, checksum = template_source(document)
+        template = SignatureTemplate(tenant_id=tenant_id, name=payload['name'], document_id=document.id,
+                                     source_checksum=checksum, definition=payload['definition'])
+        db.session.add(template)
+        db.session.commit()
+        return success(template.to_dict(), 'Template saved', 201)
+    except ValidationError as exc:
+        return fail('VALIDATION_ERROR', exc.messages, 422)
+    except (ValueError, OSError) as exc:
+        db.session.rollback()
+        return fail('TEMPLATE_INVALID', str(exc), 400)
+
+
+@signature_bp.post('/templates/<template_id>/instantiate')
+@jwt_required()
+@permission_required('document:approve')
+def use_template(template_id):
+    from marshmallow import Schema, fields
+    from app.models.signature_template import SignatureTemplate
+    from app.services.signature_template_service import instantiate_template
+    class InputSchema(Schema):
+        employee_id = fields.UUID(required=True)
+    template = tenant_query(SignatureTemplate).filter_by(id=template_id).first_or_404()
+    try:
+        payload = InputSchema().load(request.get_json() or {})
+        document = instantiate_template(template, payload['employee_id'], current_user)
+        return success({'document': document.to_dict(), 'template': template.to_dict()}, 'Ready for review', 201)
+    except ValidationError as exc:
+        return fail('VALIDATION_ERROR', exc.messages, 422)
+    except (ValueError, OSError) as exc:
+        db.session.rollback()
+        return fail('TEMPLATE_INVALID', str(exc), 400)
+
+
+@signature_bp.post('/<request_id>/send')
+@jwt_required()
+@permission_required('document:approve')
+def send_native_draft(request_id):
+    from datetime import timedelta
+    from app.models.base import utcnow, to_utc_naive
+    from app.services.signature_service import _activate_current_sequence, _record_event
+    from app.services.native_signature_service import source_pdf_bytes
+    workflow = tenant_query(SignatureRequest).filter_by(id=request_id).with_for_update().first_or_404()
+    try:
+        if workflow.status != 'draft' or workflow.provider:
+            raise ValueError('Only an unsent native draft can be sent.')
+        payload = request.get_json(silent=True) or {}
+        if payload:
+            deadline = SignatureDeadlineUpdateSchema().load(payload)['due_at']
+            workflow.due_at = to_utc_naive(deadline)
+            for recipient in workflow.recipients:
+                recipient.due_at = workflow.due_at
+        now = utcnow()
+        if not workflow.due_at or to_utc_naive(workflow.due_at) <= now:
+            raise ValueError('Update the draft deadline before sending.')
+        source_pdf_bytes(workflow)
+        workflow.status = 'sent'
+        workflow.sent_at = now
+        if workflow.reminder_rule and workflow.reminder_rule.is_active:
+            workflow.reminder_rule.next_run_at = now + timedelta(days=workflow.reminder_rule.first_reminder_after_days)
+        _record_event(workflow, 'signature.request_sent', actor=current_user, metadata={'sent_at': now.isoformat()})
+        _activate_current_sequence(workflow, actor=current_user)
+        db.session.commit()
+        return success(serialize_signature_request(workflow), 'Document sent for signature')
+    except ValidationError as exc:
+        db.session.rollback()
+        return fail('VALIDATION_ERROR', exc.messages, 422)
+    except (ValueError, OSError) as exc:
+        db.session.rollback()
+        return fail('DRAFT_SEND_FAILED', str(exc), 400)

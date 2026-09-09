@@ -40,7 +40,9 @@ class SignatureFieldCreateSchema(Schema):
     prefill_key = fields.Str(
         required=False,
         allow_none=True,
-        validate=validate.Length(max=80),
+        validate=validate.OneOf(['employee.full_name', 'employee.email',
+            'employee.initials', 'employee.job_title', 'employee.employee_number',
+            'recipient.role_label', 'company.name']),
     )
 
     mark_style = fields.Str(
@@ -73,6 +75,8 @@ class SignatureFieldCreateSchema(Schema):
         validate=validate.Range(min=0.01, max=1),
     )
     required = fields.Bool(required=False, load_default=True)
+    read_only = fields.Bool(load_default=False)
+    default_value = fields.Str(allow_none=True, validate=validate.Length(max=2000))
 
     @validates_schema
     def validate_page_bounds(self, data, **kwargs):
@@ -164,6 +168,8 @@ class SignatureReminderCreateSchema(Schema):
 class SignatureRequestCreateSchema(Schema):
     tenant_id = fields.UUID(required=False, allow_none=True)
     document_id = fields.UUID(required=True)
+    filing_employee_id = fields.UUID(allow_none=True)
+    save_as_draft = fields.Bool(load_default=False)
 
     subject = fields.Str(
         required=True,
@@ -297,6 +303,9 @@ class SignatureFieldValueSchema(Schema):
 
 
 class SignatureSubmitSchema(Schema):
+    signature_input = fields.Str(load_default='generated', validate=validate.OneOf(['generated', 'typed', 'drawn', 'uploaded']))
+    signature_text = fields.Str(allow_none=True, validate=validate.Length(min=2, max=240))
+    signature_image = fields.Str(allow_none=True, validate=validate.Length(max=700000))
     consent = fields.Bool(required=True)
     signature_style = fields.Str(
         required=False,

@@ -133,6 +133,8 @@ export default function SignatureRequestDetails({
     () => toDateTimeLocal(request?.due_at),
   );
   const [showCancel, setShowCancel] = useState(false);
+  const [draftError, setDraftError] = useState('');
+  const [draftSending, setDraftSending] = useState(false);
   const [cancelReason, setCancelReason] = useState('');
   const [showResend, setShowResend] = useState(false);
   const [resendDeadline, setResendDeadline] = useState(
@@ -243,6 +245,22 @@ export default function SignatureRequestDetails({
 
   return (
     <div className="space-y-6">
+      {request.status === 'draft' && !request.provider && <Card>
+        <p className="mb-3 text-sm">This draft has not been sent to signers.</p>
+        <Input label="Draft signing deadline" type="datetime-local" value={deadline} onChange={(event) => setDeadline(event.target.value)} />
+        <Button disabled={draftSending || !deadline} onClick={async () => {
+          setDraftSending(true); setDraftError('');
+          try { await signatureApi.sendDraft(request.id, { due_at: new Date(deadline).toISOString() }); window.location.reload(); }
+          catch (err) { setDraftError(err.error?.message || 'Unable to send draft.'); setDraftSending(false); }
+        }}>Send draft for signature</Button>
+        <Button variant="secondary" disabled={draftSending} onClick={async () => {
+          setDraftSending(true); setDraftError('');
+          try { await signatureApi.cancel(request.id, 'Draft discarded by sender'); window.location.reload(); }
+          catch (err) { setDraftError(err.error?.message || 'Unable to discard draft.'); setDraftSending(false); }
+        }}>Discard draft</Button>
+        {draftError && <p role="alert" className="mt-2 text-red-700">{draftError}</p>}
+      </Card>}
+
       <section className="rounded-xl bg-gradient-to-br from-slate-950 via-blue-950 to-blue-950 p-6 text-white">
         <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
           <div className="flex gap-4">
@@ -257,7 +275,7 @@ export default function SignatureRequestDetails({
                 </h3>
 
                 <Badge tone={statusTone(request.status)}>
-                  {request.status.replaceAll('_', ' ')}
+                  {request.display_status || request.status.replaceAll('_', ' ')}
                 </Badge>
 
                 {request.resend_attempt > 0 && (
@@ -720,6 +738,8 @@ export default function SignatureRequestDetails({
                     Sequence {recipient.sequence}
                     {' · '}
                     {recipient.email}
+                    {recipient.notified_at && <span className="block">Sent {formatDateTime(recipient.notified_at)}</span>}
+                    {recipient.viewed_at && <span className="block">Viewed {formatDateTime(recipient.viewed_at)}</span>}
                   </p>
                 </div>
 

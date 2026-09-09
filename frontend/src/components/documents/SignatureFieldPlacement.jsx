@@ -44,8 +44,10 @@ const FIELD_TYPES = [
   },
   {
     type: 'name',
-    label: 'Name',
+    label: 'Full Name',
     defaultLabel: 'Full name',
+    fieldType: 'text',
+    prefill: 'employee.full_name',
     width: 0.27,
     height: 0.05,
     required: true,
@@ -66,7 +68,18 @@ const FIELD_TYPES = [
     height: 0.05,
     required: true,
   },
-  { type: 'checkbox', label: 'Checkbox' },
+  { type: 'checkbox', label: 'Checkbox', defaultLabel: 'Checkbox', width: 0.06, height: 0.04, required: true },
+  ...[
+    ['job_title', 'Job Title / Role', 'employee.job_title'],
+    ['employee_id', 'Employee ID', 'employee.employee_number'],
+    ['national_id', 'National ID', null],
+    ['company_name', 'Company Name', 'company.name'],
+    ['representative_name', 'Company Representative Name', 'employee.full_name'],
+    ['representative_signature', 'Company Representative Signature', null],
+    ['custom', 'Custom Field', null],
+  ].map(([type, label, prefill]) => ({ type, label, defaultLabel: label,
+    fieldType: type === 'representative_signature' ? 'signature' : 'text',
+    prefill, width: 0.30, height: 0.05, required: true })),
 ];
 
 const FIELD_META = Object.fromEntries(
@@ -77,6 +90,9 @@ const FIELD_META = Object.fromEntries(
 );
 
 const PREFILL_OPTIONS = [
+  { value: 'employee.job_title', label: 'Employee job title' },
+  { value: 'employee.employee_number', label: 'Employee ID' },
+  { value: 'company.name', label: 'Company name' },
   {
     value: '',
     label: 'None — signatory enters value',
@@ -146,10 +162,12 @@ function newField(type, pageNumber, x, y) {
   const metadata = fieldMetadata(type);
 
   return {
-    field_type: type,
+    field_type: metadata.fieldType || type,
     label: metadata.defaultLabel,
     placeholder: null,
-    prefill_key: null,
+    prefill_key: metadata.prefill || null,
+    read_only: false,
+    default_value: null,
     page_number: pageNumber,
     x: rounded(x),
     y: rounded(y),
@@ -527,7 +545,7 @@ function PlacementPage({
     zoom,
   ]);
 
-  const place = (event) => {
+  const place = (event, droppedType = activeFieldType) => {
     if (
       !viewportSize
       || selectedRecipient < 0
@@ -540,7 +558,7 @@ function PlacementPage({
       .getBoundingClientRect();
 
     const metadata = fieldMetadata(
-      activeFieldType,
+      droppedType,
     );
 
     const x = clamp(
@@ -564,7 +582,7 @@ function PlacementPage({
     onPlace(
       selectedRecipient,
       newField(
-        activeFieldType,
+        droppedType,
         pageNumber,
         x,
         y,
@@ -580,7 +598,13 @@ function PlacementPage({
       aria-label={`Place ${activeFieldType} field on PDF page ${pageNumber}`}
       className="relative mx-auto cursor-crosshair bg-white shadow-lg outline-none ring-blue-500 focus:ring-2"
       style={viewportSize || undefined}
-      onClick={place}
+      onClick={(event) => place(event)}
+      onDragOver={(event) => event.preventDefault()}
+      onDrop={(event) => {
+        event.preventDefault();
+        const type = event.dataTransfer.getData('application/x-hris-signing-field');
+        if (FIELD_META[type]) place(event, type);
+      }}
       onKeyDown={() => {}}
     >
       <canvas
@@ -968,6 +992,8 @@ export default function SignatureFieldPlacement({
               <button
                 key={metadata.type}
                 type="button"
+                draggable
+                onDragStart={(event) => event.dataTransfer.setData('application/x-hris-signing-field', metadata.type)}
                 onClick={() => (
                   setActiveFieldType(metadata.type)
                 )}
@@ -1152,6 +1178,20 @@ export default function SignatureFieldPlacement({
                 </p>
               ) : (
                 <div className="mt-4 space-y-4">
+                  <label className="block text-xs">Assigned to
+                    <select aria-label="Assigned to" value={selectedField.recipientIndex} className="mt-1 w-full rounded border p-2"
+                      onChange={(event) => {
+                        const target = Number(event.target.value);
+                        if (target === selectedField.recipientIndex) return;
+                        const field = { ...selectedFieldData };
+                        const nextIndex = (recipients[target].fields || []).length;
+                        onFieldsChange(selectedField.recipientIndex, recipients[selectedField.recipientIndex].fields.filter((_, index) => index !== selectedField.fieldIndex));
+                        onFieldsChange(target, [...(recipients[target].fields || []), field]);
+                        setSelectedField({ recipientIndex: target, fieldIndex: nextIndex });
+                      }}>
+                      {recipients.map((recipient, index) => <option key={index} value={index}>{signerName(recipient, employees, index)} — {recipient.role_label}</option>)}
+                    </select>
+                  </label>
                   <label className="block space-y-1">
                     <span className="text-xs font-medium text-slate-700">
                       Label
@@ -1207,6 +1247,23 @@ export default function SignatureFieldPlacement({
 
                     Required field
                   </label>
+
+                  {['text', 'initials', 'checkbox'].includes(selectedFieldData.field_type) && (
+                    <>
+                      <label className="flex gap-2 text-xs">
+                        <input type="checkbox" aria-label="Read-only field"
+                          checked={Boolean(selectedFieldData.read_only)}
+                          onChange={(event) => updateField(selectedField.recipientIndex, selectedField.fieldIndex, { read_only: event.target.checked })} />
+                        Read-only
+                      </label>
+                      <label className="block text-xs">Pre-populated value (leave empty for blank)
+                        <input aria-label="Pre-populated value" maxLength={2000}
+                          className="mt-1 w-full rounded border p-2"
+                          value={selectedFieldData.default_value || ''}
+                          onChange={(event) => updateField(selectedField.recipientIndex, selectedField.fieldIndex, { default_value: event.target.value || null })} />
+                      </label>
+                    </>
+                  )}
 
                   {selectedFieldData.field_type === 'checkbox' && (
                     <label className="block space-y-1">

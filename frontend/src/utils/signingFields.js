@@ -22,7 +22,7 @@ function employeeInitials(name) {
 }
 
 export function editableSigningField(field) {
-  return EDITABLE_FIELD_TYPES.has(
+  return !field?.read_only && EDITABLE_FIELD_TYPES.has(
     field?.field_type,
   );
 }
@@ -140,7 +140,7 @@ export function signingFieldSubmission(
 
       const value = String(rawValue).trim();
 
-      if (!value) return null;
+      if (!value) return { field_id: String(field.id), value: '' };
 
       if (field.field_type === 'checkbox') {
         const mark = value.toLowerCase();

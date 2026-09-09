@@ -66,7 +66,7 @@ describe('SIGN-EDITOR-V2 source contract', () => {
 
   it('makes direct PDF preparation the PDF default', () => {
     expect(form).toContain(
-      "useState('document')",
+      "field_placement_mode || 'document'",
     );
 
     expect(form).toContain(

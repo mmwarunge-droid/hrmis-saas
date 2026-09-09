@@ -1,6 +1,7 @@
 import apiClient from './apiClient';
 
 export const documentApi = {
+  prepareSigning: (id) => apiClient.post(`/documents/${id}/prepare-signing`),
   list: (params = {}) => apiClient.get('/documents', { params }),
   summary: () => apiClient.get('/documents/summary'),
   upload: (formData) => apiClient.post('/documents/upload', formData, { headers: { 'Content-Type': 'multipart/form-data' } }),

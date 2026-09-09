@@ -19,7 +19,6 @@ from app.extensions import db
 from app.models import SignatureArtifact, SignatureField
 from app.models.base import utcnow
 from app.utils.signature_evidence_storage import (
-    read_signature_artifact,
     save_signature_artifact,
 )
 
@@ -102,7 +101,11 @@ def _source_artifact(signature_request):
 def source_pdf_bytes(signature_request):
     artifact = _source_artifact(signature_request)
     if artifact:
-        content = read_signature_artifact(artifact.file_path)
+        from app.services.signature_evidence_service import artifact_content, SignatureEvidenceValidationError
+        try:
+            content = artifact_content(artifact)
+        except SignatureEvidenceValidationError as exc:
+            raise NativeSignatureError('The source snapshot failed its integrity check.') from exc
     else:
         path = Path(signature_request.document.file_path)
         if not path.is_file():
@@ -175,6 +178,25 @@ def _default_field_specs(recipient_index, source_page_count_value):
     ]
 
 
+def resolve_field_prefill(recipient, spec):
+    """Snapshot only explicitly selected HR attributes for this signer."""
+    employee = recipient.employee
+    key = spec.get('prefill_key')
+    values = {
+        'employee.full_name': recipient.name,
+        'employee.email': recipient.email,
+        'employee.initials': ''.join(p[0] for p in recipient.name.split()).upper()[:32],
+        'employee.job_title': getattr(employee, 'job_title', None),
+        'employee.employee_number': getattr(employee, 'employee_number', None),
+        'recipient.role_label': recipient.role_label,
+    }
+    if key == 'company.name':
+        from app.models import Tenant
+        company = db.session.get(Tenant, recipient.tenant_id)
+        return company.name if company else None
+    return values.get(key) if key else spec.get('default_value')
+
+
 def create_signature_fields(signature_request, recipient_fields=None):
     """Create recipient-owned signature/date fields for a new request.
 
@@ -229,6 +251,9 @@ def create_signature_fields(signature_request, recipient_fields=None):
                 label=spec.get('label'),
                 placeholder=spec.get('placeholder'),
                 prefill_key=spec.get('prefill_key'),
+                read_only=bool(spec.get('read_only', False)),
+                default_value=spec.get('default_value'),
+                value=resolve_field_prefill(recipient, spec),
                 mark_style=spec.get('mark_style'),
                 page_number=page_number,
                 x=x,
@@ -237,6 +262,12 @@ def create_signature_fields(signature_request, recipient_fields=None):
                 height=height,
                 required=bool(spec.get('required', True)),
             )
+            if field.read_only and field.required and field.field_type not in {'signature', 'date', 'name'} and not field.value:
+                raise NativeSignatureError(f'{field.label or field.field_type}: a required read-only field needs a value or available HR prefill.')
+            if field.field_type == 'initials' and field.value and len(field.value) > 32:
+                raise NativeSignatureError('Pre-populated initials must not exceed 32 characters.')
+            if field.field_type == 'checkbox' and field.value and field.value not in ({'tick', 'cross'} if field.mark_style == 'either' else {field.mark_style or 'tick'}):
+                raise NativeSignatureError('The pre-populated checkbox mark is invalid.')
             db.session.add(field)
             created.append(field)
 
@@ -292,7 +323,7 @@ def complete_recipient_fields(
     for field_id, raw_value in submitted.items():
         field = owned_fields[field_id]
 
-        if field.field_type in server_controlled:
+        if field.field_type in server_controlled or getattr(field, 'read_only', False):
             raise NativeSignatureError(
                 f'{field.field_type.title()} fields are '
                 'server-controlled and cannot be overridden.',
@@ -350,45 +381,28 @@ def complete_recipient_fields(
             'The submitted signing field type is not editable.',
         )
 
+    proposed = {}
     for field in recipient.fields:
         field_id = str(field.id)
-
         if field.field_type == 'signature':
-            field.value = signature_text
-
+            value = signature_text
         elif field.field_type == 'date':
-            field.value = signed_at.strftime(
-                '%d %b %Y'
-            )
-
+            value = signed_at.strftime('%d %b %Y')
         elif field.field_type == 'name':
-            field.value = recipient.name
+            value = recipient.name
+        else:
+            value = normalized_submitted.get(field_id, field.value)
+        proposed[field_id] = value or None
 
-        elif field.field_type in {
-            'text',
-            'initials',
-            'checkbox',
-        }:
-            if field_id in normalized_submitted:
-                field.value = (
-                    normalized_submitted[field_id]
-                    or None
-                )
+    missing = [field.label or field.field_type for field in recipient.fields
+               if field.required and not proposed[str(field.id)]]
+    if missing:
+        raise NativeSignatureError('Required signing fields were not completed: ' + ', '.join(missing))
 
+    for field in recipient.fields:
+        field.value = proposed[str(field.id)]
         if field.value:
             field.completed_at = signed_at
-
-    missing = [
-        field.label or field.field_type
-        for field in recipient.fields
-        if field.required and not field.value
-    ]
-
-    if missing:
-        raise NativeSignatureError(
-            'Required signing fields were not completed: '
-            + ', '.join(missing),
-        )
 
     return recipient.fields
 
@@ -561,6 +575,14 @@ def _draw_field(
     *,
     supplemental=False,
 ):
+    if field.field_type == 'signature' and getattr(getattr(field, 'recipient', None), 'signature_image', None):
+        import base64
+        from reportlab.lib.utils import ImageReader
+        pdf_canvas.drawImage(ImageReader(BytesIO(base64.b64decode(field.recipient.signature_image))),
+            field.x * page_width, (1 - field.y - field.height) * page_height,
+            width=field.width * page_width, height=field.height * page_height,
+            preserveAspectRatio=True, anchor='c', mask='auto')
+        return
     if field.field_type == 'checkbox':
         _draw_checkbox_mark(
             pdf_canvas,
@@ -864,6 +886,7 @@ def render_signature_pdf(signature_request):
         overlay_page = PdfReader(packet).pages[0]
         page.merge_page(overlay_page)
 
+    writer.add_metadata({'/KineticVersionID': str(signature_request.id), '/KineticDocumentID': str(signature_request.document_id)})
     output = BytesIO()
     writer.write(output)
     return output.getvalue()
@@ -915,4 +938,19 @@ def create_signed_document_artifact(signature_request):
     )
     db.session.add(artifact)
     db.session.flush()
+    # The document owner is the employee whose HR file holds the execution.
+    if signature_request.document.employee_id:
+        from app.models import Document
+        source = signature_request.document
+        db.session.add(Document(
+            tenant_id=source.tenant_id, employee_id=source.employee_id,
+            uploaded_by_id=signature_request.created_by_id,
+            title=f'{source.title} — Executed', document_type=source.document_type,
+            original_filename=artifact.original_filename,
+            stored_filename=f'executed-{artifact.id}.pdf', file_path=artifact.file_path,
+            mime_type='application/pdf', size_bytes=artifact.size_bytes,
+            checksum_sha256=artifact.checksum_sha256, signature_status='signed',
+            access_level='employee', version=source.version,
+            executed_artifact_id=artifact.id,
+        ))
     return artifact

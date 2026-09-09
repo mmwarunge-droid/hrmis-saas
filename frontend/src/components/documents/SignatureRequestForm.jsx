@@ -5,6 +5,7 @@ import {
   Trash2,
 } from 'lucide-react';
 
+import { signatureApi } from '../../api/signatureApi.js';
 import SignatureFieldPlacement from './SignatureFieldPlacement.jsx';
 import Button from '../ui/Button.jsx';
 import Input from '../ui/Input.jsx';
@@ -32,6 +33,7 @@ export default function SignatureRequestForm({
   isSuperAdmin = false,
   loading = false,
   onSubmit,
+  template = null,
 }) {
   const [form, setForm] = useState({
     subject: document
@@ -46,12 +48,33 @@ export default function SignatureRequestForm({
     first_reminder_after_days: 2,
     reminder_interval_days: 2,
     escalation_days_before_due: 1,
+    ...(template?.definition ? { subject: template.definition.subject, message: template.definition.message, signing_mode: template.definition.signing_mode } : {}),
   });
-  const [recipients, setRecipients] = useState([
-    newRecipient(),
-  ]);
+  const [recipients, setRecipients] = useState(() => template?.definition?.recipients?.map((role, index) => ({
+    ...newRecipient(), ...role, employee_id: index === (template.definition.employee_role_index || 0) ? document?.employee_id || '' : '',
+  })) || [newRecipient()]);
+  const [templateName, setTemplateName] = useState('');
+  const [employeeRoleIndex, setEmployeeRoleIndex] = useState(template?.definition?.employee_role_index || 0);
+  const [templateSaved, setTemplateSaved] = useState('');
+  const [templateSaving, setTemplateSaving] = useState(false);
+  const [filingEmployee, setFilingEmployee] = useState(document?.employee_id || '');
+  const saveTemplate = async () => {
+    setTemplateSaving(true); setError(''); setTemplateSaved('');
+    try {
+      await signatureApi.saveTemplate({ name: templateName.trim(), document_id: document.id,
+        ...(isSuperAdmin ? { tenant_id: document.tenant_id } : {}),
+        definition: { subject: form.subject, message: form.message, signing_mode: form.signing_mode,
+          field_placement_mode: fieldPlacementMode,
+          employee_role_index: employeeRoleIndex,
+          recipients: recipients.map(({ role_label, sequence, fields }) => ({ role_label, sequence: Number(sequence), fields })),
+        },
+      });
+      setTemplateSaved('Template saved. It is available in the document library.');
+    } catch (err) { setError(err.error?.message || 'Unable to save template.'); }
+    finally { setTemplateSaving(false); }
+  };
   const [error, setError] = useState('');
-  const [fieldPlacementMode, setFieldPlacementMode] = useState('document');
+  const [fieldPlacementMode, setFieldPlacementMode] = useState(template?.definition?.field_placement_mode || 'document');
 
   const isQes = form.assurance_level === 'qes';
 
@@ -241,6 +264,8 @@ export default function SignatureRequestForm({
       : form.signing_mode;
     const payload = {
       document_id: document.id,
+      save_as_draft: event.nativeEvent?.submitter?.value === 'draft',
+      ...(filingEmployee ? { filing_employee_id: filingEmployee } : {}),
       subject: form.subject.trim(),
       message: form.message.trim() || null,
       assurance_level: form.assurance_level,
@@ -700,7 +725,24 @@ export default function SignatureRequestForm({
         </div>
       </section>
 
-      <div className="flex justify-end">
+      {!isQes && <section className="space-y-3 rounded-lg border p-4">
+        <label className="block text-sm">Store executed copy in employee file
+          <select aria-label="Employee file" value={filingEmployee} onChange={(event) => setFilingEmployee(event.target.value)} className="mt-1 w-full rounded border p-2" required>
+            <option value="">Select employee</option>
+            {eligibleEmployees.map((employee) => <option key={employee.id} value={employee.id}>{employee.full_name}</option>)}
+          </select>
+        </label>
+        <label className="block text-sm">Employee role when reusing this template
+          <select aria-label="Template employee role" value={employeeRoleIndex} onChange={(event) => setEmployeeRoleIndex(Number(event.target.value))} className="mt-1 w-full rounded border p-2">
+            {recipients.map((recipient, index) => <option key={index} value={index}>{recipient.role_label || 'Signatory'} ({index + 1})</option>)}
+          </select>
+        </label>
+        <Input label="Template name" value={templateName} onChange={(event) => setTemplateName(event.target.value)} placeholder="Employment Contract - Kenya" />
+        <Button type="button" variant="secondary" disabled={templateSaving || templateName.trim().length < 2} onClick={saveTemplate}>Save as template</Button>
+        {templateSaved && <p role="status" className="text-sm text-green-700">{templateSaved}</p>}
+      </section>}
+      <div className="flex justify-end gap-3">
+        {!isQes && <Button type="submit" name="action" value="draft" variant="secondary" disabled={loading}>Save draft</Button>}
         <Button
           type="submit"
           variant="accent"

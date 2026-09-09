@@ -348,6 +348,10 @@ class SignatureRequest(
             'current_sequence': self.current_sequence,
             'recipient_count': self.recipient_count,
             'signed_count': self.signed_count,
+            'display_status': ('Fully Signed' if self.status == 'completed' else
+                'Partially Signed' if self.status in ('sent', 'in_progress') and self.signed_count else
+                'Viewed' if self.status in ('sent', 'in_progress') and any(r.viewed_at for r in self.recipients) else
+                self.status.replace('_', ' ').title()),
             'due_at': (
                 self.due_at.isoformat()
                 if self.due_at
@@ -489,6 +493,7 @@ class SignatureRecipient(
     decline_reason = db.Column(db.Text, nullable=True)
     signature_name = db.Column(db.String(240), nullable=True)
     signature_method = db.Column(db.String(40), nullable=True)
+    signature_image = db.Column(db.Text, nullable=True)
     signature_style = db.Column(db.String(40), nullable=True)
     consented_at = db.Column(db.DateTime, nullable=True)
     consent_version = db.Column(db.String(40), nullable=True)
@@ -653,6 +658,8 @@ class SignatureField(
     label = db.Column(db.String(160), nullable=True)
     placeholder = db.Column(db.String(240), nullable=True)
     prefill_key = db.Column(db.String(80), nullable=True)
+    read_only = db.Column(db.Boolean, nullable=False, default=False)
+    default_value = db.Column(db.Text, nullable=True)
 
     mark_style = db.Column(
         db.String(12),
@@ -719,6 +726,8 @@ class SignatureField(
             'label': self.label,
             'placeholder': self.placeholder,
             'prefill_key': self.prefill_key,
+            'read_only': self.read_only,
+            'default_value': self.default_value,
             'mark_style': self.mark_style,
             'page_number': self.page_number,
             'x': self.x,

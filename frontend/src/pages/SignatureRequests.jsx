@@ -354,7 +354,7 @@ export default function SignatureRequests() {
       render: (request) => (
         <div className="flex flex-wrap gap-2">
           <Badge tone={statusTone(request.status)}>
-            {request.status.replaceAll('_', ' ')}
+            {request.display_status || request.status.replaceAll('_', ' ')}
           </Badge>
 
           {isOverdue(request) && (
