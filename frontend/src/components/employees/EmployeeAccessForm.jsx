@@ -1,3 +1,4 @@
+import Form from '../forms/Form.jsx';
 import { useState } from 'react';
 import { MailCheck, ShieldCheck } from 'lucide-react';
 import Button from '../ui/Button.jsx';
@@ -13,13 +14,13 @@ export default function EmployeeAccessForm({
 
   const submit = (event) => {
     event.preventDefault();
-    onSubmit({
+    return onSubmit({
       roles: [role],
     });
   };
 
   return (
-    <form onSubmit={submit} className="space-y-6">
+    <Form onSubmit={submit} className="space-y-6">
       <section className="rounded-xl border border-blue-100 bg-blue-50/70 p-5">
         <div className="flex items-start gap-3">
           <span className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-blue-100 text-blue-800">
@@ -57,6 +58,6 @@ export default function EmployeeAccessForm({
           {loading ? 'Provisioning...' : 'Provision access'}
         </Button>
       </div>
-    </form>
+    </Form>
   );
 }

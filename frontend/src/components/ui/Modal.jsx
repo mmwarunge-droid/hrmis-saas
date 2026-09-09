@@ -1,5 +1,8 @@
+import { WorkflowContext } from '../forms/WorkflowContext.js';
+import WorkflowFeedback from '../forms/WorkflowFeedback.jsx';
+import { captureWorkflow, registerWorkflow, errorState } from '../../utils/formFeedback.js';
 import { X } from 'lucide-react';
-import { useEffect, useId, useRef } from 'react';
+import { useEffect, useId, useRef, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 
 import Button from './Button.jsx';
@@ -21,10 +24,32 @@ export default function Modal({
   footer = null,
   onClose,
   size = 'lg',
+  error = null,
 }) {
   const titleId = useId();
   const descriptionId = useId();
   const panelRef = useRef(null);
+  const guards = useRef(new Map());
+  const closeRef = useRef(onClose); useEffect(() => { closeRef.current = onClose; }, [onClose]);
+  const [feedback, setFeedback] = useState(null);
+  const pending = useRef(0);
+  const context = useMemo(() => ({ register: (id, guard) => {
+    guards.current.set(id, guard); return () => guards.current.delete(id);
+  } }), []);
+  const requestClose = () => {
+    if (pending.current || [...guards.current.values()].some((guard) => guard.current.busy())) return;
+    const changed = [...guards.current.values()].filter((guard) => guard.current.dirty());
+    const next = (index) => index < changed.length ? changed[index].current.close(() => next(index + 1)) : closeRef.current?.();
+    next(0);
+  };
+  const requestCloseRef = useRef(requestClose); useEffect(() => { requestCloseRef.current = requestClose; });
+  useEffect(() => {
+    if (!open) return;
+    return registerWorkflow(titleId, {
+      start: () => { pending.current += 1; setFeedback(null); },
+      settle: (err) => { pending.current = Math.max(0, pending.current - 1); if (err) setFeedback(errorState(err)); },
+    });
+  }, [open, titleId]);
 
   useEffect(() => {
     if (!open) return undefined;
@@ -36,7 +61,7 @@ export default function Modal({
 
     const handleKeyDown = (event) => {
       if (event.key === 'Escape') {
-        onClose?.();
+        requestCloseRef.current();
         return;
       }
 
@@ -87,8 +112,9 @@ export default function Modal({
         handleKeyDown,
       );
       previouslyFocused?.focus?.();
+      setFeedback(null);
     };
-  }, [open, onClose]);
+  }, [open]);
 
   if (!open || typeof document === 'undefined') {
     return null;
@@ -103,6 +129,13 @@ export default function Modal({
 
   return createPortal(
     <div
+      onClickCapture={(event) => {
+        const button = event.target.closest?.('button');
+        if (button && /^cancel$/i.test(button.textContent.trim())) {
+          event.preventDefault(); event.stopPropagation(); requestCloseRef.current(); return;
+        }
+        if (!event.target.closest?.('form')) captureWorkflow(titleId);
+      }}
       data-modal-overlay
       className="
         fixed inset-0 z-[100]
@@ -115,7 +148,7 @@ export default function Modal({
       "
       onMouseDown={(event) => {
         if (event.target === event.currentTarget) {
-          onClose?.();
+          requestCloseRef.current();
         }
       }}
     >
@@ -182,7 +215,7 @@ export default function Modal({
             variant="ghost"
             size="sm"
             aria-label="Close dialog"
-            onClick={onClose}
+            onClick={requestClose}
             className="shrink-0"
           >
             <X size={18} />
@@ -198,7 +231,10 @@ export default function Modal({
             p-5 md:p-6
           "
         >
-          {children}
+          <WorkflowContext.Provider value={context}>
+            <WorkflowFeedback state={feedback || (error ? errorState(error) : null)} rootRef={panelRef} />
+            {children}
+          </WorkflowContext.Provider>
         </div>
 
         {footer ? (

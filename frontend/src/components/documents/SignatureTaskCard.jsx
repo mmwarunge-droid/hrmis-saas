@@ -1,3 +1,5 @@
+import { requestWorkflowExit } from '../../utils/formFeedback.js';
+import Form from '../forms/Form.jsx';
 import { useState } from 'react';
 import {
   ExternalLink,
@@ -41,7 +43,7 @@ export default function SignatureTaskCard({
 
     if (!normalizedReason) return;
 
-    onDecline(task.id, normalizedReason);
+    return onDecline(task.id, normalizedReason);
   };
 
   return (
@@ -137,9 +139,7 @@ export default function SignatureTaskCard({
                 size="sm"
                 variant="ghost"
                 disabled={loading}
-                onClick={() => setShowDecline(
-                  (current) => !current,
-                )}
+                onClick={() => requestWorkflowExit(() => setShowDecline((current) => !current))}
               >
                 <XCircle size={14} />
                 Decline
@@ -160,7 +160,7 @@ export default function SignatureTaskCard({
       </div>
 
       {showDecline && !externalQes && (
-        <div className="mt-4 border-t border-blue-100 pt-4">
+        <Form onSubmit={submitDecline} className="mt-4 border-t border-blue-100 pt-4">
           <label className="block space-y-1">
             <span className="text-sm font-medium text-slate-700">
               Reason for declining
@@ -178,16 +178,16 @@ export default function SignatureTaskCard({
 
           <div className="mt-3 flex justify-end">
             <Button
-              type="button"
+              type="submit"
               variant="danger"
               size="sm"
               disabled={loading || !reason.trim()}
-              onClick={submitDecline}
+
             >
               Submit decline
             </Button>
           </div>
-        </div>
+        </Form>
       )}
     </article>
   );

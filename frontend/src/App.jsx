@@ -1,3 +1,4 @@
+import WorkflowNavigationGuard from './components/forms/WorkflowNavigationGuard.jsx';
 import { Navigate, Route, Routes } from 'react-router-dom';
 import AuthLayout from './layouts/AuthLayout.jsx';
 import DashboardLayout from './layouts/DashboardLayout.jsx';
@@ -41,6 +42,8 @@ import VerifyEmail from './pages/VerifyEmail.jsx';
 
 export default function App() {
   return (
+    <>
+    <WorkflowNavigationGuard />
     <Routes>
       <Route element={<AuthLayout />}>
         <Route path="/login" element={<Login />} />
@@ -121,5 +124,6 @@ export default function App() {
       <Route path="/unauthorized" element={<Unauthorized />} />
       <Route path="*" element={<NotFound />} />
     </Routes>
+    </>
   );
 }

@@ -1,3 +1,4 @@
+import Form from '../forms/Form.jsx';
 import {
   useCallback,
   useEffect,
@@ -55,11 +56,11 @@ function EmployeeAccessEditForm({ employee, loading, onSubmit }) {
   );
 
   return (
-    <form
+    <Form
       className="space-y-5"
       onSubmit={(event) => {
         event.preventDefault();
-        onSubmit({
+        return onSubmit({
           roles: [role],
           is_active: status === 'active',
         });
@@ -102,7 +103,7 @@ function EmployeeAccessEditForm({ employee, loading, onSubmit }) {
           {loading ? 'Saving...' : 'Save access'}
         </Button>
       </div>
-    </form>
+    </Form>
   );
 }
 
@@ -199,6 +200,7 @@ export default function EmployeeAccessDirectory() {
       await loadDirectory();
     } catch (err) {
       setError(err.error?.message || 'Access could not be provisioned');
+      return { success: false, error: err };
     } finally {
       setSaving(false);
     }
@@ -224,6 +226,7 @@ export default function EmployeeAccessDirectory() {
       await loadDirectory();
     } catch (err) {
       setError(err.error?.message || 'Access could not be updated');
+      return { success: false, error: err };
     } finally {
       setSaving(false);
     }
@@ -475,6 +478,7 @@ export default function EmployeeAccessDirectory() {
       />
 
       <Modal
+        error={error}
         open={Boolean(grantEmployee)}
         onClose={() => setGrantEmployee(null)}
         title="Grant platform access"
@@ -490,6 +494,7 @@ export default function EmployeeAccessDirectory() {
       </Modal>
 
       <Modal
+        error={error}
         open={Boolean(manageEmployee)}
         onClose={() => setManageEmployee(null)}
         title={

@@ -1,3 +1,4 @@
+import Form from '../components/forms/Form.jsx';
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { authApi } from '../api/authApi';
@@ -22,6 +23,7 @@ export default function ForgotPassword() {
       setMessage(response.message || 'If the account exists, password reset instructions will be sent.');
     } catch (err) {
       setError(err.error?.message || 'The request could not be processed.');
+      return { success: false, error: err };
     } finally {
       setLoading(false);
     }
@@ -31,12 +33,12 @@ export default function ForgotPassword() {
     <Card className="w-full max-w-md">
       <h1 className="text-2xl font-bold">Reset your password</h1>
       <p className="mt-1 text-sm text-slate-500">Enter your work email to receive a single-use reset link.</p>
-      <form onSubmit={submit} className="mt-6 space-y-4">
+      <Form onSubmit={submit} className="mt-6 space-y-4">
         {message && <Alert>{message}</Alert>}
         {error && <Alert type="error">{error}</Alert>}
         <Input label="Email" type="email" value={email} onChange={(event) => setEmail(event.target.value)} required />
         <Button className="w-full" disabled={loading}>{loading ? 'Sending...' : 'Send reset link'}</Button>
-      </form>
+      </Form>
       <Link className="mt-4 block text-center text-sm font-medium text-slate-700 underline" to="/login">Back to sign in</Link>
     </Card>
   );

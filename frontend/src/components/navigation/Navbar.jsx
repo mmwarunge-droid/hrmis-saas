@@ -1,3 +1,4 @@
+import { requestWorkflowExit } from '../../utils/formFeedback.js';
 import {
   Bot,
   ChevronDown,
@@ -106,7 +107,7 @@ export default function Navbar({ onMenu }) {
                   <Link to="/settings" onClick={() => setProfileOpen(false)} className="flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100">
                     <Settings size={16} /> Settings
                   </Link>
-                  <button type="button" onClick={logout} className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-sm font-medium text-red-700 hover:bg-red-50">
+                  <button type="button" onClick={() => requestWorkflowExit(logout)} className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-sm font-medium text-red-700 hover:bg-red-50">
                     <LogOut size={16} /> Sign out
                   </button>
                 </div>

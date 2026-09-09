@@ -191,6 +191,7 @@ function PlatformUsers() {
       await refresh();
     } catch (err) {
       setError(err.error?.message || 'User creation failed');
+      return { success: false, error: err };
     } finally {
       setSaving(false);
     }
@@ -243,6 +244,7 @@ function PlatformUsers() {
       await refresh();
     } catch (err) {
       setError(err.error?.message || 'User update failed');
+      return { success: false, error: err };
     } finally {
       setSaving(false);
     }
@@ -719,6 +721,7 @@ function PlatformUsers() {
       />
 
       <Modal
+        error={error}
         open={Boolean(bulkResetRequest)}
         onClose={() => {
           if (!bulkResetting) setBulkResetRequest(null);
@@ -752,6 +755,7 @@ function PlatformUsers() {
       </Modal>
 
       <Modal
+        error={error}
         open={open}
         onClose={() => setOpen(false)}
         title="Create new user and employee profile"
@@ -766,6 +770,7 @@ function PlatformUsers() {
       </Modal>
 
       <Modal
+        error={error}
         open={Boolean(selectedUser)}
         onClose={() => setSelectedUser(null)}
         title="Manage user account"

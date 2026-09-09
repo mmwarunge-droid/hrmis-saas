@@ -66,6 +66,8 @@ test('user provisioning normalizes an available email before submission', async 
 
   await user.type(screen.getByLabelText(/first name/i), 'Jane');
   await user.type(screen.getByLabelText(/last name/i), 'Doe');
+  fireEvent.change(screen.getByLabelText(/employee number/i), { target: { value: 'EMP-123' } });
+  fireEvent.change(screen.getByLabelText(/hire date/i), { target: { value: '2026-09-09' } });
   const email = screen.getByLabelText(/work email/i);
   await user.type(email, ' Jane.Doe@Acme.Test ');
   fireEvent.blur(email);

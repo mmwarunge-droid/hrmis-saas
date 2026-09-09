@@ -61,3 +61,7 @@ The new backend tests exercise HR prefills, rejected read-only overrides, draft 
 5. Verify source and executed copies remain separately retrievable. Confirm an attempted modification of the executed document is rejected and evidence downloads pass checksum verification.
 
 No production database migration, deployment, or live signing invitation was performed during this review.
+
+## Form workflow follow-up (9 September 2026)
+
+See [Form feedback and draft readiness](FORM_WORKFLOW_READINESS.md) for the platform-wide contextual feedback, unsaved-change protection and private resumable preparation drafts added after the original signing release.

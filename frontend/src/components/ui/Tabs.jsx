@@ -1,3 +1,4 @@
+import { requestWorkflowExit } from '../../utils/formFeedback.js';
 import { useRef } from 'react';
 
 export default function Tabs({
@@ -13,8 +14,7 @@ export default function Tabs({
   const focusItem = (index) => {
     const safeIndex = (index + items.length) % items.length;
     const item = items[safeIndex];
-    onChange(item.value);
-    buttonRefs.current.get(item.value)?.focus();
+    requestWorkflowExit(() => { onChange(item.value); buttonRefs.current.get(item.value)?.focus(); });
   };
 
   const handleKeyDown = (event, index) => {
@@ -51,7 +51,7 @@ export default function Tabs({
               aria-selected={selected}
               aria-controls={`${idPrefix}-panel-${item.value}`}
               tabIndex={selected ? 0 : -1}
-              onClick={() => onChange(item.value)}
+              onClick={() => { if (!selected) requestWorkflowExit(() => onChange(item.value)); }}
               onKeyDown={(event) => handleKeyDown(event, index)}
               className={`relative px-3 py-3 text-sm font-semibold transition after:absolute after:inset-x-2 after:bottom-0 after:h-0.5 after:rounded-full ${
                 selected

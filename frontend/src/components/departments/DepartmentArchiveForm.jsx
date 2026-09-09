@@ -1,3 +1,4 @@
+import Form from '../forms/Form.jsx';
 import { useState } from 'react';
 import Button from '../ui/Button.jsx';
 import Input from '../ui/Input.jsx';
@@ -12,7 +13,7 @@ export default function DepartmentArchiveForm({ department, departments, loading
 
   const submit = (event) => {
     event.preventDefault();
-    onSubmit({
+    return onSubmit({
       replacement_department_id: replacementDepartmentId || null,
       effective_date: effectiveDate,
       reason: reason.trim(),
@@ -20,7 +21,7 @@ export default function DepartmentArchiveForm({ department, departments, loading
   };
 
   return (
-    <form onSubmit={submit} className="space-y-5">
+    <Form onSubmit={submit} className="space-y-5">
       <div className="rounded-lg bg-amber-50 p-4 text-sm text-amber-900">
         <p className="font-semibold">{department.name} has {department.employee_count || 0} active employee(s).</p>
         <p className="mt-1">Employees will be reassigned before the department is archived. Historical records are preserved.</p>
@@ -56,6 +57,6 @@ export default function DepartmentArchiveForm({ department, departments, loading
       <Button variant="danger" disabled={loading}>
         {loading ? 'Archiving...' : 'Archive department'}
       </Button>
-    </form>
+    </Form>
   );
 }

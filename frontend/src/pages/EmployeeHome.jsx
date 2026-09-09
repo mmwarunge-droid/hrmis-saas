@@ -1,3 +1,4 @@
+import Form from '../components/forms/Form.jsx';
 import { useEffect, useMemo, useState } from 'react';
 import {
   ArrowRight,
@@ -152,7 +153,7 @@ function ProfileForm({ viewer, onSave, loading }) {
   };
 
   return (
-    <form className="space-y-5" onSubmit={submit}>
+    <Form className="space-y-5" onSubmit={submit}>
       <div className="grid gap-4 md:grid-cols-2">
         <Input
           label="Date of birth"
@@ -233,7 +234,7 @@ function ProfileForm({ viewer, onSave, loading }) {
           {loading ? 'Saving…' : 'Save profile'}
         </Button>
       </div>
-    </form>
+    </Form>
   );
 }
 
@@ -563,6 +564,7 @@ export default function EmployeeHome() {
       </section>
 
       <Modal
+        error={error}
         title="Complete your employee profile"
         open={profileOpen}
         onClose={() => setProfileOpen(false)}

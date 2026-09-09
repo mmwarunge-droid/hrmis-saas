@@ -1,3 +1,4 @@
+import Form from '../components/forms/Form.jsx';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ArrowLeft,
@@ -365,6 +366,7 @@ export default function SignatureTask() {
           </section>
 
           <aside className="space-y-4 xl:max-h-[calc(100vh-110px)] xl:overflow-auto xl:pr-1">
+            <Form error={error} values={{ fieldValues, signatureInput, signatureStyle, consent, declineReason }} onSubmit={(event) => event.nativeEvent?.submitter?.value === 'decline' ? decline() : sign()} successMessage="Your response was recorded." className="space-y-4">
             <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
               <p className="text-xs font-bold uppercase tracking-[0.16em] text-slate-500">Signing progress</p>
               <div className="mt-4 space-y-5">
@@ -775,7 +777,7 @@ export default function SignatureTask() {
                   <span className="text-xs leading-5 text-blue-950">I have reviewed this document and intend the signature I selected to be my electronic signature.</span>
                 </label>
 
-                <Button
+                <Button type="submit"
                   className="mt-4 w-full"
                   size="lg"
                   disabled={
@@ -786,7 +788,7 @@ export default function SignatureTask() {
                     || !reviewComplete
                     || missingRequiredFields.length > 0
                   }
-                  onClick={sign}
+                  value="sign"
                 >
                   <Send size={16} /> Sign &amp; submit
                 </Button>
@@ -812,12 +814,12 @@ export default function SignatureTask() {
                       onChange={(event) => setDeclineReason(event.target.value)}
                       className="mt-2 w-full rounded-lg border border-slate-300 p-3 text-sm outline-none focus:border-red-400"
                     />
-                    <Button
+                    <Button type="submit"
                       className="mt-2 w-full"
                       variant="danger"
                       size="sm"
                       disabled={busy || declineReason.trim().length < 2}
-                      onClick={decline}
+                      value="decline" formNoValidate
                     >
                       <XCircle size={14} /> Decline and open discussion
                     </Button>
@@ -900,6 +902,7 @@ export default function SignatureTask() {
               </div>
             </section>
 
+            </Form>
             <SignatureDiscussionPanel
               recipientId={recipientId}
               allowResolve

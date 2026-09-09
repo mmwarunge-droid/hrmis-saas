@@ -528,6 +528,7 @@ export default function SignatureRequests() {
       )}
 
       <Modal
+        error={error}
         title="Signature request details"
         open={detailsOpen}
         onClose={() => {

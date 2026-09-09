@@ -58,7 +58,9 @@ __all__ = [
     'SignatureArtifact', 'SignatureProviderEvent',
     'LeaveType', 'LeaveBalance', 'LeaveRequest', 'LeaveLedgerEntry',
     'AttendanceRecord', 'OnboardingTemplate', 'OnboardingResource', 'OnboardingTask', 'EmployeeOnboardingTask', 'OnboardingTrainingAttempt', 'AuditLog', 'Notification', 'Goal', 'GoalCheckIn',
-    'SignatureSeal', 'SignatureTemplate',
+    'FormDraft', 'SignatureSeal', 'SignatureTemplate',
 ]
 
 from app.models.signature_template import SignatureTemplate
+
+from app.models.form_draft import FormDraft

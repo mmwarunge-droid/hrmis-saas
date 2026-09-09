@@ -1,3 +1,4 @@
+import Form from '../forms/Form.jsx';
 import { useMemo, useState } from 'react';
 import {
   History,
@@ -106,7 +107,7 @@ export default function LeaveLedgerPanel({
       </div>
 
       {canAdjust && balances.length > 0 && (
-        <form
+        <Form
           onSubmit={submitAdjustment}
           className="mt-5 grid gap-3 rounded-lg bg-slate-50 p-4 lg:grid-cols-[1.4fr_140px_1.6fr_auto]"
         >
@@ -178,7 +179,7 @@ export default function LeaveLedgerPanel({
               Post adjustment
             </Button>
           </div>
-        </form>
+        </Form>
       )}
 
       <div className="mt-5 overflow-x-auto">

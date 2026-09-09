@@ -617,6 +617,7 @@ export default function LeaveRequests() {
       />
 
       <Modal
+        error={error}
         title="Submit time-off request"
         open={requestOpen}
         onClose={() => setRequestOpen(false)}

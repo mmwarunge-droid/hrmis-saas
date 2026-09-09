@@ -138,6 +138,7 @@ export default function Organizations() {
       await refresh();
     } catch (err) {
       setError(err.error?.message || 'Organization provisioning failed');
+      return { success: false, error: err };
     } finally {
       setSaving(false);
     }
@@ -163,6 +164,7 @@ export default function Organizations() {
       await refresh();
     } catch (err) {
       setError(err.error?.message || 'Organization update failed');
+      return { success: false, error: err };
     } finally {
       setSaving(false);
     }
@@ -366,6 +368,7 @@ export default function Organizations() {
       )}
 
       <Modal
+        error={error}
         open={open}
         onClose={() => setOpen(false)}
         title="Provision organization"
@@ -375,6 +378,7 @@ export default function Organizations() {
       </Modal>
 
       <Modal
+        error={error}
         open={Boolean(selectedTenant)}
         onClose={() => setSelectedTenant(null)}
         title="Manage organization"

@@ -2,6 +2,7 @@ const ACTIVE_TENANT_STORAGE_KEY = 'kinetic.activeTenantId';
 const LEGACY_ACTIVE_TENANT_STORAGE_KEY = 'ace.activeTenantId';
 
 const TENANT_SCOPED_PREFIXES = [
+  '/form-drafts',
   '/dashboard',
   '/employees',
   '/documents',

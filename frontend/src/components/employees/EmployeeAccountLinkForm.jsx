@@ -1,3 +1,4 @@
+import Form from '../forms/Form.jsx';
 import { useState } from 'react';
 import Button from '../ui/Button.jsx';
 import Select from '../ui/Select.jsx';
@@ -15,11 +16,11 @@ export default function EmployeeAccountLinkForm({
   ));
 
   return (
-    <form
+    <Form
       className="space-y-5"
       onSubmit={(event) => {
         event.preventDefault();
-        onSubmit(userId);
+        return onSubmit(userId);
       }}
     >
       <div className="rounded-xl border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-950">
@@ -44,6 +45,6 @@ export default function EmployeeAccountLinkForm({
           {loading ? 'Linking…' : 'Link account'}
         </Button>
       </div>
-    </form>
+    </Form>
   );
 }

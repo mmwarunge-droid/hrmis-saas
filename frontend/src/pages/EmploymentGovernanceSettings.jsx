@@ -1,3 +1,4 @@
+import Form from '../components/forms/Form.jsx';
 import { useEffect, useState } from 'react';
 import { BriefcaseBusiness, Save } from 'lucide-react';
 
@@ -102,6 +103,7 @@ export default function EmploymentGovernanceSettings() {
         err.error?.message
         || 'Employment governance settings could not be saved.',
       );
+      return { success: false, error: err };
     } finally {
       setSaving(false);
     }
@@ -124,7 +126,7 @@ export default function EmploymentGovernanceSettings() {
   }
 
   return (
-    <div className="space-y-6">
+    <Form error={error} draft={{ key: 'settings.governance', title: 'Employment governance', data: { titlesText }, onRestore: (saved) => setTitlesText(saved.titlesText) }} onSubmit={save} className="space-y-6">
       <PageHeader
         eyebrow="Administration"
         title="Employment governance"
@@ -135,7 +137,7 @@ export default function EmploymentGovernanceSettings() {
         actions={(
           <Button
             variant="accent"
-            onClick={save}
+            type="submit"
             disabled={saving}
           >
             <Save size={17} />
@@ -181,6 +183,6 @@ export default function EmploymentGovernanceSettings() {
           </span>
         </label>
       </Card>
-    </div>
+    </Form>
   );
 }

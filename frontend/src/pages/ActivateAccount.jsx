@@ -1,3 +1,4 @@
+import Form from '../components/forms/Form.jsx';
 import { Eye, EyeOff, KeyRound, MailCheck } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
@@ -121,6 +122,7 @@ export default function ActivateAccount() {
         err.error?.message
           || 'Your account could not be activated. Request a new invitation.',
       );
+      return { success: false, error: err };
     } finally {
       setSubmitting(false);
     }
@@ -148,7 +150,7 @@ export default function ActivateAccount() {
       {error && <div className="mt-6"><Alert type="error">{error}</Alert></div>}
 
       {!loading && context && (
-        <form onSubmit={submit} className="mt-6 space-y-4">
+        <Form onSubmit={submit} className="mt-6 space-y-4">
           <div className="rounded-lg border border-blue-100 bg-blue-50/70 p-4">
             <div className="flex items-start gap-3">
               <MailCheck className="mt-0.5 shrink-0 text-blue-700" size={18} />
@@ -204,7 +206,7 @@ export default function ActivateAccount() {
           >
             {submitting ? 'Activating...' : 'Activate my account'}
           </Button>
-        </form>
+        </Form>
       )}
     </Card>
   );

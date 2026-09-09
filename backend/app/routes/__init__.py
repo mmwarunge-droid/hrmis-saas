@@ -1,4 +1,5 @@
 def register_blueprints(app):
+    from app.routes.form_draft_routes import form_draft_bp
     from app.routes.attendance_routes import attendance_bp
     from app.routes.auth_routes import auth_bp
     from app.routes.dashboard_routes import dashboard_bp
@@ -17,6 +18,7 @@ def register_blueprints(app):
     from app.routes.user_routes import user_bp
 
     blueprints = [
+        form_draft_bp,
         auth_bp,
         tenant_bp,
         user_bp,

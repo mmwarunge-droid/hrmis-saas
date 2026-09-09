@@ -1,3 +1,4 @@
+import Form from '../forms/Form.jsx';
 import { useMemo, useState } from 'react';
 
 import Button from '../ui/Button.jsx';
@@ -84,7 +85,7 @@ export default function LeaveRequestForm({
 
   const submit = (event) => {
     event.preventDefault();
-    onSubmit({
+    return onSubmit({
       ...form,
       total_days: totalDays,
       reason: form.reason.trim() || null,
@@ -92,7 +93,7 @@ export default function LeaveRequestForm({
   };
 
   return (
-    <form
+    <Form draft={{ key: 'leave.new', title: 'Leave request', data: form, onRestore: setForm }}
       onSubmit={submit}
       className="grid gap-4 md:grid-cols-2"
     >
@@ -196,6 +197,6 @@ export default function LeaveRequestForm({
           {loading ? 'Submitting...' : 'Submit request'}
         </Button>
       </div>
-    </form>
+    </Form>
   );
 }

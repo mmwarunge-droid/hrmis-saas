@@ -1,3 +1,4 @@
+import Form from '../forms/Form.jsx';
 import { useMemo, useState } from 'react';
 import { ShieldCheck, UserCog } from 'lucide-react';
 import Button from '../ui/Button.jsx';
@@ -51,7 +52,7 @@ export default function UserAccountEditForm({
 
   const submit = (event) => {
     event.preventDefault();
-    onSubmit({
+    return onSubmit({
       profile: {
         first_name: firstName.trim(),
         last_name: lastName.trim(),
@@ -62,7 +63,7 @@ export default function UserAccountEditForm({
   };
 
   return (
-    <form className="space-y-6" onSubmit={submit}>
+    <Form draft={{ key: `user.${account.id}`, title: 'Edit platform user', data: { firstName, lastName, status, roles }, onRestore: (saved) => { setFirstName(saved.firstName); setLastName(saved.lastName); setStatus(saved.status); setRoles(saved.roles); } }} className="space-y-6" onSubmit={submit}>
       <div className="rounded-xl border border-blue-100 bg-blue-50 p-4 text-sm text-blue-950">
         <div className="flex items-start gap-3">
           <UserCog className="mt-0.5 shrink-0" size={18} />
@@ -142,6 +143,6 @@ export default function UserAccountEditForm({
           {loading ? 'Saving...' : 'Save account'}
         </Button>
       </div>
-    </form>
+    </Form>
   );
 }

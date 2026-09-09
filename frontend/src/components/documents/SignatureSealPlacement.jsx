@@ -1,3 +1,4 @@
+import Form from '../forms/Form.jsx';
 import {
   useEffect,
   useRef,
@@ -543,6 +544,7 @@ export default function SignatureSealPlacement({
         error.error?.message
         || 'Unable to save the company seal placement.',
       );
+      return { success: false, error: error };
     } finally {
       setBusy(false);
     }
@@ -557,7 +559,7 @@ export default function SignatureSealPlacement({
   }
 
   return (
-    <section className="overflow-hidden rounded-xl border border-slate-200 bg-slate-100">
+    <Form values={{ placement, preview }} onSubmit={savePlacement} className="overflow-hidden rounded-xl border border-slate-200 bg-slate-100">
       <div className="border-b border-slate-200 bg-white p-4">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div>
@@ -639,11 +641,11 @@ export default function SignatureSealPlacement({
             </div>
 
             <Button
-              type="button"
+              type="submit"
               size="sm"
               variant="secondary"
               disabled={loading || busy || !placement}
-              onClick={savePlacement}
+
             >
               <Save size={14} />
               Save seal placement
@@ -686,6 +688,6 @@ export default function SignatureSealPlacement({
           </div>
         </>
       )}
-    </section>
+    </Form>
   );
 }

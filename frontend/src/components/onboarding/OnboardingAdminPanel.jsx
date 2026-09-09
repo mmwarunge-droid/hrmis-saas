@@ -1,3 +1,4 @@
+import Form from '../forms/Form.jsx';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   CheckCircle2,
@@ -207,6 +208,7 @@ export default function OnboardingAdminPanel() {
       await load();
     } catch (err) {
       setError(err.error?.message || err.message || 'Template creation failed.');
+      return { success: false, error: err };
     } finally {
       setSaving(false);
     }
@@ -223,6 +225,7 @@ export default function OnboardingAdminPanel() {
       await load();
     } catch (err) {
       setError(err.error?.message || 'Onboarding assignment failed.');
+      return { success: false, error: err };
     } finally {
       setSaving(false);
     }
@@ -285,6 +288,7 @@ export default function OnboardingAdminPanel() {
       await load();
     } catch (err) {
       setError(err.error?.message || 'Unable to resubmit training.');
+      return { success: false, error: err };
     } finally {
       setSaving(false);
     }
@@ -307,7 +311,7 @@ export default function OnboardingAdminPanel() {
             <p className="text-xs font-bold uppercase tracking-wider text-blue-700">Templates</p>
             <h2 className="mt-1 text-lg font-bold text-slate-950">Create a reusable onboarding plan</h2>
           </div>
-          <form className="mt-5 space-y-4" onSubmit={createTemplate}>
+          <Form draft={{ key: 'onboarding.template.new', title: 'Onboarding template', data: templateForm, onRestore: setTemplateForm }} className="mt-5 space-y-4" onSubmit={createTemplate}>
             <Input
               label="Template name"
               value={templateForm.name}
@@ -433,7 +437,7 @@ export default function OnboardingAdminPanel() {
               </Button>
               <Button type="submit" disabled={saving}>Create template</Button>
             </div>
-          </form>
+          </Form>
         </Card>
 
         <Card>
@@ -441,7 +445,7 @@ export default function OnboardingAdminPanel() {
             <p className="text-xs font-bold uppercase tracking-wider text-violet-700">Assignment</p>
             <h2 className="mt-1 text-lg font-bold text-slate-950">Start an employee onboarding plan</h2>
           </div>
-          <form className="mt-5 space-y-4" onSubmit={assign}>
+          <Form className="mt-5 space-y-4" onSubmit={assign}>
             <Select
               label="Employee"
               value={assignmentForm.employee_id}
@@ -469,7 +473,7 @@ export default function OnboardingAdminPanel() {
             <Button type="submit" disabled={saving || !assignmentForm.employee_id || !assignmentForm.template_id}>
               <UserPlus size={16} /> Assign onboarding
             </Button>
-          </form>
+          </Form>
 
           <div className="mt-7 border-t border-slate-200 pt-5">
             <p className="text-sm font-bold text-slate-900">Available templates</p>
@@ -585,6 +589,7 @@ export default function OnboardingAdminPanel() {
       </Card>
 
       <Modal
+        error={error}
         open={Boolean(retakeAssignment)}
         title={retakeAssignment?.attempts_remaining > 0
           ? 'Resubmit training'
@@ -596,7 +601,7 @@ export default function OnboardingAdminPanel() {
         onClose={() => !saving && setRetakeAssignment(null)}
       >
         {retakeAssignment && (
-          <form className="space-y-5" onSubmit={submitRetake}>
+          <Form className="space-y-5" onSubmit={submitRetake}>
             <div className="grid gap-3 rounded-lg bg-slate-50 p-4 sm:grid-cols-2">
               <div>
                 <p className="text-xs text-slate-500">Employee</p>
@@ -712,7 +717,7 @@ export default function OnboardingAdminPanel() {
                   : 'Grant & resubmit'}
               </Button>
             </div>
-          </form>
+          </Form>
         )}
       </Modal>
     </div>

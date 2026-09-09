@@ -1,3 +1,4 @@
+import Form from '../forms/Form.jsx';
 import { useState } from 'react';
 import Button from '../ui/Button.jsx';
 import Input from '../ui/Input.jsx';
@@ -10,7 +11,7 @@ export default function GoalCheckInForm({ goal, onSubmit, loading = false }) {
 
   const submit = (event) => {
     event.preventDefault();
-    onSubmit({
+    return onSubmit({
       current_value: Number(currentValue),
       health,
       note: note || null,
@@ -18,7 +19,7 @@ export default function GoalCheckInForm({ goal, onSubmit, loading = false }) {
   };
 
   return (
-    <form className="space-y-5" onSubmit={submit}>
+    <Form className="space-y-5" onSubmit={submit}>
       <div className="rounded-lg border border-blue-100 bg-blue-50 p-4">
         <p className="text-xs font-semibold uppercase tracking-[0.12em] text-blue-700">Current goal</p>
         <p className="mt-1 font-bold text-slate-950">{goal.title}</p>
@@ -61,6 +62,6 @@ export default function GoalCheckInForm({ goal, onSubmit, loading = false }) {
           {loading ? 'Saving…' : 'Save check-in'}
         </Button>
       </div>
-    </form>
+    </Form>
   );
 }

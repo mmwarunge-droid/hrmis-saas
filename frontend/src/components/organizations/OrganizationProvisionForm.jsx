@@ -1,3 +1,4 @@
+import Form from '../forms/Form.jsx';
 import { useMemo, useState } from 'react';
 import {
   Building2,
@@ -55,11 +56,11 @@ export default function OrganizationProvisionForm({
         slug: form.organization.slug || generatedSlug,
       },
     };
-    onSubmit(payload);
+    return onSubmit(payload);
   };
 
   return (
-    <form onSubmit={submit} className="space-y-7">
+    <Form draft={{ key: 'organization.new', title: 'New organization', data: form, onRestore: setForm }} onSubmit={submit} className="space-y-7">
       <div className="rounded-xl bg-gradient-to-br from-slate-950 via-blue-950 to-blue-900 p-6 text-white">
         <div className="flex items-start gap-4">
           <span className="grid h-12 w-12 place-items-center rounded-lg bg-white/10">
@@ -187,6 +188,6 @@ export default function OrganizationProvisionForm({
           {loading ? 'Provisioning...' : 'Create workspace'}
         </Button>
       </div>
-    </form>
+    </Form>
   );
 }

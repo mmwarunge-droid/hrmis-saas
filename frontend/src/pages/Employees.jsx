@@ -184,6 +184,7 @@ export default function Employees() {
 
       setDuplicateJobTitleConfirmation(null);
       setFormError(err.error?.message || 'Employee creation failed');
+      return { success: false, error: err };
     } finally {
       setSaving(false);
     }
@@ -213,6 +214,7 @@ export default function Employees() {
       await refreshDirectory();
     } catch (err) {
       setError(err.error?.message || 'Department transfer failed');
+      return { success: false, error: err };
     } finally {
       setSaving(false);
     }
@@ -463,6 +465,7 @@ export default function Employees() {
       )}
 
       <Modal
+        error={error}
         title={
           duplicateJobTitleConfirmation
             ? 'Duplicate job title'
@@ -561,6 +564,7 @@ export default function Employees() {
       </Modal>
 
       <Modal
+        error={error}
         title="Change department"
         description="This change is applied to every selected employee."
         open={transferOpen}

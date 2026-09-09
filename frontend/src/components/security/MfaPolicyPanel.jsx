@@ -1,3 +1,4 @@
+import Form from '../forms/Form.jsx';
 import { useEffect, useMemo, useState } from 'react';
 import { tenantApi } from '../../api/tenantApi.js';
 import { userApi } from '../../api/userApi.js';
@@ -98,6 +99,7 @@ export default function MfaPolicyPanel({
       setCompliance(complianceResponse.data);
     } catch (err) {
       setError(err.error?.message || 'MFA policy could not be updated.');
+      return { success: false, error: err };
     } finally {
       setLoading(false);
     }
@@ -126,6 +128,7 @@ export default function MfaPolicyPanel({
       await load();
     } catch (err) {
       setError(err.error?.message || 'MFA enrollment could not be reset.');
+      return { success: false, error: err };
     } finally {
       setLoading(false);
     }
@@ -220,7 +223,7 @@ export default function MfaPolicyPanel({
         {message && <div className="mt-4"><Alert type="success">{message}</Alert></div>}
         {error && <div className="mt-4"><Alert type="error">{error}</Alert></div>}
 
-        <form onSubmit={savePolicy} className="mt-5 grid gap-4 lg:grid-cols-3">
+        <Form onSubmit={savePolicy} className="mt-5 grid gap-4 lg:grid-cols-3">
           <label className="space-y-1 text-sm font-medium text-slate-700">
             <span>Policy mode</span>
             <select
@@ -262,7 +265,7 @@ export default function MfaPolicyPanel({
               {loading ? 'Saving…' : 'Save MFA policy'}
             </Button>
           </div>
-        </form>
+        </Form>
       </Card>
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
@@ -287,7 +290,7 @@ export default function MfaPolicyPanel({
 
       {resetTarget && (
         <Card>
-          <form onSubmit={resetMfa} className="max-w-xl space-y-4">
+          <Form onSubmit={resetMfa} className="max-w-xl space-y-4">
             <div>
               <h3 className="font-semibold text-slate-950">
                 Reset MFA for {resetTarget.full_name}
@@ -340,7 +343,7 @@ export default function MfaPolicyPanel({
                 Cancel
               </Button>
             </div>
-          </form>
+          </Form>
         </Card>
       )}
     </div>

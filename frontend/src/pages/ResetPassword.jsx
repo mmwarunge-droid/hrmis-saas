@@ -1,3 +1,4 @@
+import Form from '../components/forms/Form.jsx';
 import { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { authApi } from '../api/authApi';
@@ -34,6 +35,7 @@ export default function ResetPassword() {
       setForm({ password: '', confirmPassword: '' });
     } catch (err) {
       setError(err.error?.message || 'The reset link is invalid or has expired.');
+      return { success: false, error: err };
     } finally {
       setLoading(false);
     }
@@ -43,7 +45,7 @@ export default function ResetPassword() {
     <Card className="w-full max-w-md">
       <h1 className="text-2xl font-bold">Choose a new password</h1>
       <p className="mt-1 text-sm text-slate-500">Use at least 10 characters and avoid reusing your current password.</p>
-      <form onSubmit={submit} className="mt-6 space-y-4">
+      <Form onSubmit={submit} className="mt-6 space-y-4">
         {message && <Alert>{message}</Alert>}
         {error && <Alert type="error">{error}</Alert>}
         <Input
@@ -63,7 +65,7 @@ export default function ResetPassword() {
           required
         />
         <Button className="w-full" disabled={loading || !token || Boolean(message)}>{loading ? 'Resetting...' : 'Reset password'}</Button>
-      </form>
+      </Form>
       <Link className="mt-4 block text-center text-sm font-medium text-slate-700 underline" to="/login">Back to sign in</Link>
     </Card>
   );

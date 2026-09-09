@@ -1,3 +1,4 @@
+import Form from '../forms/Form.jsx';
 import { useState } from 'react';
 import Button from '../ui/Button.jsx';
 import Input from '../ui/Input.jsx';
@@ -31,7 +32,7 @@ export default function DepartmentForm({
 
   const submit = (event) => {
     event.preventDefault();
-    onSubmit({
+    return onSubmit({
       name: form.name.trim(),
       code: form.code.trim() || null,
       parent_department_id: form.parent_department_id || null,
@@ -47,7 +48,7 @@ export default function DepartmentForm({
   );
 
   return (
-    <form onSubmit={submit} className="grid gap-4 md:grid-cols-2">
+    <Form draft={{ key: `department.${initialValues.id || 'new'}`, title: 'Department', data: form, onRestore: setForm }} onSubmit={submit} className="grid gap-4 md:grid-cols-2">
       <Input
         label="Department name"
         name="name"
@@ -94,6 +95,6 @@ export default function DepartmentForm({
       <div className="md:col-span-2">
         <Button disabled={loading}>{loading ? 'Saving...' : submitLabel}</Button>
       </div>
-    </form>
+    </Form>
   );
 }

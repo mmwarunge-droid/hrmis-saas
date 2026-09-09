@@ -1,3 +1,4 @@
+import Form from '../components/forms/Form.jsx';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ArrowDown,
@@ -190,6 +191,7 @@ export default function EmployeeExperienceSettings() {
         err,
         'Employee homepage settings could not be saved.',
       ));
+      return { success: false, error: err };
     } finally {
       setBrandingUpload('');
       setSaving(false);
@@ -289,6 +291,7 @@ export default function EmployeeExperienceSettings() {
       await load();
     } catch (err) {
       setError(err.error?.message || 'The organization event could not be saved.');
+      return { success: false, error: err };
     } finally {
       setSaving(false);
     }
@@ -323,6 +326,7 @@ export default function EmployeeExperienceSettings() {
       await load();
     } catch (err) {
       setError(err.error?.message || 'The employee essential could not be added.');
+      return { success: false, error: err };
     } finally {
       setSaving(false);
     }
@@ -363,6 +367,7 @@ export default function EmployeeExperienceSettings() {
 
   return (
     <div className="space-y-6">
+      <Form error={error} draft={{ key: 'settings.homepage', title: 'Employee homepage settings', data: settings, onRestore: setSettings }} onSubmit={saveSettings} className="space-y-6">
       <PageHeader
         eyebrow="Administration"
         title="Employee experience"
@@ -370,11 +375,11 @@ export default function EmployeeExperienceSettings() {
         actions={(
           <>
             <Link to="/employee-home">
-              <Button variant="secondary">
+              <Button type="button" variant="secondary">
                 <Eye size={17} /> Preview employee home
               </Button>
             </Link>
-            <Button variant="accent" onClick={saveSettings} disabled={saving || Boolean(brandingUpload)}>
+            <Button variant="accent" type="submit" disabled={saving || Boolean(brandingUpload)}>
               <Save size={17} /> {saving ? 'Saving…' : 'Save homepage'}
             </Button>
           </>
@@ -409,7 +414,7 @@ export default function EmployeeExperienceSettings() {
               size="sm"
               variant="secondary"
               disabled={!bannerFile || saving || Boolean(brandingUpload)}
-              onClick={() => uploadBranding('banner', bannerFile)}
+              type="button" onClick={() => uploadBranding('banner', bannerFile)}
             >
               <Image size={15} />
               {brandingUpload === 'banner' ? 'Uploading…' : 'Upload banner'}
@@ -431,7 +436,7 @@ export default function EmployeeExperienceSettings() {
               size="sm"
               variant="secondary"
               disabled={!logoFile || saving || Boolean(brandingUpload)}
-              onClick={() => uploadBranding('logo', logoFile)}
+              type="button" onClick={() => uploadBranding('logo', logoFile)}
             >
               <Image size={15} />
               {brandingUpload === 'logo' ? 'Uploading…' : 'Upload logo'}
@@ -481,10 +486,10 @@ export default function EmployeeExperienceSettings() {
                   {label}
                 </label>
                 <div className="flex gap-1">
-                  <Button variant="ghost" size="sm" disabled={index === 0} onClick={() => moveSection(section, -1)} aria-label={`Move ${label} up`}>
+                  <Button variant="ghost" size="sm" disabled={index === 0} type="button" onClick={() => moveSection(section, -1)} aria-label={`Move ${label} up`}>
                     <ArrowUp size={15} />
                   </Button>
-                  <Button variant="ghost" size="sm" disabled={index === settings.section_order.length - 1} onClick={() => moveSection(section, 1)} aria-label={`Move ${label} down`}>
+                  <Button variant="ghost" size="sm" disabled={index === settings.section_order.length - 1} type="button" onClick={() => moveSection(section, 1)} aria-label={`Move ${label} down`}>
                     <ArrowDown size={15} />
                   </Button>
                 </div>
@@ -537,6 +542,7 @@ export default function EmployeeExperienceSettings() {
         </div>
       </Card>
 
+      </Form>
       <Card>
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
@@ -569,7 +575,7 @@ export default function EmployeeExperienceSettings() {
           <h2 className="text-lg font-bold text-slate-950">Essentials</h2>
           <p className="text-sm text-slate-500">Promote existing documents as required or recommended employee reading.</p>
         </div>
-        <form onSubmit={addEssential} className="mt-5 grid gap-3 md:grid-cols-[1.3fr_1fr_auto_auto] md:items-end">
+        <Form onSubmit={addEssential} className="mt-5 grid gap-3 md:grid-cols-[1.3fr_1fr_auto_auto] md:items-end">
           <label className="block space-y-1">
             <span className="text-sm font-medium text-slate-700">Document</span>
             <select
@@ -599,7 +605,7 @@ export default function EmployeeExperienceSettings() {
             </select>
           </label>
           <Button type="submit" variant="accent" disabled={saving || !essentialForm.document_id}><FilePlus2 size={16} /> Add</Button>
-        </form>
+        </Form>
         <div className="mt-5 space-y-2">
           {essentials.length ? essentials.map((item) => (
             <div key={item.id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-100 bg-slate-50/70 p-4">
@@ -617,7 +623,7 @@ export default function EmployeeExperienceSettings() {
       </Card>
 
       <Modal title={editingEventId ? 'Edit organization event' : 'Create organization event'} open={eventOpen} onClose={() => setEventOpen(false)} size="xl">
-        <form className="space-y-5" onSubmit={saveEvent}>
+        <Form draft={{ key: `event.${editingEventId || 'new'}`, title: 'Employee event', data: eventForm, onRestore: setEventForm }} className="space-y-5" onSubmit={saveEvent}>
           <div className="grid gap-4 md:grid-cols-2">
             <Input label="Event title" required value={eventForm.title} onChange={(event) => setEventForm((current) => ({ ...current, title: event.target.value }))} />
             <Input label="Location" value={eventForm.location} onChange={(event) => setEventForm((current) => ({ ...current, location: event.target.value }))} />
@@ -643,7 +649,7 @@ export default function EmployeeExperienceSettings() {
             <textarea rows={5} value={eventForm.description} onChange={(event) => setEventForm((current) => ({ ...current, description: event.target.value }))} className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none focus:border-blue-400 focus:ring-4 focus:ring-blue-100" />
           </label>
           <div className="flex justify-end"><Button type="submit" variant="accent" disabled={saving}>{saving ? 'Saving…' : 'Save event'}</Button></div>
-        </form>
+        </Form>
       </Modal>
     </div>
   );

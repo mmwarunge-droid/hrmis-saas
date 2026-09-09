@@ -1,3 +1,4 @@
+import Form from '../forms/Form.jsx';
 import { useMemo, useState } from 'react';
 import {
   Plus,
@@ -264,7 +265,7 @@ export default function SignatureRequestForm({
       : form.signing_mode;
     const payload = {
       document_id: document.id,
-      save_as_draft: event.nativeEvent?.submitter?.value === 'draft',
+      save_as_draft: false,
       ...(filingEmployee ? { filing_employee_id: filingEmployee } : {}),
       subject: form.subject.trim(),
       message: form.message.trim() || null,
@@ -310,13 +311,21 @@ export default function SignatureRequestForm({
       payload.tenant_id = document.tenant_id;
     }
 
-    onSubmit(payload);
+    return onSubmit(payload);
   };
 
   if (!document) return null;
 
   return (
-    <form onSubmit={submit} className="space-y-6">
+    <Form error={error} draft={{ key: `signing.${document.id}`, title: `Signing: ${document.title}`,
+      data: { documentId: document.id, form, recipients, filingEmployee, fieldPlacementMode, templateName, employeeRoleIndex },
+      onRestore: (saved) => {
+        if (saved.documentId !== document.id) return;
+        setForm(saved.form); setRecipients(saved.recipients); setFilingEmployee(saved.filingEmployee);
+        setFieldPlacementMode(saved.fieldPlacementMode); setTemplateName(saved.templateName || '');
+        setEmployeeRoleIndex(saved.employeeRoleIndex || 0); setError('');
+      },
+    }} onSubmit={submit} className="space-y-6">
       <div className="rounded-lg border border-blue-100 bg-blue-50 p-4">
         <p className="text-xs font-bold uppercase tracking-wider text-blue-700">
           Selected document
@@ -329,14 +338,6 @@ export default function SignatureRequestForm({
         </p>
       </div>
 
-      {error && (
-        <div
-          role="alert"
-          className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700"
-        >
-          {error}
-        </div>
-      )}
 
       <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-slate-200 bg-white p-4">
         <input
@@ -476,7 +477,7 @@ export default function SignatureRequestForm({
 
       <div className="grid gap-4 md:grid-cols-2">
         <Input
-          label="Email subject"
+          label="Email subject" name="subject"
           value={form.subject}
           onChange={(event) => setForm({
             ...form,
@@ -487,7 +488,7 @@ export default function SignatureRequestForm({
 
         <div className="grid gap-3 sm:grid-cols-2">
           <Input
-            label="Completion date"
+            label="Completion date" name="due_date"
             type="date"
             value={form.due_date}
             onChange={(event) => setForm({
@@ -498,7 +499,7 @@ export default function SignatureRequestForm({
           />
 
           <Input
-            label="Deadline time"
+            label="Deadline time" name="due_time"
             type="time"
             value={form.due_time}
             onChange={(event) => setForm({
@@ -590,7 +591,7 @@ export default function SignatureRequestForm({
                 Signatory {index + 1}
               </span>
               <select
-                aria-label={`Signatory ${index + 1}`}
+                name={`recipients.${index}.employee_id`} aria-label={`Signatory ${index + 1}`}
                 value={recipient.employee_id}
                 onChange={(event) => updateRecipient(
                   index,
@@ -742,7 +743,6 @@ export default function SignatureRequestForm({
         {templateSaved && <p role="status" className="text-sm text-green-700">{templateSaved}</p>}
       </section>}
       <div className="flex justify-end gap-3">
-        {!isQes && <Button type="submit" name="action" value="draft" variant="secondary" disabled={loading}>Save draft</Button>}
         <Button
           type="submit"
           variant="accent"
@@ -755,6 +755,6 @@ export default function SignatureRequestForm({
               : 'Send for signature'}
         </Button>
       </div>
-    </form>
+    </Form>
   );
 }

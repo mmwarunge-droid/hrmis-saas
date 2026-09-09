@@ -1,3 +1,5 @@
+import Form from '../forms/Form.jsx';
+import { requestWorkflowExit } from '../../utils/formFeedback.js';
 import {
   AtSign,
   MessageSquare,
@@ -170,6 +172,7 @@ export default function SignatureDiscussionPanel({
             : 'Unable to add comment.'
         ),
       );
+      return { success: false, error: err };
     } finally {
       setBusy(false);
     }
@@ -330,7 +333,7 @@ export default function SignatureDiscussionPanel({
                       title="Edit comment"
                       aria-label="Edit comment"
                       disabled={busy}
-                      onClick={() => beginEdit(item)}
+                      onClick={() => requestWorkflowExit(() => beginEdit(item))}
                       className="rounded p-1 text-slate-500 hover:bg-white hover:text-slate-900 disabled:opacity-50"
                     >
                       <Pencil size={13} />
@@ -370,12 +373,13 @@ export default function SignatureDiscussionPanel({
         )}
       </div>
 
+      <Form values={{ body, mentionedUserIds }} onSubmit={submit} successMessage="Your comment was saved.">
       {editingId && (
         <div className="mt-3 flex items-center justify-between rounded-lg bg-blue-50 px-3 py-2 text-xs text-blue-800">
           <span>Editing your comment</span>
           <button
             type="button"
-            onClick={resetComposer}
+            onClick={() => requestWorkflowExit(resetComposer)}
             className="rounded p-1 hover:bg-blue-100"
             aria-label="Cancel editing"
           >
@@ -426,10 +430,11 @@ export default function SignatureDiscussionPanel({
         size="sm"
         variant="secondary"
         disabled={busy || body.trim().length < 2}
-        onClick={submit}
+        type="submit"
       >
         {editingId ? 'Save changes' : 'Reply'}
       </Button>
+      </Form>
     </section>
   );
 }

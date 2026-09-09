@@ -148,6 +148,7 @@ export default function Goals() {
       await refresh();
     } catch (err) {
       setError(err.error?.message || 'Goal creation failed');
+      return { success: false, error: err };
     } finally {
       setSaving(false);
     }
@@ -164,6 +165,7 @@ export default function Goals() {
       await refresh();
     } catch (err) {
       setError(err.error?.message || 'Goal check-in failed');
+      return { success: false, error: err };
     } finally {
       setSaving(false);
     }
@@ -336,6 +338,7 @@ export default function Goals() {
       </Card>
 
       <Modal
+        error={error}
         open={createOpen}
         onClose={() => setCreateOpen(false)}
         title="Create a measurable goal"
@@ -352,6 +355,7 @@ export default function Goals() {
       </Modal>
 
       <Modal
+        error={error}
         open={Boolean(selectedGoal)}
         onClose={() => setSelectedGoal(null)}
         title="Record a goal check-in"

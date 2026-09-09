@@ -1,3 +1,4 @@
+import Form from '../components/forms/Form.jsx';
 import { ArrowRight, Eye, EyeOff, LockKeyhole } from 'lucide-react';
 import { useState } from 'react';
 import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom';
@@ -43,6 +44,7 @@ export default function Login() {
       navigate(destination, { replace: true });
     } catch (err) {
       setError(err.error?.message || 'Login failed');
+      return { success: false, error: err };
     } finally {
       setLoading(false);
     }
@@ -53,7 +55,7 @@ export default function Login() {
       <span className="grid h-11 w-11 place-items-center rounded-lg bg-blue-50 text-blue-700"><LockKeyhole size={20} /></span>
       <h1 className="mt-5 text-3xl font-bold tracking-tight text-slate-950">Welcome back</h1>
       <p className="mt-2 text-sm leading-6 text-slate-600">Sign in to your organization’s people workspace.</p>
-      <form onSubmit={submit} className="mt-7 space-y-4">
+      <Form onSubmit={submit} className="mt-7 space-y-4">
         {activated && (
           <Alert type="success">
             Account activated successfully. Sign in with the password you just created.
@@ -96,7 +98,7 @@ export default function Login() {
 
         <div className="text-right"><Link className="text-sm font-semibold text-blue-700 hover:text-blue-900" to="/forgot-password">Forgot password?</Link></div>
         <Button variant="accent" className="w-full" size="lg" disabled={loading}>{loading ? 'Signing in...' : <>Sign in <ArrowRight size={17} /></>}</Button>
-      </form>
+      </Form>
       <p className="mt-5 text-center text-xs text-slate-500">Protected by secure cookies, CSRF controls and privileged-role MFA.</p>
     </Card>
   );

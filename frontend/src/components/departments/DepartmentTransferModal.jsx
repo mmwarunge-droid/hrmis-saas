@@ -1,3 +1,4 @@
+import Form from '../forms/Form.jsx';
 import { useState } from 'react';
 import Button from '../ui/Button.jsx';
 import Input from '../ui/Input.jsx';
@@ -17,7 +18,7 @@ export default function DepartmentTransferModal({
 
   const submit = (event) => {
     event.preventDefault();
-    onSubmit({
+    return onSubmit({
       employee_ids: employees.map((employee) => employee.id),
       department_id: departmentId || null,
       effective_date: effectiveDate,
@@ -26,7 +27,7 @@ export default function DepartmentTransferModal({
   };
 
   return (
-    <form onSubmit={submit} className="space-y-5">
+    <Form onSubmit={submit} className="space-y-5">
       <div className="rounded-lg bg-slate-50 p-4">
         <p className="text-sm font-semibold text-slate-900">
           Moving {employees.length} employee{employees.length === 1 ? '' : 's'}
@@ -68,6 +69,6 @@ export default function DepartmentTransferModal({
       <Button disabled={loading || employees.length === 0}>
         {loading ? 'Moving employees...' : `Move ${employees.length} employee${employees.length === 1 ? '' : 's'}`}
       </Button>
-    </form>
+    </Form>
   );
 }

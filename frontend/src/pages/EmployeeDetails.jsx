@@ -209,6 +209,7 @@ export default function EmployeeDetails() {
 
       setDuplicateJobTitleConfirmation(null);
       setFormError(err.error?.message || 'Employee update failed');
+      return { success: false, error: err };
     } finally {
       setSaving(false);
     }
@@ -244,6 +245,7 @@ export default function EmployeeDetails() {
       await load();
     } catch (err) {
       setError(err.error?.message || 'Account linking failed.');
+      return { success: false, error: err };
     } finally {
       setLinkSaving(false);
     }
@@ -260,6 +262,7 @@ export default function EmployeeDetails() {
       setSuccess(`Access was provisioned for ${response.data.user.email}.`);
     } catch (err) {
       setError(err.error?.message || 'Access provisioning failed');
+      return { success: false, error: err };
     } finally {
       setAccessSaving(false);
     }
@@ -576,6 +579,7 @@ export default function EmployeeDetails() {
       </div>
 
       <Modal
+        error={error}
         title={
           duplicateJobTitleConfirmation
             ? 'Duplicate job title'

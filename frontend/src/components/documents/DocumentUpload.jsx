@@ -1,3 +1,4 @@
+import Form from '../forms/Form.jsx';
 import { useState } from 'react';
 import Button from '../ui/Button.jsx';
 import Input from '../ui/Input.jsx';
@@ -21,10 +22,10 @@ export default function DocumentUpload({
     const data = new FormData();
     Object.entries(form).forEach(([key, value]) => value && data.append(key, value));
     if (file) data.append('file', file);
-    onSubmit(data);
+    return onSubmit(data);
   };
   return (
-    <form onSubmit={submit} className="space-y-4">
+    <Form draft={{ key: 'document.upload', title: 'Upload document', data: form, onRestore: setForm }} onSubmit={submit} className="space-y-4">
       {isSuperAdmin && (
         <label className="block space-y-1">
           <span className="text-sm font-medium text-slate-700">
@@ -62,6 +63,6 @@ export default function DocumentUpload({
       <Button type="submit" disabled={loading}>
         {loading ? 'Uploading...' : 'Upload document'}
       </Button>
-    </form>
+    </Form>
   );
 }

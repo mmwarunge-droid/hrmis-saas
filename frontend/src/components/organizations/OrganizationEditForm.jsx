@@ -1,3 +1,4 @@
+import Form from '../forms/Form.jsx';
 import { useState } from 'react';
 import { Building2, ShieldAlert } from 'lucide-react';
 import Button from '../ui/Button.jsx';
@@ -26,13 +27,13 @@ export default function OrganizationEditForm({
 
   const submit = (event) => {
     event.preventDefault();
-    onSubmit(form);
+    return onSubmit(form);
   };
 
   const lifecycleWarning = form.status !== 'active';
 
   return (
-    <form className="space-y-6" onSubmit={submit}>
+    <Form draft={{ key: `organization.${organization.id}`, title: 'Organization settings', data: form, onRestore: setForm }} className="space-y-6" onSubmit={submit}>
       <div className="rounded-xl border border-blue-100 bg-blue-50 p-4 text-sm text-blue-950">
         <div className="flex items-start gap-3">
           <Building2 className="mt-0.5 shrink-0" size={18} />
@@ -75,6 +76,6 @@ export default function OrganizationEditForm({
           {loading ? 'Saving...' : 'Save organization'}
         </Button>
       </div>
-    </form>
+    </Form>
   );
 }

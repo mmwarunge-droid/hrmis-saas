@@ -105,6 +105,7 @@ export default function Departments() {
       await load();
     } catch (err) {
       setError(err.error?.message || 'Department could not be saved');
+      return { success: false, error: err };
     } finally {
       setSaving(false);
     }
@@ -121,6 +122,7 @@ export default function Departments() {
       await load();
     } catch (err) {
       setError(err.error?.message || 'Department could not be archived');
+      return { success: false, error: err };
     } finally {
       setSaving(false);
     }
@@ -239,6 +241,7 @@ export default function Departments() {
       )}
 
       <Modal
+        error={error}
         title={editing ? `Edit ${editing.name}` : 'Create department'}
         open={formOpen}
         onClose={() => setFormOpen(false)}
@@ -254,6 +257,7 @@ export default function Departments() {
       </Modal>
 
       <Modal
+        error={error}
         title={archiveTarget ? `Archive ${archiveTarget.name}` : 'Archive department'}
         open={Boolean(archiveTarget)}
         onClose={() => setArchiveTarget(null)}

@@ -1,3 +1,4 @@
+import Form from '../components/forms/Form.jsx';
 import { useEffect, useState } from 'react';
 import { authApi } from '../api/authApi';
 import Alert from '../components/ui/Alert.jsx';
@@ -87,6 +88,7 @@ export default function Settings() {
       setEnrollmentPassword('');
     } catch (err) {
       setError(err.error?.message || 'Authenticator enrollment could not be started.');
+      return { success: false, error: err };
     } finally {
       setLoading(false);
     }
@@ -108,6 +110,7 @@ export default function Settings() {
       setMessage(response.message || 'Multi-factor authentication enabled.');
     } catch (err) {
       setError(err.error?.message || 'The authenticator code was not accepted.');
+      return { success: false, error: err };
     } finally {
       setLoading(false);
     }
@@ -130,6 +133,7 @@ export default function Settings() {
       setMessage(response.message || 'Recovery codes regenerated.');
     } catch (err) {
       setError(err.error?.message || 'Recovery codes could not be regenerated.');
+      return { success: false, error: err };
     } finally {
       setLoading(false);
     }
@@ -148,6 +152,7 @@ export default function Settings() {
     } catch (err) {
       setError(err.error?.message || 'Multi-factor authentication could not be disabled.');
       setLoading(false);
+      return { success: false, error: err };
     }
   };
 
@@ -220,7 +225,7 @@ export default function Settings() {
         </div>
 
         {!mfa?.enabled && !enrollment && (
-          <form onSubmit={startEnrollment} className="mt-5 max-w-md space-y-3">
+          <Form onSubmit={startEnrollment} className="mt-5 max-w-md space-y-3">
             <Input
               label="Current password"
               type="password"
@@ -232,7 +237,7 @@ export default function Settings() {
             <Button disabled={loading || !mfa?.email_verified}>
               {loading ? 'Starting...' : 'Set up authenticator'}
             </Button>
-          </form>
+          </Form>
         )}
 
         {!mfa?.enabled && enrollment && (
@@ -248,7 +253,7 @@ export default function Settings() {
                 {enrollment.manual_key}
               </p>
             </div>
-            <form onSubmit={confirmEnrollment} className="space-y-3">
+            <Form onSubmit={confirmEnrollment} className="space-y-3">
               <Input
                 label="Six-digit authenticator code"
                 value={enrollmentCode}
@@ -270,13 +275,13 @@ export default function Settings() {
                   Cancel
                 </Button>
               </div>
-            </form>
+            </Form>
           </div>
         )}
 
         {mfa?.enabled && (
           <div className="mt-5 grid gap-5 lg:grid-cols-2">
-            <form onSubmit={regenerateRecoveryCodes} className="space-y-3">
+            <Form onSubmit={regenerateRecoveryCodes} className="space-y-3">
               <h3 className="font-semibold">Recovery codes</h3>
               <p className="text-sm text-slate-600">
                 Unused recovery codes: {mfa.recovery_codes_remaining}
@@ -295,10 +300,10 @@ export default function Settings() {
               <Button disabled={loading}>
                 {loading ? 'Regenerating...' : 'Regenerate recovery codes'}
               </Button>
-            </form>
+            </Form>
 
             {policy.can_disable && (
-              <form onSubmit={disableMfa} className="space-y-3">
+              <Form onSubmit={disableMfa} className="space-y-3">
                 <h3 className="font-semibold">Disable MFA</h3>
                 <p className="text-sm text-slate-600">
                   This signs out every session. You will need to sign in again.
@@ -319,7 +324,7 @@ export default function Settings() {
                 <Button variant="danger" disabled={loading}>
                   Disable MFA
                 </Button>
-              </form>
+              </Form>
             )}
           </div>
         )}

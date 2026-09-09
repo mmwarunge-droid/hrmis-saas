@@ -1,3 +1,4 @@
+import SigningDrafts from '../components/documents/SigningDrafts.jsx';
 import {
   useCallback,
   useEffect,
@@ -75,6 +76,7 @@ export default function Documents() {
   const [selectedTemplate, setSelectedTemplate] = useState(null);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [sentRequestId, setSentRequestId] = useState(null);
   const [query, setQuery] = useState('');
   const [folder, setFolder] = useState('all');
   const [page, setPage] = useState(1);
@@ -171,6 +173,7 @@ export default function Documents() {
       await refreshLibrary();
     } catch (err) {
       setError(err.error?.message || 'Upload failed');
+      return { success: false, error: err };
     } finally {
       setSaving(false);
     }
@@ -212,6 +215,7 @@ export default function Documents() {
 
     try {
       const response = await signatureApi.create(payload);
+      setSentRequestId(payload.document_id);
 
       setSignatureOpen(false);
       setSelectedDocument(null);
@@ -235,6 +239,7 @@ export default function Documents() {
         err.error?.message
         || 'Unable to send signature request',
       );
+      return { success: false, error: err };
     } finally {
       setSignatureSaving(false);
     }
@@ -386,7 +391,8 @@ export default function Documents() {
       />
 
       {error && <Alert type="error">{error}</Alert>}
-      {success && <Alert type="success">{success}</Alert>}
+      {success && <Alert type="success">{success}{sentRequestId && <button type="button" className="ml-3 underline" onClick={() => navigate(`/signature-requests?document_id=${encodeURIComponent(sentRequestId)}`)}>View signing request</button>}</Alert>}
+      {canManageSignatures && <SigningDrafts refreshKey={signatureOpen} onOpen={(document) => { setSelectedDocument(document); setSelectedTemplate(null); setError(''); setSignatureOpen(true); }} />}
       {canManageSignatures && <SignatureTemplatePicker employees={employees} tenants={tenants} isSuperAdmin={isSuperAdmin}
         onSelect={({ document, template }) => { setSelectedDocument(document); setSelectedTemplate(template); setSignatureOpen(true); }} />}
 
@@ -525,6 +531,7 @@ export default function Documents() {
       </div>
 
       <Modal
+        error={error}
         title="Upload file"
         open={uploadOpen}
         onClose={() => setUploadOpen(false)}
@@ -538,6 +545,7 @@ export default function Documents() {
       </Modal>
 
       <Modal
+        error={error}
         title="Send document for signature"
         open={signatureOpen}
         onClose={closeSignatureRequest}

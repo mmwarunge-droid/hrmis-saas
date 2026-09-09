@@ -1,3 +1,4 @@
+import Form from '../forms/Form.jsx';
 import { useMemo, useState } from 'react';
 import {
   BellRing,
@@ -506,7 +507,7 @@ export default function SignatureRequestDetails({
           </div>
 
           {showResend && (
-            <form
+            <Form
               onSubmit={submitResend}
               className="mt-5 space-y-4 rounded-lg border border-blue-100 bg-blue-50/60 p-4"
             >
@@ -593,7 +594,7 @@ export default function SignatureRequestDetails({
                   Resend for signature
                 </Button>
               </div>
-            </form>
+            </Form>
           )}
         </Card>
       )}
@@ -614,7 +615,7 @@ export default function SignatureRequestDetails({
             </div>
           </div>
 
-          <form
+          <Form
             onSubmit={submitDeadline}
             className="mt-5 flex flex-col gap-3 md:flex-row md:items-end"
           >
@@ -649,10 +650,10 @@ export default function SignatureRequestDetails({
               <XCircle size={16} />
               Cancel request
             </Button>
-          </form>
+          </Form>
 
           {showCancel && (
-            <form
+            <Form
               onSubmit={submitCancel}
               className="mt-5 rounded-lg border border-red-200 bg-red-50 p-4"
             >
@@ -683,7 +684,7 @@ export default function SignatureRequestDetails({
                   Confirm cancellation
                 </Button>
               </div>
-            </form>
+            </Form>
           )}
         </Card>
       )}

@@ -1,3 +1,4 @@
+import Form from '../forms/Form.jsx';
 import { useMemo, useRef, useState } from 'react';
 import {
   BriefcaseBusiness,
@@ -109,11 +110,11 @@ export default function UserProvisionForm({
         work_location: form.work_location || undefined,
       };
     }
-    onSubmit(payload);
+    return onSubmit(payload);
   };
 
   return (
-    <form onSubmit={submit} className="space-y-6">
+    <Form draft={{ key: 'user.new', title: 'New platform user', data: form, onRestore: setForm }} onSubmit={submit} className="space-y-6">
       <div className="grid gap-4 md:grid-cols-2">
         {isSuperAdmin && (
           <Select
@@ -258,6 +259,6 @@ export default function UserProvisionForm({
           {loading ? 'Creating...' : 'Create account'}
         </Button>
       </div>
-    </form>
+    </Form>
   );
 }

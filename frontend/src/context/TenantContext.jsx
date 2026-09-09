@@ -1,3 +1,4 @@
+import { requestWorkflowExit } from '../utils/formFeedback.js';
 import {
   createContext,
   useCallback,
@@ -30,8 +31,7 @@ export function TenantProvider({ children }) {
 
   const setTenantId = useCallback((nextTenantId) => {
     const next = nextTenantId ? String(nextTenantId) : null;
-    setTenantIdState(next);
-    writeActiveTenantId(next);
+    requestWorkflowExit(() => { setTenantIdState(next); writeActiveTenantId(next); });
   }, []);
 
   const clearTenant = useCallback(() => {

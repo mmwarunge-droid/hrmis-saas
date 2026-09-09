@@ -1,6 +1,11 @@
+import { FormFeedbackContext } from '../forms/WorkflowContext.js';
+import { isValidElement, useContext } from 'react';
+import { flattenErrors, fieldLabel } from '../../utils/formFeedback.js';
 import { AlertCircle, CheckCircle2, Info, TriangleAlert } from 'lucide-react';
 
 export default function Alert({ children, type = 'info', title }) {
+  const feedback = useContext(FormFeedbackContext);
+  if (type === 'error' && feedback?.kind === 'error' && feedback.message === children) return null;
   const styles = {
     error: 'border-red-200 bg-red-50 text-red-800',
     success: 'border-emerald-200 bg-emerald-50 text-emerald-800',
@@ -20,7 +25,7 @@ export default function Alert({ children, type = 'info', title }) {
       <Icon className="mt-0.5 shrink-0" size={17} />
       <div className="min-w-0 leading-6">
         {title && <p className="font-bold">{title}</p>}
-        <div>{children}</div>
+        <div>{children && typeof children === 'object' && !isValidElement(children) && !Array.isArray(children) ? flattenErrors(children).map((issue) => `${fieldLabel(issue.field)}: ${issue.message}`).join(' ') : children}</div>
       </div>
     </div>
   );

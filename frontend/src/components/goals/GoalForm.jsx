@@ -1,3 +1,4 @@
+import Form from '../forms/Form.jsx';
 import { useMemo, useState } from 'react';
 import Button from '../ui/Button.jsx';
 import Input from '../ui/Input.jsx';
@@ -52,11 +53,11 @@ export default function GoalForm({
       target_value: Number(form.target_value),
       current_value: Number(form.current_value || 0),
     };
-    onSubmit(payload);
+    return onSubmit(payload);
   };
 
   return (
-    <form className="space-y-5" onSubmit={submit}>
+    <Form draft={{ key: 'goal.new', title: 'Goal', data: form, onRestore: setForm }} className="space-y-5" onSubmit={submit}>
       <div className="grid gap-4 md:grid-cols-2">
         <div className="md:col-span-2">
           <Input
@@ -181,6 +182,6 @@ export default function GoalForm({
           {loading ? 'Creating…' : 'Create goal'}
         </Button>
       </div>
-    </form>
+    </Form>
   );
 }

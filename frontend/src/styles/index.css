@@ -318,3 +318,6 @@ textarea {
     animation: none;
   }
 }
+
+/* Contextual validation retains the existing control layout. */
+[data-form-invalid="true"] { border-color: #dc2626 !important; outline: 2px solid #fecaca; outline-offset: 1px; }

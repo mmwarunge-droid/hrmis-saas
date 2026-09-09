@@ -1,3 +1,4 @@
+import Form from '../forms/Form.jsx';
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
@@ -177,7 +178,7 @@ export default function LeaveSetupPanel({
           </div>
         </div>
 
-        <form
+        <Form
           onSubmit={saveGovernance}
           className="mt-5 grid gap-4 md:grid-cols-2"
         >
@@ -236,7 +237,7 @@ export default function LeaveSetupPanel({
               Save approval governance
             </Button>
           </div>
-        </form>
+        </Form>
       </Card>
 
       <Card>

@@ -1,3 +1,4 @@
+import Form from '../components/forms/Form.jsx';
 import { useEffect, useState } from 'react';
 import {
   Camera,
@@ -108,6 +109,7 @@ export default function MyProfile() {
       setMessage('Your profile has been updated.');
     } catch (err) {
       setError(err.error?.message || 'Your profile could not be updated.');
+      return { success: false, error: err };
     } finally {
       setSaving(false);
     }
@@ -207,7 +209,7 @@ export default function MyProfile() {
         </div>
       </Card>
 
-      <form onSubmit={save} className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
+      <Form draft={{ key: `profile.${viewer?.id || 'me'}`, title: 'My profile', data: form, onRestore: setForm }} onSubmit={save} className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
         <Card>
           <div className="flex items-center gap-3">
             <span className="grid h-11 w-11 place-items-center rounded-lg bg-blue-50 text-blue-700">
@@ -336,7 +338,7 @@ export default function MyProfile() {
             Colleagues never see your birth year. Gender and hobbies are used only in privacy-protected organization totals.
           </p>
         </Card>
-      </form>
+      </Form>
     </div>
   );
 }

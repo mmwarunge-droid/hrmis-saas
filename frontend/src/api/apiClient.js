@@ -1,3 +1,4 @@
+import { requestWorkflow, workflowRequest, workflowResponse, normalizeApiError, hasUnsavedWork, notifySessionExpiry } from '../utils/formFeedback.js';
 import axios from 'axios';
 
 import { withActiveTenantParams } from '../utils/tenantScope.js';
@@ -33,6 +34,10 @@ const apiClient = axios.create({
 });
 
 apiClient.interceptors.request.use((config) => {
+  if (!config.skipWorkflowFeedback) {
+    config.workflowOwner = requestWorkflow(config.method?.toLowerCase());
+    workflowRequest(config.workflowOwner, config.method);
+  }
   config.params = withActiveTenantParams(
     config.url,
     config.params,
@@ -52,24 +57,24 @@ apiClient.interceptors.request.use((config) => {
   }
 
   return config;
-});
+}, undefined, { synchronous: true });
 
 apiClient.interceptors.response.use(
-  (response) => response.data,
+  (response) => {
+    workflowResponse(response.config?.workflowOwner, null, response.data);
+    return response.data;
+  },
   (error) => {
-    const payload = error.response?.data || {
-      success: false,
-      error: {
-        code: error.code === 'ECONNABORTED' ? 'REQUEST_TIMEOUT' : 'NETWORK_ERROR',
-        message: error.code === 'ECONNABORTED' ? 'The request timed out' : error.message,
-      },
-    };
-
+    let payload = normalizeApiError(error);
     if (shouldHandleSessionExpiry(error)) {
-      signalSessionExpired();
-      return Promise.reject(sessionExpiredPayload(payload));
+      if (hasUnsavedWork() || error.config?.workflowOwner) {
+        notifySessionExpiry(payload);
+      } else {
+        signalSessionExpired();
+        payload = sessionExpiredPayload(payload);
+      }
     }
-
+    workflowResponse(error.config?.workflowOwner, payload);
     return Promise.reject(payload);
   },
 );

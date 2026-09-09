@@ -1,3 +1,4 @@
+import Form from '../components/forms/Form.jsx';
 import { useEffect, useState } from 'react';
 import { Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { authApi } from '../api/authApi';
@@ -48,6 +49,7 @@ export default function MfaChallenge() {
       }
     } catch (err) {
       setError(err.error?.message || 'The authentication code was not accepted.');
+      return { success: false, error: err };
     } finally {
       setLoading(false);
     }
@@ -80,7 +82,7 @@ export default function MfaChallenge() {
           <p className="break-all rounded-lg bg-slate-100 p-3 text-center font-mono text-sm">{enrollment.manual_key}</p>
         </div>
       )}
-      <form onSubmit={submit} className="mt-5 space-y-4">
+      <Form onSubmit={submit} className="mt-5 space-y-4">
         <Input
           label={enrollmentRequired ? 'Six-digit authenticator code' : 'Authenticator or recovery code'}
           value={code}
@@ -92,7 +94,7 @@ export default function MfaChallenge() {
         <Button className="w-full" disabled={loading || (enrollmentRequired && !enrollment)}>
           {loading ? 'Verifying...' : enrollmentRequired ? 'Enable MFA' : 'Verify'}
         </Button>
-      </form>
+      </Form>
     </Card>
   );
 }

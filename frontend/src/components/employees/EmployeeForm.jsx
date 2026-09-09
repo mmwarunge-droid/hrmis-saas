@@ -1,3 +1,4 @@
+import Form from '../forms/Form.jsx';
 import { useRef, useState } from 'react';
 import Button from '../ui/Button.jsx';
 import Input from '../ui/Input.jsx';
@@ -124,7 +125,7 @@ export default function EmployeeForm({
       payload.change_effective_date = form.change_effective_date || null;
       payload.change_reason = form.change_reason.trim() || null;
     }
-    onSubmit(payload);
+    return onSubmit(payload);
   };
 
   const managerOptions = employees.filter(
@@ -134,7 +135,7 @@ export default function EmployeeForm({
   const activeDepartments = departments.filter((department) => !department.archived);
 
   return (
-    <form id={formId} onSubmit={submit} className="grid gap-4 md:grid-cols-2">
+    <Form draft={{ key: `employee.${initialValues?.id || 'new'}`, title: 'Employee details', data: form, onRestore: setForm }} id={formId} onSubmit={submit} className="grid gap-4 md:grid-cols-2">
       {error ? (
         <div className="md:col-span-2">
           <Alert type="error">{error}</Alert>
@@ -244,6 +245,6 @@ export default function EmployeeForm({
         </Button>
       </div>
       ) : null}
-    </form>
+    </Form>
   );
 }
