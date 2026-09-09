@@ -656,10 +656,10 @@ export default function EmployeeDetails() {
         ) : null}
       </Modal>
 
-      <Modal title={`Provision access for ${employee.full_name}`} description="Create a linked Kinetic account for this employee record." open={accessOpen} onClose={() => setAccessOpen(false)} size="lg">
+      <Modal error={error} title={`Provision access for ${employee.full_name}`} description="Create a linked Kinetic account for this employee record." open={accessOpen} onClose={() => setAccessOpen(false)} size="lg">
         <EmployeeAccessForm employee={employee} onSubmit={provisionAccess} loading={accessSaving} />
       </Modal>
-      <Modal title={`Link existing account to ${employee.full_name}`} description="Connect a tenant user to this employee record without creating another identity." open={linkOpen} onClose={() => setLinkOpen(false)} size="lg">
+      <Modal error={error} title={`Link existing account to ${employee.full_name}`} description="Connect a tenant user to this employee record without creating another identity." open={linkOpen} onClose={() => setLinkOpen(false)} size="lg">
         <EmployeeAccountLinkForm employee={employee} users={userOptions} onSubmit={linkAccount} loading={linkSaving} />
       </Modal>
     </div>

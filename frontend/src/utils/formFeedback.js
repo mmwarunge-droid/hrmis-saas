@@ -11,11 +11,21 @@ export function captureWorkflow(id) {
   current = id;
   queueMicrotask(() => { if (sequence === turn) current = null; });
 }
-export function requestWorkflow(method) {
+export function requestWorkflow(_method) {
   if (current && owners.has(current)) return current;
-  if (!['post', 'put', 'patch', 'delete'].includes(method)) return null;
   const submitting = [...owners.entries()].filter(([, owner]) => owner.submitting?.());
-  return submitting.length === 1 ? submitting[0][0] : null;
+  if (submitting.length === 1) return submitting[0][0];
+  // After await, the original event turn has ended. Keep feedback in the
+  // foreground workflow, including GET-based preflight validation.
+  if (typeof document !== 'undefined') {
+    const dialogs = document.querySelectorAll('[data-modal-overlay]');
+    const dialog = dialogs[dialogs.length - 1];
+    const active = document.activeElement;
+    const element = dialog && !dialog.contains(active) ? dialog : active?.closest?.('[data-workflow-owner]');
+    const ownerId = element?.getAttribute('data-workflow-owner');
+    if (ownerId && owners.has(ownerId)) return ownerId;
+  }
+  return null;
 }
 export function workflowRequest(id, method) { owners.get(id)?.start?.(method); }
 export function workflowResponse(id, error, response) { owners.get(id)?.settle?.(error, response); }

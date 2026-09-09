@@ -52,7 +52,7 @@ Migration `036_private_form_drafts` creates `form_drafts`. Drafts are scoped to 
 
 The UI supports explicit Save draft, last-saved timestamps, an indication of newer unsaved changes, resume, discard and reload after a conflict/failure. A saved candidate is never automatically substituted for current entries. Existing saved work must be resumed or discarded before submitting a replacement. Saving failures keep the form and entries open. Successful submission attempts to remove its preparation draft.
 
-Draft persistence uses the server, not localStorage/sessionStorage. Automatic background saving is not enabled: users explicitly save meaningful progress. A browser/process crash can only recover the last explicit save; local attachment bytes require reselection.
+Draft persistence uses the server, not localStorage/sessionStorage. Draft-enabled forms now save after a 1.2-second pause in editing. Autosave waits for the existing draft to load, pauses for submission/exit confirmation, and stops after an error until the user retries. It never overwrites an unopened saved draft. Explicit saving remains available. A browser/process crash can only recover the last successful save; local attachment bytes require reselection.
 
 ## Signing workflow
 
@@ -64,7 +64,7 @@ New preparation drafts can be edited in full. Older send-ready `SignatureRequest
 
 ## Verification
 
-- Frontend regression suite: 210 tests passed across 70 files.
+- Frontend regression suite: 214 tests passed across 70 files after the corrective follow-up.
 - New tests exercise 400/422/401/403/500, network loss, timeout, native required fields, double submission, X/Cancel/Escape/backdrop, browser Back, continue/discard, failed draft saving, incomplete draft saving without execution, multi-signer/field recovery after remount, public authentication errors, and retaining drafts when an intermediate upload succeeds but the overall workflow fails.
 - Backend full regression suite passed (318 passed, 4 skipped at that run), followed by the expanded six-test draft suite covering revisions, owner isolation, selected-organization isolation, stale-account rejection, authentication and invalid/oversized content.
 - Frontend lint and production build passed; new backend files pass Ruff.
@@ -76,3 +76,13 @@ New preparation drafts can be edited in full. Older send-ready `SignatureRequest
 Apply migration 036 before deploying the frontend that uses private drafts. Existing workflows continue using their current tables. No notification/provider credentials or infrastructure changes are needed. Keep the migration when rolling back only the frontend; downgrading 036 deletes stored preparation drafts.
 
 Before production release, exercise one HR signing draft through Save → Leave → Resume → Send using two employee accounts, then validate signing completion and employee-file storage. Also exercise a network failure and an expired session in the deployed browser environment.
+
+## Corrective follow-up after the first release
+
+The previous shared implementation had gaps that could reproduce hidden or confusing feedback. Delayed actions lost their event-turn ownership; several single-line modal declarations omitted the parent error; newly created error objects repeatedly moved focus while typing; empty feedback components cleared highlights belonging to another summary; and global toasts shared the modal z-index.
+
+The correction retains the existing Form, Modal, Axios interceptor and private draft API. Submitting forms retain ownership across asynchronous steps, with a foreground-modal fallback for other actions. Field errors now include adjacent messages and preserve accessible names. Only the owning summary clears its highlights. Errors behind another dialog do not steal focus, Escape affects the foreground modal, and toasts render above the dialog.
+
+Autosave uses the existing revision checks and serial save queue. Canonical snapshots avoid false changes from JSON key ordering. Unopened drafts are not overwritten; discarded or completed drafts are not immediately recreated; reverting a field to its initial value is saved correctly. Confirmation disables the editing controls while keeping all three exit choices available. No additional database migration is required.
+
+Verification includes the frontend regression suite and a local Chromium acceptance run with mocked APIs: long-form 422 feedback is visible inside the modal, fields retain their values and focus, autosave does not submit, and Save Draft & Exit restores the exact saved values on reopening. This browser run did not use live employee accounts or modify production data.

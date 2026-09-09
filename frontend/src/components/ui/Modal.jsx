@@ -33,6 +33,7 @@ export default function Modal({
   const closeRef = useRef(onClose); useEffect(() => { closeRef.current = onClose; }, [onClose]);
   const [feedback, setFeedback] = useState(null);
   const pending = useRef(0);
+  const externalFeedback = useMemo(() => error ? errorState(error) : null, [error]);
   const context = useMemo(() => ({ register: (id, guard) => {
     guards.current.set(id, guard); return () => guards.current.delete(id);
   } }), []);
@@ -60,6 +61,8 @@ export default function Modal({
     document.body.style.overflow = 'hidden';
 
     const handleKeyDown = (event) => {
+      const dialogs = document.querySelectorAll('[data-modal-overlay]');
+      if (dialogs[dialogs.length - 1] !== panelRef.current?.parentElement) return;
       if (event.key === 'Escape') {
         requestCloseRef.current();
         return;
@@ -136,6 +139,7 @@ export default function Modal({
         }
         if (!event.target.closest?.('form')) captureWorkflow(titleId);
       }}
+      data-workflow-owner={titleId}
       data-modal-overlay
       className="
         fixed inset-0 z-[100]
@@ -232,7 +236,7 @@ export default function Modal({
           "
         >
           <WorkflowContext.Provider value={context}>
-            <WorkflowFeedback state={feedback || (error ? errorState(error) : null)} rootRef={panelRef} />
+            <WorkflowFeedback state={externalFeedback || feedback} rootRef={panelRef} />
             {children}
           </WorkflowContext.Provider>
         </div>

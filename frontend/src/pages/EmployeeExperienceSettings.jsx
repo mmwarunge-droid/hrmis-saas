@@ -622,7 +622,7 @@ export default function EmployeeExperienceSettings() {
         </div>
       </Card>
 
-      <Modal title={editingEventId ? 'Edit organization event' : 'Create organization event'} open={eventOpen} onClose={() => setEventOpen(false)} size="xl">
+      <Modal error={error} title={editingEventId ? 'Edit organization event' : 'Create organization event'} open={eventOpen} onClose={() => setEventOpen(false)} size="xl">
         <Form draft={{ key: `event.${editingEventId || 'new'}`, title: 'Employee event', data: eventForm, onRestore: setEventForm }} className="space-y-5" onSubmit={saveEvent}>
           <div className="grid gap-4 md:grid-cols-2">
             <Input label="Event title" required value={eventForm.title} onChange={(event) => setEventForm((current) => ({ ...current, title: event.target.value }))} />

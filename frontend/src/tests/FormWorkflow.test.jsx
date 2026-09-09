@@ -123,3 +123,59 @@ it('does not clear a draft when an intermediate upload succeeds but the workflow
   expect(screen.getByLabelText('Full name')).toHaveValue('Keep this workflow');
   expect(screen.queryByText('Changes saved successfully.')).not.toBeInTheDocument();
 });
+
+it('shows an asynchronous modal action failure after event capture has ended', async () => {
+  apiClient.defaults.adapter = async (config) => { throw { config, response: { status: 422, data: { error: { message: 'Choose a signatory with an email address.' } } } }; };
+  render(<Modal open title="Prepare signing" onClose={() => {}}><button type="button" onClick={async () => {
+    await Promise.resolve(); await Promise.resolve();
+    try { await apiClient.get('/employees/validate'); } catch { /* legacy page catches it */ }
+  }}>Validate signatories</button></Modal>);
+  fireEvent.click(screen.getByText('Validate signatories'));
+  expect(await within(screen.getByRole('dialog')).findByRole('alert')).toHaveTextContent('Choose a signatory');
+});
+
+it('automatically saves changed draft data and does not submit it', async () => {
+  vi.spyOn(formDraftApi, 'get').mockResolvedValue({ data: {} });
+  const save = vi.spyOn(formDraftApi, 'save').mockImplementation(async (key, payload) => ({ data: { key, ...payload, revision: payload.revision + 1, updated_at: '2026-09-09T11:42:00Z' } }));
+  const submit = vi.fn();
+  render(<AuthContext.Provider value={{ user: { id: 'owner' } }}><Example drafts submit={submit} /></AuthContext.Provider>);
+  await act(async () => {});
+  expect(save).not.toHaveBeenCalled();
+  fireEvent.change(screen.getByLabelText('Full name'), { target: { value: 'Autosaved employee' } });
+  await waitFor(() => expect(save).toHaveBeenCalledTimes(1), { timeout: 3000 });
+  expect(save.mock.calls[0][1].data.name).toBe('Autosaved employee');
+  expect(submit).not.toHaveBeenCalled();
+  // Reverting to the initial value must replace the older saved value too.
+  fireEvent.change(screen.getByLabelText('Full name'), { target: { value: '' } });
+  await waitFor(() => expect(save).toHaveBeenCalledTimes(2), { timeout: 3000 });
+  expect(save.mock.calls[1][1].data.name).toBe('');
+});
+
+it('does not overwrite an existing draft or recreate it immediately after discard', async () => {
+  vi.spyOn(formDraftApi, 'get').mockResolvedValue({ data: { key: 'employee.new', revision: 3, data: { name: 'Older saved work' }, updated_at: '2026-09-09T11:42:00Z' } });
+  const save = vi.spyOn(formDraftApi, 'save');
+  const discard = vi.spyOn(formDraftApi, 'discard').mockResolvedValue({ data: {} });
+  render(<AuthContext.Provider value={{ user: { id: 'owner' } }}><Example drafts /></AuthContext.Provider>);
+  await screen.findByText('Resume draft');
+  fireEvent.change(screen.getByLabelText('Full name'), { target: { value: 'New unsaved entries' } });
+  await act(async () => { await new Promise(resolve => setTimeout(resolve, 1300)); });
+  expect(save).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByText('Discard saved draft'));
+  await waitFor(() => expect(discard).toHaveBeenCalled());
+  await act(async () => { await new Promise(resolve => setTimeout(resolve, 1300)); });
+  expect(save).not.toHaveBeenCalled();
+  expect(screen.getByLabelText('Full name')).toHaveValue('New unsaved entries');
+});
+
+it('does not pull focus away while correcting an external form error', async () => {
+  function ExternalError() {
+    const [value, setValue] = useState('');
+    return <Form error="Please correct your name." onSubmit={() => {}}><Input label="Name to correct" value={value} onChange={e => setValue(e.target.value)} /></Form>;
+  }
+  render(<ExternalError />);
+  const input=screen.getByLabelText('Name to correct');
+  input.focus();
+  fireEvent.change(input, { target: { value: 'Correction' } });
+  expect(input).toHaveFocus();
+  expect(screen.getByRole('alert')).toBeVisible();
+});
