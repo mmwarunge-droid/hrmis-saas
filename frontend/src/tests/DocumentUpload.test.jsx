@@ -63,4 +63,32 @@ describe('DocumentUpload', () => {
     expect(submitted.get('title')).toBe('Board resolution');
     expect(submitted.get('file')).toBe(file);
   });
+    it('provides accessible document type and file controls', () => {
+    render(
+      <DocumentUpload
+        onSubmit={vi.fn()}
+      />,
+    );
+
+    expect(
+      screen.getByLabelText('Document type'),
+    ).toHaveValue('contract');
+
+    expect(
+      screen.getByLabelText('Choose file'),
+    ).toHaveAttribute('type', 'file');
+
+    expect(
+      screen.getByLabelText('Choose file'),
+    ).toHaveAttribute(
+      'accept',
+      '.pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg,.txt',
+    );
+
+    expect(
+      screen.getByText(
+        'PDF, Word, Excel, PNG, JPEG, or text. Uploaded files are initially visible to HR only.',
+      ),
+    ).toBeInTheDocument();
+  });
 });
