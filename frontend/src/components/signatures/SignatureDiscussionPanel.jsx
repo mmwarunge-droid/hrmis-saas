@@ -290,7 +290,7 @@ export default function SignatureDiscussionPanel({
           <p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">
             Thread
           </p>
-          <p className="mt-1 text-sm font-semibold text-slate-900">
+          <p className="mt-1 break-words text-sm font-semibold text-slate-900">
             {discussion.subject}
           </p>
           {discussion.signer_name && (
