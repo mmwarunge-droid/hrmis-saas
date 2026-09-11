@@ -433,3 +433,65 @@ test(
     expect(subject).toHaveClass('break-words');
   },
 );
+
+test(
+  'reloads the discussion when its refresh key changes',
+  async () => {
+    const declineReason = (
+      'Contract terms need revision before I can sign.'
+    );
+
+    signatureApi.discussion
+      .mockResolvedValueOnce({
+        data: discussionPayload({
+          comments: [],
+        }),
+      })
+      .mockResolvedValueOnce({
+        data: discussionPayload({
+          comments: [
+            comment({
+              id: 'decline-comment',
+              authorUserId: 'user-me',
+              authorName: 'Current Employee',
+              body: declineReason,
+            }),
+          ],
+        }),
+      });
+
+    const { rerender } = render(
+      <MemoryRouter>
+        <SignatureDiscussionPanel
+          recipientId="recipient-1"
+          allowResolve
+          refreshKey="viewed"
+        />
+      </MemoryRouter>,
+    );
+
+    await screen.findByText('Discussion');
+
+    expect(
+      signatureApi.discussion,
+    ).toHaveBeenCalledTimes(1);
+
+    rerender(
+      <MemoryRouter>
+        <SignatureDiscussionPanel
+          recipientId="recipient-1"
+          allowResolve
+          refreshKey="declined"
+        />
+      </MemoryRouter>,
+    );
+
+    expect(
+      await screen.findByText(declineReason),
+    ).toBeInTheDocument();
+
+    expect(
+      signatureApi.discussion,
+    ).toHaveBeenCalledTimes(2);
+  },
+);

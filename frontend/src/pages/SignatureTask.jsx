@@ -906,6 +906,7 @@ export default function SignatureTask() {
             <SignatureDiscussionPanel
               recipientId={recipientId}
               allowResolve
+              refreshKey={task?.status}
             />
           </aside>
         </div>

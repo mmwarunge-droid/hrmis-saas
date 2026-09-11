@@ -47,6 +47,7 @@ export default function SignatureDiscussionPanel({
   recipientId,
   allowResolve = false,
   compact = false,
+  refreshKey,
 }) {
   const { user } = useAuth();
 
@@ -88,7 +89,7 @@ export default function SignatureDiscussionPanel({
     return () => {
       active = false;
     };
-  }, [load]);
+  }, [load, refreshKey]);
 
   useEffect(() => {
     if (!mention || mention.query.length < 2) {
