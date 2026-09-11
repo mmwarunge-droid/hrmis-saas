@@ -350,7 +350,7 @@ def test_mentioned_employee_gets_discussion_only_access(
         )
         assert owner_notification is not None
         assert owner_notification.action_url == (
-            f'/signature-tasks/{recipient_id}'
+            f'/signature-discussions/{recipient_id}'
         )
 
     follow_up = client.post(

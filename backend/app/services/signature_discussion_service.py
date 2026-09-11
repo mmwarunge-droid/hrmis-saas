@@ -334,9 +334,7 @@ def _notify_comment(
             notification_type='signature_discussion',
             priority='normal',
             action_url=(
-                f'/signature-tasks/{recipient.id}'
-                if has_task_access
-                else f'/signature-discussions/{recipient.id}'
+                f'/signature-discussions/{recipient.id}'
             ),
             metadata={
                 'signature_request_id': str(request.id),
