@@ -228,8 +228,8 @@ export default function Documents() {
           )
           : (
             `${response.data.subject} was sent to `
-            + `${response.data.recipient_count} signatory`
-            + `${response.data.recipient_count === 1 ? '' : 'ies'}.`
+            + `${response.data.recipient_count} `
+            + `${response.data.recipient_count === 1 ? 'signatory' : 'signatories'}.`
           ),
       );
 

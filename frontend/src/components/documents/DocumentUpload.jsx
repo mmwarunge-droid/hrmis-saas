@@ -1,7 +1,9 @@
-import Form from '../forms/Form.jsx';
 import { useState } from 'react';
+
+import Form from '../forms/Form.jsx';
 import Button from '../ui/Button.jsx';
 import Input from '../ui/Input.jsx';
+import Select from '../ui/Select.jsx';
 
 export default function DocumentUpload({
   onSubmit,
@@ -17,49 +19,102 @@ export default function DocumentUpload({
     expiry_date: '',
   });
   const [file, setFile] = useState(null);
-  const submit = (e) => {
-    e.preventDefault();
+
+  const submit = (event) => {
+    event.preventDefault();
+
     const data = new FormData();
-    Object.entries(form).forEach(([key, value]) => value && data.append(key, value));
+
+    Object.entries(form).forEach(([key, value]) => {
+      if (value) data.append(key, value);
+    });
+
     if (file) data.append('file', file);
+
     return onSubmit(data);
   };
+
   return (
-    <Form draft={{ key: 'document.upload', title: 'Upload document', data: form, onRestore: setForm }} onSubmit={submit} className="space-y-4">
+    <Form
+      draft={{
+        key: 'document.upload',
+        title: 'Upload document',
+        data: form,
+        onRestore: setForm,
+      }}
+      onSubmit={submit}
+      className="space-y-4"
+    >
       {isSuperAdmin && (
-        <label className="block space-y-1">
-          <span className="text-sm font-medium text-slate-700">
-            Organization
-          </span>
-          <select
-            aria-label="Organization"
-            value={form.tenant_id}
-            onChange={(event) => setForm({
-              ...form,
-              tenant_id: event.target.value,
-            })}
-            required
-            disabled={tenants.length === 0}
-            className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-100 disabled:bg-slate-100"
-          >
-            <option value="">
-              {tenants.length
-                ? 'Select organization'
-                : 'No organizations available'}
+        <Select
+          label="Organization"
+          value={form.tenant_id}
+          onChange={(event) => setForm({
+            ...form,
+            tenant_id: event.target.value,
+          })}
+          required
+          disabled={tenants.length === 0}
+        >
+          <option value="">
+            {tenants.length
+              ? 'Select organization'
+              : 'No organizations available'}
+          </option>
+
+          {tenants.map((tenant) => (
+            <option key={tenant.id} value={tenant.id}>
+              {tenant.name}
             </option>
-            {tenants.map((tenant) => (
-              <option key={tenant.id} value={tenant.id}>
-                {tenant.name}
-              </option>
-            ))}
-          </select>
-        </label>
+          ))}
+        </Select>
       )}
 
-      <Input label="Title" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} required />
-      <select className="w-full rounded-xl border border-slate-200 px-3 py-2" value={form.document_type} onChange={(e) => setForm({ ...form, document_type: e.target.value })}><option value="contract">Contract</option><option value="policy">Policy</option><option value="tax">Tax</option><option value="certification">Certification</option><option value="id">ID</option><option value="other">Other</option></select>
-      <Input label="Expiry date" type="date" value={form.expiry_date} onChange={(e) => setForm({ ...form, expiry_date: e.target.value })} />
-      <input type="file" onChange={(e) => setFile(e.target.files[0])} required className="block w-full text-sm" />
+      <Input
+        label="Title"
+        value={form.title}
+        onChange={(event) => setForm({
+          ...form,
+          title: event.target.value,
+        })}
+        required
+      />
+
+      <Select
+        label="Document type"
+        value={form.document_type}
+        onChange={(event) => setForm({
+          ...form,
+          document_type: event.target.value,
+        })}
+      >
+        <option value="contract">Contract</option>
+        <option value="policy">Policy</option>
+        <option value="tax">Tax</option>
+        <option value="certification">Certification</option>
+        <option value="id">ID</option>
+        <option value="other">Other</option>
+      </Select>
+
+      <Input
+        label="Expiry date"
+        type="date"
+        value={form.expiry_date}
+        onChange={(event) => setForm({
+          ...form,
+          expiry_date: event.target.value,
+        })}
+      />
+
+      <Input
+        label="Choose file"
+        type="file"
+        accept=".pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg,.txt"
+        hint="PDF, Word, Excel, PNG, JPEG, or text. Uploaded files are initially visible to HR only."
+        onChange={(event) => setFile(event.target.files[0])}
+        required
+      />
+
       <Button type="submit" disabled={loading}>
         {loading ? 'Uploading...' : 'Upload document'}
       </Button>

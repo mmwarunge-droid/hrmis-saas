@@ -24,6 +24,7 @@ export default function Navbar({ onMenu }) {
   const [searchOpen, setSearchOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const menuRef = useRef(null);
+  const profileTriggerRef = useRef(null);
   const title = getPageTitle(location.pathname);
 
   useEffect(() => {
@@ -36,6 +37,22 @@ export default function Navbar({ onMenu }) {
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, []);
+
+  useEffect(() => {
+    if (!profileOpen) return undefined;
+
+    const handleEscape = (event) => {
+      if (event.key !== 'Escape') return;
+
+      event.preventDefault();
+      setProfileOpen(false);
+      profileTriggerRef.current?.focus();
+    };
+
+    document.addEventListener('keydown', handleEscape);
+
+    return () => document.removeEventListener('keydown', handleEscape);
+  }, [profileOpen]);
 
   useEffect(() => {
     const closeMenus = (event) => {
@@ -83,9 +100,11 @@ export default function Navbar({ onMenu }) {
             <NotificationMenu />
             <div className="relative ml-1 border-l border-slate-200 pl-2">
               <button
+                ref={profileTriggerRef}
                 type="button"
                 onClick={() => setProfileOpen((value) => !value)}
                 className="flex items-center gap-2 rounded-lg p-1 pr-1.5 text-left hover:bg-slate-100"
+                aria-label="Account options"
                 aria-expanded={profileOpen}
               >
                 <Avatar name={user?.full_name} size="sm" />

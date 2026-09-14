@@ -411,3 +411,87 @@ test(
     ).not.toHaveBeenCalled();
   },
 );
+
+test(
+  'allows long discussion subjects to wrap within the thread card',
+  async () => {
+    const longSubject = (
+      'EMPLOYMENT_CONTRACT_RENEWAL_FOR_SENIOR_OPERATIONS_MANAGER_'
+      + 'WITH_EXTENDED_PROBATION_AND_RELOCATION_TERMS'
+    );
+
+    signatureApi.discussion.mockResolvedValue({
+      data: discussionPayload({
+        subject: longSubject,
+      }),
+    });
+
+    renderPanel();
+
+    const subject = await screen.findByText(longSubject);
+
+    expect(subject).toHaveClass('break-words');
+  },
+);
+
+test(
+  'reloads the discussion when its refresh key changes',
+  async () => {
+    const declineReason = (
+      'Contract terms need revision before I can sign.'
+    );
+
+    signatureApi.discussion
+      .mockResolvedValueOnce({
+        data: discussionPayload({
+          comments: [],
+        }),
+      })
+      .mockResolvedValueOnce({
+        data: discussionPayload({
+          comments: [
+            comment({
+              id: 'decline-comment',
+              authorUserId: 'user-me',
+              authorName: 'Current Employee',
+              body: declineReason,
+            }),
+          ],
+        }),
+      });
+
+    const { rerender } = render(
+      <MemoryRouter>
+        <SignatureDiscussionPanel
+          recipientId="recipient-1"
+          allowResolve
+          refreshKey="viewed"
+        />
+      </MemoryRouter>,
+    );
+
+    await screen.findByText('Discussion');
+
+    expect(
+      signatureApi.discussion,
+    ).toHaveBeenCalledTimes(1);
+
+    rerender(
+      <MemoryRouter>
+        <SignatureDiscussionPanel
+          recipientId="recipient-1"
+          allowResolve
+          refreshKey="declined"
+        />
+      </MemoryRouter>,
+    );
+
+    expect(
+      await screen.findByText(declineReason),
+    ).toBeInTheDocument();
+
+    expect(
+      signatureApi.discussion,
+    ).toHaveBeenCalledTimes(2);
+  },
+);

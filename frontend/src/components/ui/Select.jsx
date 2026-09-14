@@ -1,18 +1,34 @@
 import { useId } from 'react';
 
-export default function Select({ label, error, hint, className = '', children, id, required, ...props }) {
+export default function Select({
+  label,
+  error,
+  hint,
+  className = '',
+  children,
+  id,
+  required,
+  ...props
+}) {
   const generatedId = useId();
   const selectId = id || generatedId;
   const messageId = `${selectId}-message`;
 
   return (
-    <label htmlFor={selectId} className="block space-y-1.5">
+    <div className="block space-y-1.5">
       {label && (
-        <span className="flex items-center gap-1 text-[13px] font-semibold text-slate-700">
+        <label
+          htmlFor={selectId}
+          className={`flex items-center gap-1 text-[13px] font-semibold text-slate-700 ${
+            required
+              ? "after:ml-1 after:text-red-600 after:content-['*']"
+              : ''
+          }`}
+        >
           {label}
-          {required && <span className="text-red-600" aria-hidden="true">*</span>}
-        </span>
+        </label>
       )}
+
       <select
         id={selectId}
         required={required}
@@ -27,11 +43,17 @@ export default function Select({ label, error, hint, className = '', children, i
       >
         {children}
       </select>
+
       {(error || hint) && (
-        <span id={messageId} className={`block text-xs leading-5 ${error ? 'text-red-600' : 'text-slate-500'}`}>
+        <span
+          id={messageId}
+          className={`block text-xs leading-5 ${
+            error ? 'text-red-600' : 'text-slate-500'
+          }`}
+        >
           {error || hint}
         </span>
       )}
-    </label>
+    </div>
   );
 }

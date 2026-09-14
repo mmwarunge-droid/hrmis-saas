@@ -8,6 +8,7 @@ import {
 
 import { documentApi } from '../api/documentApi.js';
 import { employeeApi } from '../api/employeeApi.js';
+import { signatureApi } from '../api/signatureApi.js';
 import { tenantApi } from '../api/tenantApi.js';
 import usePermissions from '../hooks/usePermissions.js';
 import Documents from '../pages/Documents.jsx';
@@ -16,6 +17,23 @@ vi.mock(
   '../components/documents/SignatureFieldPlacement.jsx',
   () => ({
     default: () => null,
+  }),
+);
+
+vi.mock(
+  '../components/documents/SignatureRequestForm.jsx',
+  () => ({
+    default: ({ document, onSubmit }) => (
+      <button
+        type="button"
+        onClick={() => onSubmit({
+          document_id: document.id,
+          recipients: [{ user_id: 'employee-1' }],
+        })}
+      >
+        Submit mocked signature request
+      </button>
+    ),
   }),
 );
 
@@ -272,4 +290,65 @@ test('allows a new request after a document workflow has expired', async () => {
   expect(
     screen.getByText('Send document for signature'),
   ).toBeInTheDocument();
+});
+
+test('uses correct plural wording after sending a signature request', async () => {
+  usePermissions.mockReturnValue({
+    hasPermission: (permission) => permission === 'document:approve',
+    hasRole: () => false,
+  });
+
+  documentApi.list.mockResolvedValue({
+    data: {
+      items: [{
+        ...document(1),
+        signature_status: 'expired',
+      }],
+      meta: {
+        page: 1,
+        per_page: 15,
+        total: 1,
+        pages: 1,
+      },
+    },
+  });
+
+  signatureApi.create.mockResolvedValue({
+    data: {
+      status: 'sent',
+      assurance_level: 'ses',
+      subject: 'Employment contract',
+      recipient_count: 2,
+    },
+  });
+
+  render(
+    <MemoryRouter>
+      <Documents />
+    </MemoryRouter>,
+  );
+
+  fireEvent.click(
+    await screen.findByRole(
+      'button',
+      { name: 'Send for signature' },
+    ),
+  );
+
+  fireEvent.click(
+    screen.getByRole(
+      'button',
+      { name: 'Submit mocked signature request' },
+    ),
+  );
+
+  expect(
+    await screen.findByText(
+      'Employment contract was sent to 2 signatories.',
+    ),
+  ).toBeInTheDocument();
+
+  expect(
+    screen.queryByText(/signatoryies/i),
+  ).not.toBeInTheDocument();
 });

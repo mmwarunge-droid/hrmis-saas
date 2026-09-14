@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { MemoryRouter } from 'react-router-dom';
 import Tabs from '../components/ui/Tabs.jsx';
 import NotFound from '../pages/NotFound.jsx';
+import Unauthorized from '../pages/Unauthorized.jsx';
 
 function TabFixture() {
   const [value, setValue] = useState('overview');
@@ -58,4 +59,21 @@ test('unknown routes provide a recoverable not-found experience', () => {
 
   expect(screen.getByRole('heading', { name: /page is not available/i })).toBeInTheDocument();
   expect(screen.getByRole('link', { name: /open home/i })).toHaveAttribute('href', '/dashboard');
+});
+
+
+test('unauthorized routes provide a recoverable access-denied experience', () => {
+  render(
+    <MemoryRouter>
+      <Unauthorized />
+    </MemoryRouter>,
+  );
+
+  expect(
+    screen.getByRole('heading', { name: /you do not have access/i }),
+  ).toBeInTheDocument();
+
+  expect(
+    screen.getByRole('link', { name: /open home/i }),
+  ).toHaveAttribute('href', '/dashboard');
 });

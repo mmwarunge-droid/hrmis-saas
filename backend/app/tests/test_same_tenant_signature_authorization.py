@@ -350,7 +350,7 @@ def test_mentioned_employee_gets_discussion_only_access(
         )
         assert owner_notification is not None
         assert owner_notification.action_url == (
-            f'/signature-tasks/{recipient_id}'
+            f'/signature-discussions/{recipient_id}'
         )
 
     follow_up = client.post(
@@ -738,3 +738,34 @@ def test_plain_text_mention_cannot_grant_discussion_access(
     )
 
     assert discussion_response.status_code == 403
+
+def test_recipient_decline_reason_is_recorded_in_discussion(
+    app,
+    client,
+    tenant,
+):
+    seeded = _seed_multisigner_request(app, tenant.id)
+    headers = _login(client, seeded['signer_b_email'])
+    recipient_id = seeded['recipient_b_id']
+    reason = 'Contract terms need revision before I can sign.'
+
+    declined = client.patch(
+        f'/api/signature-requests/recipients/{recipient_id}/decline',
+        headers=headers,
+        json={'reason': reason},
+    )
+
+    assert declined.status_code == 200
+    assert declined.json['data']['status'] == 'declined'
+
+    with app.app_context():
+        discussion = SignatureDiscussion.query.filter_by(
+            recipient_id=recipient_id,
+        ).one()
+
+        comments = SignatureDiscussionComment.query.filter_by(
+            discussion_id=discussion.id,
+        ).all()
+
+        assert [comment.body for comment in comments] == [reason]
+        assert str(comments[0].author_user_id) == seeded['signer_b_user_id']
