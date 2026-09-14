@@ -179,3 +179,48 @@ it('does not pull focus away while correcting an external form error', async () 
   expect(input).toHaveFocus();
   expect(screen.getByRole('alert')).toBeVisible();
 });
+
+it('shows signing recipient validation without rendering the raw error object', async () => {
+  apiClient.defaults.adapter = async (config) => { throw {
+    config,
+    response: {
+      status: 422,
+      data: {
+        error: {
+          message: {
+            recipients: [{
+              employee_id: ['Select an employee for this signatory.'],
+            }],
+          },
+        },
+      },
+    },
+  }; };
+
+  render(
+    <Form onSubmit={async () => {
+      try {
+        await apiClient.post('/signature-requests', {});
+      } catch {
+        // The workflow feedback layer owns the visible error state.
+      }
+    }}>
+      <select name="recipients.0.employee_id" aria-label="Signatory 1" defaultValue="">
+        <option value="">Select employee</option>
+      </select>
+      <button type="submit">Send request</button>
+    </Form>,
+  );
+
+  fireEvent.click(screen.getByText('Send request'));
+
+  expect(
+    await screen.findByRole('alert'),
+  ).toHaveTextContent(
+    'Signatory 1: employee: Select an employee for this signatory.',
+  );
+
+  expect(
+    screen.getByLabelText('Signatory 1'),
+  ).toHaveAttribute('aria-invalid', 'true');
+});
