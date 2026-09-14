@@ -10,6 +10,7 @@ import { signatureApi } from '../../api/signatureApi.js';
 import SignatureFieldPlacement from './SignatureFieldPlacement.jsx';
 import Button from '../ui/Button.jsx';
 import Input from '../ui/Input.jsx';
+import Select from '../ui/Select.jsx';
 
 const DAY_MS = 86400000;
 const MAX_STANDARD_SIGNATORIES = 4;
@@ -360,26 +361,20 @@ export default function SignatureRequestForm({
         </span>
       </label>
 
-      <label className="block space-y-1">
-        <span className="text-sm font-medium text-slate-700">
-          Signature assurance
-        </span>
-        <select
-          aria-label="Signature assurance"
-          value={form.assurance_level}
-          onChange={(event) => updateAssurance(
-            event.target.value,
-          )}
-          className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-100"
-        >
-          <option value="qes">
-            Qualified electronic signature target — eID
-          </option>
-          <option value="standard">
-            Standard Kinetic electronic signature
-          </option>
-        </select>
-      </label>
+      <Select
+        label="Signature assurance"
+        value={form.assurance_level}
+        onChange={(event) => updateAssurance(
+          event.target.value,
+        )}
+      >
+        <option value="qes">
+          Qualified electronic signature target — eID
+        </option>
+        <option value="standard">
+          Standard Kinetic electronic signature
+        </option>
+      </Select>
 
       {isQes && (
         <div className="rounded-lg border border-blue-200 bg-blue-50 p-4 text-blue-950">
@@ -528,28 +523,22 @@ export default function SignatureRequestForm({
         />
       </label>
 
-      <label className="block space-y-1">
-        <span className="text-sm font-medium text-slate-700">
-          Signing order
-        </span>
-        <select
-          aria-label="Signing order"
-          value={isQes ? 'sequential' : form.signing_mode}
-          disabled={isQes}
-          onChange={(event) => setForm({
-            ...form,
-            signing_mode: event.target.value,
-          })}
-          className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none transition disabled:bg-slate-100 disabled:text-slate-500 focus:border-blue-400 focus:ring-4 focus:ring-blue-100"
-        >
-          <option value="sequential">
-            Sequential — notify one stage at a time
-          </option>
-          <option value="parallel">
-            Parallel — notify all signatories together
-          </option>
-        </select>
-      </label>
+      <Select
+        label="Signing order"
+        value={isQes ? 'sequential' : form.signing_mode}
+        disabled={isQes}
+        onChange={(event) => setForm({
+          ...form,
+          signing_mode: event.target.value,
+        })}
+      >
+        <option value="sequential">
+          Sequential — notify one stage at a time
+        </option>
+        <option value="parallel">
+          Parallel — notify all signatories together
+        </option>
+      </Select>
 
       <section className="space-y-3">
         <div className="flex items-center justify-between gap-4">
@@ -586,19 +575,15 @@ export default function SignatureRequestForm({
             key={`${index}-${recipient.employee_id}`}
             className="grid gap-3 rounded-lg border border-slate-200 p-4 md:grid-cols-[1.4fr_1fr_120px_auto]"
           >
-            <label className="block space-y-1">
-              <span className="text-sm font-medium text-slate-700">
-                Signatory {index + 1}
-              </span>
-              <select
-                name={`recipients.${index}.employee_id`} aria-label={`Signatory ${index + 1}`}
-                value={recipient.employee_id}
+            <Select
+              label={`Signatory ${index + 1}`}
+              name={`recipients.${index}.employee_id`}
+              value={recipient.employee_id}
                 onChange={(event) => updateRecipient(
                   index,
                   { employee_id: event.target.value },
                 )}
                 required
-                className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-100"
               >
                 <option value="">Select employee</option>
                 {eligibleEmployees.map((employee) => {
@@ -620,8 +605,7 @@ export default function SignatureRequestForm({
                     </option>
                   );
                 })}
-              </select>
-            </label>
+            </Select>
 
             <Input
               label={`Role for signatory ${index + 1}`}
@@ -727,17 +711,24 @@ export default function SignatureRequestForm({
       </section>
 
       {!isQes && <section className="space-y-3 rounded-lg border p-4">
-        <label className="block text-sm">Store executed copy in employee file
-          <select aria-label="Employee file" value={filingEmployee} onChange={(event) => setFilingEmployee(event.target.value)} className="mt-1 w-full rounded border p-2" required>
-            <option value="">Select employee</option>
-            {eligibleEmployees.map((employee) => <option key={employee.id} value={employee.id}>{employee.full_name}</option>)}
-          </select>
-        </label>
-        <label className="block text-sm">Employee role when reusing this template
-          <select aria-label="Template employee role" value={employeeRoleIndex} onChange={(event) => setEmployeeRoleIndex(Number(event.target.value))} className="mt-1 w-full rounded border p-2">
-            {recipients.map((recipient, index) => <option key={index} value={index}>{recipient.role_label || 'Signatory'} ({index + 1})</option>)}
-          </select>
-        </label>
+        <Select
+          label="Store executed copy in employee file"
+          aria-label="Employee file"
+          value={filingEmployee}
+          onChange={(event) => setFilingEmployee(event.target.value)}
+          required
+        >
+          <option value="">Select employee</option>
+          {eligibleEmployees.map((employee) => <option key={employee.id} value={employee.id}>{employee.full_name}</option>)}
+        </Select>
+        <Select
+          label="Employee role when reusing this template"
+          aria-label="Template employee role"
+          value={employeeRoleIndex}
+          onChange={(event) => setEmployeeRoleIndex(Number(event.target.value))}
+        >
+          {recipients.map((recipient, index) => <option key={index} value={index}>{recipient.role_label || 'Signatory'} ({index + 1})</option>)}
+        </Select>
         <Input label="Template name" value={templateName} onChange={(event) => setTemplateName(event.target.value)} placeholder="Employment Contract - Kenya" />
         <Button type="button" variant="secondary" disabled={templateSaving || templateName.trim().length < 2} onClick={saveTemplate}>Save as template</Button>
         {templateSaved && <p role="status" className="text-sm text-green-700">{templateSaved}</p>}
