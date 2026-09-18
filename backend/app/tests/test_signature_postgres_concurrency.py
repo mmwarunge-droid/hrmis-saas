@@ -526,3 +526,37 @@ def test_parallel_signers_finalize_exactly_once(
         assert signature_request.completed_at is not None
         assert len(signed_artifacts) == 1
         assert len(completion_events) == 1
+
+
+def test_same_recipient_concurrent_retries_do_not_change_signature(postgres_parallel_signing_app):
+    app, state = postgres_parallel_signing_app
+    barrier = threading.Barrier(2)
+    errors = []
+    def submit():
+        try:
+            with app.app_context():
+                recipient = db.session.get(SignatureRecipient, state['recipient_ids'][0])
+                assert recipient.signature_request.status == 'in_progress'
+                actor = db.session.get(User, state['user_ids'][0])
+                barrier.wait(timeout=10)
+                mark_recipient_signed(recipient, actor, consent=True, field_values=[{
+                    'field_id': str(state['text_field_ids'][0]), 'value': state['values'][0],
+                }])
+        except Exception as exc:
+            errors.append(str(exc))
+    workers = [threading.Thread(target=submit) for _ in range(2)]
+    for worker in workers:
+        worker.start()
+    for worker in workers:
+        worker.join(timeout=20)
+    assert not any(worker.is_alive() for worker in workers)
+    assert errors == []
+    with app.app_context():
+        assert SignatureEvent.query.filter_by(signature_request_id=state['request_id'], event_type='signature.recipient_signed').count() == 1
+        recipient = db.session.get(SignatureRecipient, state['recipient_ids'][1])
+        actor = db.session.get(User, state['user_ids'][1])
+        mark_recipient_signed(recipient, actor, consent=True, field_values=[{
+            'field_id': str(state['text_field_ids'][1]), 'value': state['values'][1],
+        }])
+        assert SignatureArtifact.query.filter_by(signature_request_id=state['request_id'], artifact_type='signed_document').count() == 1
+        assert SignatureEvent.query.filter_by(signature_request_id=state['request_id'], event_type='signature.request_completed').count() == 1

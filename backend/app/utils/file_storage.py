@@ -4,6 +4,7 @@ from uuid import uuid4
 from flask import current_app, send_file
 from werkzeug.datastructures import FileStorage
 from werkzeug.utils import secure_filename
+from app.utils.transaction_effects import on_rollback
 
 ALLOWED_EXTENSIONS = {'pdf', 'doc', 'docx', 'xls', 'xlsx', 'png', 'jpg', 'jpeg', 'txt'}
 ALLOWED_MIME_PREFIXES = ('application/', 'image/', 'text/plain')
@@ -114,11 +115,17 @@ def validate_upload(file: FileStorage):
 def save_document_file(file: FileStorage, tenant_id: str) -> dict:
     validate_upload(file)
     original = secure_filename(file.filename)
-    ext = _extension(original)
+    ext = _extension(file.filename)
+    if _extension(original) != ext:
+        original = f'document.{ext}'
+    if not file.stream.read(1):
+        raise ValueError('The uploaded file is empty')
+    file.stream.seek(0)
     stored_name = f'{uuid4().hex}.{ext}'
     folder = Path(current_app.config['UPLOAD_FOLDER']) / str(tenant_id)
     folder.mkdir(parents=True, exist_ok=True)
     path = folder / stored_name
+    on_rollback(lambda: path.unlink(missing_ok=True))
     file.save(path)
     return {
         'original_filename': original,
@@ -169,6 +176,7 @@ def save_onboarding_resource_file(file: FileStorage, tenant_id: str) -> dict:
     )
     folder.mkdir(parents=True, exist_ok=True)
     path = folder / stored_name
+    on_rollback(lambda: path.unlink(missing_ok=True))
     file.save(path)
 
     return {

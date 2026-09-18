@@ -50,6 +50,12 @@ export default defineConfig(({ mode }) => {
 
   return {
     plugins: [react()],
+    // PDF.js 6's modern build requires newer typed-array APIs than the
+    // browsers supported by Kinetic. Keep the API and worker on the same
+    // compatibility build in development, production, and tests.
+    resolve: {
+      alias: [{ find: /^pdfjs-dist$/, replacement: 'pdfjs-dist/legacy/build/pdf.mjs' }],
+    },
     server: {
       port: 5173,
     },

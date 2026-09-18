@@ -150,13 +150,13 @@ def upload_document():
         document = create_document(payload, request.files.get('file'), tenant_id)
     except ValidationError as err:
         return fail('VALIDATION_ERROR', err.messages, 422)
-    except Exception as exc:
+    except ValueError as exc:
         db.session.rollback()
         return fail('DOCUMENT_UPLOAD_FAILED', str(exc), 400)
     return success(document.to_dict(), 'Document uploaded', 201)
 
 
-@document_bp.get('/<document_id>')
+@document_bp.get('/<uuid:document_id>')
 @jwt_required()
 @permission_required('document:read')
 def get_document(document_id):
@@ -166,7 +166,7 @@ def get_document(document_id):
     return success(document.to_dict())
 
 
-@document_bp.get('/<document_id>/download')
+@document_bp.get('/<uuid:document_id>/download')
 @jwt_required()
 @permission_required('document:read')
 def download_document(document_id):
@@ -178,7 +178,7 @@ def download_document(document_id):
     return send_stored_file(document.file_path, document.original_filename)
 
 
-@document_bp.get('/<document_id>/content')
+@document_bp.get('/<uuid:document_id>/content')
 @jwt_required()
 @permission_required('document:read')
 def view_document_content(document_id):
@@ -201,7 +201,7 @@ def view_document_content(document_id):
     return response
 
 
-@document_bp.patch('/<document_id>')
+@document_bp.patch('/<uuid:document_id>')
 @jwt_required()
 @permission_required('document:approve')
 def patch_document(document_id):
@@ -228,7 +228,7 @@ def _executed_content(document, attachment):
                      download_name=document.original_filename, as_attachment=attachment, max_age=0)
 
 
-@document_bp.post('/<document_id>/prepare-signing')
+@document_bp.post('/<uuid:document_id>/prepare-signing')
 @jwt_required()
 @permission_required('document:approve')
 def prepare_document_signing(document_id):
@@ -241,3 +241,29 @@ def prepare_document_signing(document_id):
     except (ValueError, OSError) as exc:
         db.session.rollback()
         return fail('DOCUMENT_PREPARATION_FAILED', str(exc), 400)
+
+
+@document_bp.errorhandler(FileNotFoundError)
+def document_file_missing(error):
+    db.session.rollback()
+    return fail('DOCUMENT_UNAVAILABLE', 'The document file is unavailable. Contact your administrator.', 409)
+
+
+@document_bp.errorhandler(OSError)
+def document_storage_unavailable(error):
+    from flask import current_app
+    db.session.rollback()
+    current_app.logger.exception('Document storage operation failed')
+    return fail('DOCUMENT_STORAGE_UNAVAILABLE', 'Document storage is temporarily unavailable. Please retry.', 503)
+
+
+@document_bp.before_request
+def validate_workflow_identifiers():
+    from uuid import UUID
+    for name in ('tenant_id', 'document_id', 'employee_id'):
+        value = request.args.get(name)
+        if value:
+            try:
+                UUID(value)
+            except ValueError:
+                return fail('INVALID_IDENTIFIER', f'{name} must be a valid UUID.', 422)

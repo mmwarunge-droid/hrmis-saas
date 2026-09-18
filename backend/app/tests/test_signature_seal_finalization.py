@@ -265,7 +265,7 @@ def test_apply_route_requires_document_approve():
 
     route = (
         "@signature_bp.post("
-        "'/<request_id>/seal/apply'"
+        "'/<uuid:request_id>/seal/apply'"
         ")"
     )
 

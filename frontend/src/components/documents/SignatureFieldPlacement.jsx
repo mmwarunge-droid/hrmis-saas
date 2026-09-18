@@ -18,7 +18,7 @@ import {
   getDocument,
   GlobalWorkerOptions,
 } from 'pdfjs-dist';
-import pdfWorker from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
+import pdfWorker from 'pdfjs-dist/legacy/build/pdf.worker.min.mjs?url';
 
 import { documentApi } from '../../api/documentApi.js';
 import Button from '../ui/Button.jsx';

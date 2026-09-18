@@ -64,7 +64,16 @@ apiClient.interceptors.response.use(
     workflowResponse(response.config?.workflowOwner, null, response.data);
     return response.data;
   },
-  (error) => {
+  async (error) => {
+    // Binary downloads still return JSON when the server rejects the request.
+    // Decode that error before normalization so the UI can explain recovery.
+    if (error.response?.data instanceof Blob && error.response.data.type.includes('json')) {
+      try {
+        error.response.data = JSON.parse(await error.response.data.text());
+      } catch {
+        // Keep the normal HTTP error when an upstream response is not valid JSON.
+      }
+    }
     let payload = normalizeApiError(error);
     if (shouldHandleSessionExpiry(error)) {
       if (hasUnsavedWork() || error.config?.workflowOwner) {

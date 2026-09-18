@@ -33,4 +33,5 @@ Thumbs.db
 frontend/e2e/node_modules/
 frontend/e2e/test-results/
 frontend/e2e/playwright-report/
-\nfrontend/e2e/.auth/\n
+
+frontend/e2e/.auth/

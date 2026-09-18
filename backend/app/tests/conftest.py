@@ -10,8 +10,10 @@ from app.services.rbac_service import seed_roles_permissions
 
 
 @pytest.fixture()
-def app():
+def app(tmp_path):
     app = create_app('testing')
+    app.config['UPLOAD_FOLDER'] = str(tmp_path / 'uploads')
+    app.config['SIGNATURE_EVIDENCE_FOLDER'] = str(tmp_path / 'evidence')
     with app.app_context():
         db.create_all()
         seed_roles_permissions()

@@ -4,7 +4,20 @@ from urllib.parse import urlparse
 from uuid import uuid4
 
 from flask import current_app
+from botocore.exceptions import BotoCoreError, ClientError
 from werkzeug.utils import secure_filename
+from app.utils.transaction_effects import on_rollback
+
+
+class SignatureStorageError(OSError):
+    """The configured evidence store is unavailable."""
+
+
+def _s3_operation(operation, **kwargs):
+    try:
+        return getattr(_s3_client(), operation)(**kwargs)
+    except (BotoCoreError, ClientError) as exc:
+        raise SignatureStorageError('Evidence storage is temporarily unavailable.') from exc
 
 
 def _storage_backend():
@@ -61,7 +74,7 @@ def _s3_client():
     try:
         import boto3
     except ImportError as exc:
-        raise RuntimeError(
+        raise SignatureStorageError(
             'boto3 is required for S3 signature evidence storage.',
         ) from exc
 
@@ -88,7 +101,7 @@ def _s3_location(key):
     )
 
     if not bucket:
-        raise RuntimeError(
+        raise SignatureStorageError(
             'SIGNATURE_EVIDENCE_S3_BUCKET is required.',
         )
 
@@ -140,7 +153,8 @@ def save_signature_artifact(
             payload['ServerSideEncryption'] = (
                 server_side_encryption
             )
-        _s3_client().put_object(**payload)
+        on_rollback(lambda: _s3_operation('delete_object', Bucket=bucket, Key=key))
+        _s3_operation('put_object', **payload)
     else:
         folder = (
             _evidence_root()
@@ -149,6 +163,7 @@ def save_signature_artifact(
         )
         folder.mkdir(parents=True, exist_ok=True)
         path = folder / stored_filename
+        on_rollback(lambda: path.unlink(missing_ok=True))
         path.write_bytes(content)
         file_path = str(path)
 
@@ -219,17 +234,20 @@ def read_signature_artifact(file_path):
         return validated.read_bytes()
 
     bucket, key = _parse_s3_path(validated)
-    response = _s3_client().get_object(
+    response = _s3_operation('get_object',
         Bucket=bucket,
         Key=key,
     )
-    return response['Body'].read()
+    try:
+        return response['Body'].read()
+    except (BotoCoreError, ClientError, OSError) as exc:
+        raise SignatureStorageError('Evidence storage is temporarily unavailable.') from exc
 
 
 def delete_signature_artifact(file_path):
     if str(file_path).startswith('s3://'):
         bucket, key = _parse_s3_path(str(file_path))
-        _s3_client().delete_object(
+        _s3_operation('delete_object',
             Bucket=bucket,
             Key=key,
         )

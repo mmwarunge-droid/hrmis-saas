@@ -1,3 +1,8 @@
+import hashlib
+from pathlib import Path
+from tempfile import TemporaryDirectory
+from reportlab.pdfgen import canvas
+
 from datetime import datetime, timedelta
 
 from sqlalchemy import inspect
@@ -85,6 +90,14 @@ def _create_document(
 ):
     admin_user_id = inspect(admin_user).identity[0]
 
+    temporary = TemporaryDirectory(prefix='kinetic-workflow-')
+    app.extensions.setdefault('test_source_directories', []).append(temporary)
+    source = Path(temporary.name) / 'contract.pdf'
+    pdf = canvas.Canvas(str(source))
+    pdf.drawString(72, 720, 'Employment contract for workflow tests')
+    pdf.save()
+    source_bytes = source.read_bytes()
+
     with app.app_context():
         document = Document(
             tenant_id=tenant_id,
@@ -93,10 +106,10 @@ def _create_document(
             document_type='contract',
             original_filename='employment-contract.pdf',
             stored_filename='signature-workflow-contract.pdf',
-            file_path='/tmp/signature-workflow-contract.pdf',
+            file_path=str(source),
             mime_type='application/pdf',
-            size_bytes=2048,
-            checksum_sha256='b' * 64,
+            size_bytes=len(source_bytes),
+            checksum_sha256=hashlib.sha256(source_bytes).hexdigest(),
             signature_status='not_required',
             access_level='employee',
             status='active',
@@ -373,6 +386,22 @@ def test_sequential_request_notifies_next_signer_after_first_signature(
     ]
 
     assert len(second_recipient_mail) == 1
+
+    second_headers = _login(client, second['email'], second['password'])
+    completed = client.post(
+        f"/api/signature-requests/recipients/{recipients[second['email']]['id']}/submit",
+        headers=second_headers, json={'consent': True},
+    )
+    assert completed.status_code == 200, completed.json
+    with app.app_context():
+        workflow = db.session.get(SignatureRequest, data['id'])
+        assert workflow.status == 'completed'
+        assert all(item.status == 'signed' for item in workflow.recipients)
+        assert len([item for item in workflow.artifacts if item.artifact_type == 'signed_document']) == 1
+        assert not workflow.reminder_rule.is_active
+    download = client.get(f"/api/signature-requests/recipients/{recipients[second['email']]['id']}/signed-document")
+    assert download.status_code == 200
+    assert download.data.startswith(b'%PDF-')
 
 
 def test_client_admin_reminds_reschedules_and_cancels_request(

@@ -168,7 +168,7 @@ export default function Modal({
         className={`
           flex
           max-h-[calc(100dvh-1.5rem)]
-          min-h-0
+          min-h-0 min-w-0
           w-full
           flex-col
           overflow-hidden

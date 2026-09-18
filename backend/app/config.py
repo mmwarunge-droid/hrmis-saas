@@ -138,7 +138,7 @@ class BaseConfig:
     )
     JSON_SORT_KEYS = False
     JSON_LOGS = _bool_env('JSON_LOGS', False)
-    RELEASE_SHA = os.getenv('RELEASE_SHA', 'development')
+    RELEASE_SHA = os.getenv('RELEASE_SHA') or os.getenv('RENDER_GIT_COMMIT', 'development')
     ERROR_INCLUDE_MESSAGE = False
     REDIS_URL = os.getenv('REDIS_URL', 'redis://127.0.0.1:6379/0')
     REDIS_KEY_PREFIX = os.getenv('REDIS_KEY_PREFIX', 'hrmis:auth')

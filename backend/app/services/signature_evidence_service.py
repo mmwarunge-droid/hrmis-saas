@@ -1,3 +1,4 @@
+from app.utils.signature_evidence_storage import SignatureStorageError
 import hashlib
 import logging
 from datetime import timedelta
@@ -120,14 +121,15 @@ def capture_source_artifact(signature_request):
     source_path = Path(document.file_path)
 
     if not source_path.is_file():
-        if current_app.config.get('TESTING'):
-            return None
         raise SignatureEvidenceValidationError(
             'The source document is unavailable for evidence '
             'capture.',
         )
 
-    content = source_path.read_bytes()
+    try:
+        content = source_path.read_bytes()
+    except OSError as exc:
+        raise SignatureEvidenceValidationError('The source document is unavailable for evidence capture.') from exc
     checksum = hashlib.sha256(content).hexdigest()
     expected = _expected_source_checksum(signature_request)
 
@@ -783,7 +785,12 @@ def serialize_signature_evidence(signature_request):
 
 
 def artifact_content(artifact):
-    content = read_signature_artifact(artifact.file_path)
+    try:
+        content = read_signature_artifact(artifact.file_path)
+    except SignatureStorageError:
+        raise
+    except (OSError, ValueError) as exc:
+        raise SignatureEvidenceValidationError('Stored evidence is unavailable. Contact your administrator.') from exc
     checksum = hashlib.sha256(content).hexdigest()
 
     if checksum != artifact.checksum_sha256:

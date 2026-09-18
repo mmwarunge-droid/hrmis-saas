@@ -1,3 +1,8 @@
+import hashlib
+from pathlib import Path
+from tempfile import TemporaryDirectory
+from reportlab.pdfgen import canvas
+
 from datetime import datetime, timedelta
 from uuid import uuid4
 
@@ -130,6 +135,14 @@ def _create_document(
 ):
     admin_user_id = inspect(admin_user).identity[0]
 
+    temporary = TemporaryDirectory(prefix='kinetic-workflow-')
+    app.extensions.setdefault('test_source_directories', []).append(temporary)
+    source = Path(temporary.name) / 'contract.pdf'
+    pdf = canvas.Canvas(str(source))
+    pdf.drawString(72, 720, 'Employment contract for workflow tests')
+    pdf.save()
+    source_bytes = source.read_bytes()
+
     with app.app_context():
         document = Document(
             tenant_id=tenant_id,
@@ -138,10 +151,10 @@ def _create_document(
             document_type='contract',
             original_filename=f'qualified-contract-{suffix}.pdf',
             stored_filename=f'qualified-contract-{suffix}.pdf',
-            file_path=f'/tmp/qualified-contract-{suffix}.pdf',
+            file_path=str(source),
             mime_type='application/pdf',
-            size_bytes=2048,
-            checksum_sha256='e' * 64,
+            size_bytes=len(source_bytes),
+            checksum_sha256=hashlib.sha256(source_bytes).hexdigest(),
             signature_status='not_required',
             access_level='employee',
             status='active',

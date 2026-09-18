@@ -35,6 +35,7 @@ from app.services.native_signature_service import (
     CONSENT_VERSION,
     DEFAULT_SIGNATURE_STYLE,
     NativeSignatureError,
+    SignatureDocumentUnavailable,
     canonical_signature_text,
     complete_recipient_fields,
     create_signature_fields,
@@ -169,7 +170,7 @@ def expire_overdue_internal_signature_requests(
             SignatureRequest.document_id == document_id,
         )
 
-    expired_requests = query.all()
+    expired_requests = query.populate_existing().with_for_update().all()
     affected_documents = {}
 
     for signature_request in expired_requests:
@@ -296,27 +297,40 @@ def _deliver_email(
     recipient=None,
     failure_event='signature.email_delivery_failed',
 ):
-    try:
-        send_email(
-            to_address,
-            subject,
-            body,
-            html_body=html_body,
-            reply_to=current_app.config.get('MAIL_REPLY_TO'),
-        )
-        return True
-    except EmailDeliveryError as exc:
-        _record_event(
-            signature_request,
-            failure_event,
-            recipient=recipient,
-            description='Signature workflow email delivery failed',
-            metadata={
-                'recipient_email': to_address,
-                'error': str(exc),
-            },
-        )
-        return False
+    from sqlalchemy.orm import Session
+    from sqlalchemy.exc import SQLAlchemyError
+    from app.utils.transaction_effects import after_commit
+
+    # Capture primitive values before commit; never query through the session
+    # from its after_commit hook (SQLAlchemy forbids that).
+    event_values = {
+        'tenant_id': signature_request.tenant_id,
+        'signature_request_id': signature_request.id,
+        'recipient_id': recipient.id if recipient else None,
+    }
+    reply_to = current_app.config.get('MAIL_REPLY_TO')
+
+    def deliver():
+        try:
+            send_email(to_address, subject, body, html_body=html_body, reply_to=reply_to)
+        except EmailDeliveryError:
+            current_app.logger.exception('Signature email delivery failed; workflow is committed')
+            # Evidence is append-only. Record delivery failure in a separate
+            # transaction, without changing the already committed workflow.
+            try:
+                with Session(db.engine) as session:
+                    session.add(SignatureEvent(
+                        **event_values, event_type=failure_event,
+                        description='Signature workflow email delivery failed',
+                        metadata_json={'recipient_email': to_address},
+                        occurred_at=utcnow(),
+                    ))
+                    session.commit()
+            except SQLAlchemyError:
+                current_app.logger.exception('Could not persist signature email failure event')
+
+    after_commit(deliver)
+    return None  # Delivery is scheduled, not yet confirmed.
 
 
 def _notify_recipient(
@@ -403,6 +417,7 @@ def _notify_recipient(
             'email': recipient.email,
             'sequence': recipient.sequence,
             'email_delivered': delivered,
+            'email_scheduled': True,
         },
     )
 
@@ -498,7 +513,7 @@ def create_signature_request(
         id=payload['document_id'],
         tenant_id=tenant_id,
         deleted_at=None,
-    ).first()
+    ).populate_existing().with_for_update().first()
 
     if not document:
         raise ValueError(
@@ -986,6 +1001,7 @@ def resend_signature_request(
     message,
     actor,
 ):
+    signature_request = _lock_signature_request(signature_request.id)
     if signature_request.provider is None:
         expire_overdue_internal_signature_requests(
             tenant_id=signature_request.tenant_id,
@@ -1334,10 +1350,38 @@ def list_my_signature_tasks(user):
 
 
 def _require_recipient_actor(recipient, actor):
-    if str(recipient.user_id) != str(actor.id):
+    if (str(recipient.user_id) != str(actor.id)
+            or str(recipient.tenant_id) != str(actor.tenant_id)):
         raise PermissionError(
             'This signature task is assigned to another user.',
         )
+
+
+class SignatureStateConflict(ValueError):
+    """The task state or deadline no longer allows this action."""
+
+
+def _lock_signature_request(request_id):
+    workflow = (SignatureRequest.query.filter_by(id=request_id)
+                .populate_existing().with_for_update().one())
+    db.session.expire(workflow, ['recipients'])
+    return workflow
+
+
+def _lock_recipient_request(recipient):
+    signature_request = _lock_signature_request(recipient.signature_request_id)
+    db.session.refresh(recipient)
+    db.session.expire(signature_request, ['recipients'])
+    return signature_request
+
+
+def _require_open_recipient_request(signature_request, recipient):
+    if signature_request.status not in {'sent', 'in_progress'}:
+        raise SignatureStateConflict('This signature request is no longer open for signing.')
+    now = utcnow()
+    if any(due is not None and to_utc_naive(due) <= now
+           for due in (signature_request.due_at, recipient.due_at)):
+        raise SignatureStateConflict('The signing deadline has passed. Ask the sender to resend the request.')
 
 
 def mark_recipient_viewed(
@@ -1345,9 +1389,14 @@ def mark_recipient_viewed(
     actor,
 ):
     _require_recipient_actor(recipient, actor)
+    signature_request = _lock_recipient_request(recipient)
+    _require_open_recipient_request(signature_request, recipient)
+    if recipient.status == 'viewed':
+        db.session.commit()
+        return recipient
 
     if recipient.status in FINAL_RECIPIENT_STATUSES:
-        raise ValueError(
+        raise SignatureStateConflict(
             'This signature task is already closed.',
         )
 
@@ -1474,36 +1523,12 @@ def mark_recipient_signed(
     """
     _require_recipient_actor(recipient, actor)
 
-    # Serialize all mutations for one signature request.
-    #
-    # Parallel recipients use separate rows, so without locking
-    # the parent request two transactions can each mark their own
-    # recipient signed, both observe the other recipient as still
-    # unsigned, and both commit without finalizing the request.
-    #
-    # PostgreSQL's row lock makes the second signer wait until the
-    # first transaction commits. The second transaction can then
-    # observe the first signature and become the sole finalizer.
-    signature_request = (
-        SignatureRequest.query.filter_by(
-            id=recipient.signature_request_id,
-        )
-        .with_for_update()
-        .one()
-    )
-
-    # The recipient may have been loaded before waiting for the
-    # request lock. Refresh it after lock acquisition so duplicate
-    # or concurrent submissions are validated against committed
-    # state rather than a stale ORM instance.
-    db.session.refresh(recipient)
-
-    # Force the completion decision to load recipient statuses
-    # after the request lock has been acquired.
-    db.session.expire(
-        signature_request,
-        ['recipients'],
-    )
+    signature_request = _lock_recipient_request(recipient)
+    # A retry returns the persisted signature without changing fields or evidence.
+    if recipient.status == 'signed' and not _provider_backed(signature_request):
+        db.session.commit()
+        return recipient
+    _require_open_recipient_request(signature_request, recipient)
 
     if recipient.status not in {
         'notified',
@@ -1598,13 +1623,10 @@ def mark_recipient_signed(
                 signature_request,
             )
         except NativeSignatureError as exc:
-            if current_app.config.get('TESTING'):
-                signed_artifact = None
-            else:
-                raise ValueError(
-                    'The signature was not submitted because Kinetic '
-                    f'could not create the signed PDF: {exc}'
-                ) from exc
+            raise SignatureDocumentUnavailable(
+                'The signature was not submitted because Kinetic '
+                'could not create the signed PDF. Please retry or contact your administrator.'
+            ) from exc
 
         signature_request.status = 'completed'
         signature_request.completed_at = now
@@ -1674,6 +1696,8 @@ def decline_signature(
     reason,
 ):
     _require_recipient_actor(recipient, actor)
+    signature_request = _lock_recipient_request(recipient)
+    _require_open_recipient_request(signature_request, recipient)
 
     if recipient.status not in {
         'notified',
@@ -1754,6 +1778,7 @@ def send_signature_reminder(
     signature_request,
     actor,
 ):
+    signature_request = _lock_signature_request(signature_request.id)
     _require_active_signature_request(signature_request)
 
     if signature_request.provider_status == 'cancellation_pending':
@@ -1850,6 +1875,7 @@ def send_signature_reminder(
                 'email': recipient.email,
                 'sequence': recipient.sequence,
                 'email_delivered': delivered,
+            'email_scheduled': True,
                 'provider': (
                     'dropbox_sign'
                     if provider_backed
@@ -1896,6 +1922,7 @@ def update_signature_deadline(
     due_at,
     actor,
 ):
+    signature_request = _lock_signature_request(signature_request.id)
     _require_active_signature_request(signature_request)
 
     if signature_request.provider_status == 'cancellation_pending':
@@ -2028,6 +2055,7 @@ def cancel_signature_request(
     actor,
     reason,
 ):
+    signature_request = _lock_signature_request(signature_request.id)
     if signature_request.status != 'draft' or signature_request.provider:
         _require_active_signature_request(signature_request)
 

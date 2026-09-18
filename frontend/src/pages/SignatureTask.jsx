@@ -1,5 +1,5 @@
 import Form from '../components/forms/Form.jsx';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ArrowLeft,
   CalendarDays,
@@ -96,11 +96,15 @@ export default function SignatureTask() {
   const [activeFieldId, setActiveFieldId] = useState(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [documentError, setDocumentError] = useState('');
+  const submissionInFlight = useRef(false);
   const [success, setSuccess] = useState('');
 
   const closed = useMemo(
-    () => ['signed', 'declined', 'expired', 'skipped'].includes(task?.status),
-    [task?.status],
+    () => ['signed', 'declined', 'expired', 'skipped'].includes(task?.status)
+      || ['completed', 'cancelled', 'declined', 'expired', 'failed'].includes(task?.request_status)
+      || Boolean(task?.due_at && new Date(task.due_at).getTime() <= Date.now()),
+    [task?.status, task?.request_status, task?.due_at],
   );
 
   const currentFields = useMemo(
@@ -178,6 +182,7 @@ export default function SignatureTask() {
     if (!task?.document?.id) return undefined;
 
     setDocumentUrl(null);
+    setDocumentError('');
 
     const request = task.external_signing_required
       ? documentApi.content(task.document.id)
@@ -195,10 +200,7 @@ export default function SignatureTask() {
       .catch((err) => {
         if (!active) return;
 
-        setError(
-          err.error?.message
-            || 'Unable to open the document for review.',
-        );
+        setDocumentError(err.error?.message || 'Unable to open the document for review.');
       });
 
     return () => {
@@ -228,7 +230,9 @@ export default function SignatureTask() {
           status: current.status === 'notified' ? 'viewed' : current.status,
         } : current));
       })
-      .catch(() => {});
+      .catch((err) => {
+        if (active) setError(err.error?.message || 'Unable to record your review. Please retry.');
+      });
 
     return () => {
       active = false;
@@ -236,6 +240,7 @@ export default function SignatureTask() {
   }, [documentUrl, recipientId, task?.external_signing_required, task?.status]);
 
   const sign = async () => {
+    if (submissionInFlight.current || closed) return;
     setError('');
     setSuccess('');
 
@@ -252,6 +257,7 @@ export default function SignatureTask() {
       return;
     }
 
+    submissionInFlight.current = true;
     setBusy(true);
 
     try {
@@ -271,6 +277,7 @@ export default function SignatureTask() {
     } catch (err) {
       setError(err.error?.message || 'Unable to sign this document.');
     } finally {
+      submissionInFlight.current = false;
       setBusy(false);
     }
   };
@@ -297,7 +304,13 @@ export default function SignatureTask() {
   if (!task) {
     return (
       <div className="grid min-h-screen place-items-center bg-slate-100 text-sm text-slate-500">
-        Loading signing workspace…
+        {error ? (
+          <div className="max-w-md space-y-4 p-6">
+            <Alert type="error">{error}</Alert>
+            <Button onClick={() => { setError(''); load().catch((err) => setError(err.error?.message || 'Unable to load signature task.')); }}>Retry loading task</Button>
+            <Link to="/tasks" className="block text-blue-700">Back to tasks</Link>
+          </div>
+        ) : 'Loading signing workspace…'}
       </div>
     );
   }
@@ -360,7 +373,11 @@ export default function SignatureTask() {
                   onFieldSelect={setActiveFieldId}
                 />
               ) : (
-                <div className="grid min-h-[70vh] place-items-center text-sm text-slate-500">Preparing document…</div>
+                <div className="grid min-h-[70vh] place-items-center p-6 text-sm text-slate-500">
+                  {documentError ? <div className="space-y-4"><Alert type="error">{documentError}</Alert>
+                    <Button onClick={() => setDocumentRefreshKey((value) => value + 1)}>Retry loading PDF</Button>
+                  </div> : 'Preparing document…'}
+                </div>
               )}
             </div>
           </section>

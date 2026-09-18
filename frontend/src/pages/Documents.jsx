@@ -428,7 +428,7 @@ export default function Documents() {
         />
       </div>
 
-      <div className="grid gap-6 xl:grid-cols-[260px_1fr]">
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-[260px_minmax(0,1fr)]">
         <Card>
           <div className="flex items-center gap-3">
             <span className="grid h-10 w-10 place-items-center rounded-lg bg-blue-50 text-blue-700">

@@ -15,10 +15,10 @@ notification_bp = Blueprint(
 
 
 def _notification_query():
-    return Notification.query.filter(
-        Notification.user_id == current_user.id,
-        Notification.tenant_id == current_user.tenant_id,
-    )
+    query = Notification.query.filter(Notification.user_id == current_user.id)
+    if not current_user.has_role('SUPER_ADMIN'):
+        query = query.filter(Notification.tenant_id == current_user.tenant_id)
+    return query
 
 
 @notification_bp.get('')
@@ -44,7 +44,7 @@ def list_notifications():
     return success(data)
 
 
-@notification_bp.patch('/<notification_id>/read')
+@notification_bp.patch('/<uuid:notification_id>/read')
 @jwt_required()
 def read_notification(notification_id):
     notification = _notification_query().filter_by(

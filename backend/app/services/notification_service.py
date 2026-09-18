@@ -1,5 +1,9 @@
 from collections.abc import Iterable
 from html import escape
+from types import SimpleNamespace
+from sqlalchemy.orm import Session
+from sqlalchemy.exc import SQLAlchemyError
+from app.utils.transaction_effects import after_commit
 from urllib.parse import urlparse
 
 from flask import current_app
@@ -78,7 +82,7 @@ def create_notification(
         not user
         or not user.is_active
         or user.deleted_at is not None
-        or str(user.tenant_id) != str(tenant_id)
+        or (str(user.tenant_id) != str(tenant_id) and not user.has_role('SUPER_ADMIN'))
     ):
         return None
 
@@ -96,11 +100,24 @@ def create_notification(
 
     should_email = bool(action_url) if email_delivery is None else bool(email_delivery)
     if should_email:
-        delivery = _deliver_notification_email(user, title, body, action_url)
-        notification.metadata_json = {
-            **(notification.metadata_json or {}),
-            'email_delivery': delivery,
-        }
+        db.session.flush()
+        notification_id = notification.id
+        recipient = SimpleNamespace(email=user.email)
+        metadata_snapshot = dict(notification.metadata_json or {})
+        notification.metadata_json = {**metadata_snapshot, 'email_delivery': {'status': 'pending'}}
+
+        def deliver():
+            delivery = _deliver_notification_email(recipient, title, body, action_url)
+            try:
+                with Session(db.engine) as session:
+                    item = session.get(Notification, notification_id)
+                    if item:
+                        item.metadata_json = {**metadata_snapshot, 'email_delivery': delivery}
+                        session.commit()
+            except SQLAlchemyError:
+                current_app.logger.exception('Could not persist notification email delivery status')
+
+        after_commit(deliver)
 
     if commit:
         db.session.commit()

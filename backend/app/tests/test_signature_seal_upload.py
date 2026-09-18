@@ -224,9 +224,9 @@ def test_seal_management_routes_require_document_approve():
     ).read_text()
 
     for route in (
-        "@signature_bp.get('/<request_id>/seal/image')",
-        "@signature_bp.post('/<request_id>/seal/image')",
-        "@signature_bp.patch('/<request_id>/seal/placement')",
+        "@signature_bp.get('/<uuid:request_id>/seal/image')",
+        "@signature_bp.post('/<uuid:request_id>/seal/image')",
+        "@signature_bp.patch('/<uuid:request_id>/seal/placement')",
     ):
         assert route in source
 

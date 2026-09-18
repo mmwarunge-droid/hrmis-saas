@@ -28,6 +28,7 @@ from app.services.signature_evidence_service import (
 )
 from app.services.native_signature_service import (
     NativeSignatureError,
+    SignatureDocumentUnavailable,
     canonical_signature_text,
     render_signature_pdf,
 )
@@ -50,6 +51,7 @@ from app.services.signature_service import (
     decline_signature,
     list_my_signature_tasks,
     list_signature_requests,
+    SignatureStateConflict,
     mark_recipient_signed,
     mark_recipient_viewed,
     serialize_signature_request,
@@ -125,6 +127,9 @@ def create_request():
             exc,
             502,
         )
+    except (SignatureDocumentUnavailable, SignatureStateConflict) as exc:
+        db.session.rollback()
+        return fail('SIGNATURE_STATE_CONFLICT', str(exc), 409)
     except ValueError as exc:
         db.session.rollback()
         return fail(
@@ -177,7 +182,7 @@ def my_tasks():
     })
 
 
-@signature_bp.get('/<request_id>')
+@signature_bp.get('/<uuid:request_id>')
 @jwt_required()
 def request_details(request_id):
     signature_request = tenant_query(SignatureRequest).filter_by(
@@ -202,7 +207,7 @@ def request_details(request_id):
     )
 
 
-@signature_bp.get('/recipients/<recipient_id>')
+@signature_bp.get('/recipients/<uuid:recipient_id>')
 @jwt_required()
 def recipient_details(recipient_id):
     recipient = _recipient_for_active_tenant(recipient_id)
@@ -304,7 +309,7 @@ def recipient_details(recipient_id):
     return success(data)
 
 
-@signature_bp.get('/recipients/<recipient_id>/document')
+@signature_bp.get('/recipients/<uuid:recipient_id>/document')
 @jwt_required()
 def recipient_signing_document(recipient_id):
     recipient = _recipient_for_active_tenant(recipient_id)
@@ -333,7 +338,7 @@ def recipient_signing_document(recipient_id):
     )
 
 
-@signature_bp.get('/recipients/<recipient_id>/signed-document')
+@signature_bp.get('/recipients/<uuid:recipient_id>/signed-document')
 @jwt_required()
 def recipient_signed_document(recipient_id):
     recipient = _recipient_for_active_tenant(recipient_id)
@@ -366,7 +371,7 @@ def recipient_signed_document(recipient_id):
     )
 
 
-@signature_bp.patch('/recipients/<recipient_id>/viewed')
+@signature_bp.patch('/recipients/<uuid:recipient_id>/viewed')
 @jwt_required()
 def recipient_viewed(recipient_id):
     recipient = _recipient_for_active_tenant(recipient_id)
@@ -378,7 +383,11 @@ def recipient_viewed(recipient_id):
         )
     except PermissionError as exc:
         return fail('FORBIDDEN', str(exc), 403)
+    except (SignatureDocumentUnavailable, SignatureStateConflict) as exc:
+        db.session.rollback()
+        return fail('SIGNATURE_STATE_CONFLICT', str(exc), 409)
     except ValueError as exc:
+        db.session.rollback()
         return fail(
             'SIGNATURE_ACTION_FAILED',
             str(exc),
@@ -391,7 +400,7 @@ def recipient_viewed(recipient_id):
     )
 
 
-@signature_bp.post('/recipients/<recipient_id>/submit')
+@signature_bp.post('/recipients/<uuid:recipient_id>/submit')
 @jwt_required()
 def recipient_submit_signature(recipient_id):
     recipient = _recipient_for_active_tenant(recipient_id)
@@ -412,6 +421,9 @@ def recipient_submit_signature(recipient_id):
         return fail('VALIDATION_ERROR', err.messages, 422)
     except PermissionError as exc:
         return fail('FORBIDDEN', str(exc), 403)
+    except (SignatureDocumentUnavailable, SignatureStateConflict) as exc:
+        db.session.rollback()
+        return fail('SIGNATURE_STATE_CONFLICT', str(exc), 409)
     except ValueError as exc:
         db.session.rollback()
         return fail('SIGNATURE_ACTION_FAILED', str(exc), 400)
@@ -419,7 +431,7 @@ def recipient_submit_signature(recipient_id):
     return success(recipient.to_dict(), 'Document signed and submitted')
 
 
-@signature_bp.patch('/recipients/<recipient_id>/sign')
+@signature_bp.patch('/recipients/<uuid:recipient_id>/sign')
 @jwt_required()
 def recipient_signed(recipient_id):
     recipient = _recipient_for_active_tenant(recipient_id)
@@ -437,6 +449,9 @@ def recipient_signed(recipient_id):
         return fail('VALIDATION_ERROR', err.messages, 422)
     except PermissionError as exc:
         return fail('FORBIDDEN', str(exc), 403)
+    except (SignatureDocumentUnavailable, SignatureStateConflict) as exc:
+        db.session.rollback()
+        return fail('SIGNATURE_STATE_CONFLICT', str(exc), 409)
     except ValueError as exc:
         db.session.rollback()
         return fail(
@@ -451,7 +466,7 @@ def recipient_signed(recipient_id):
     )
 
 
-@signature_bp.patch('/recipients/<recipient_id>/decline')
+@signature_bp.patch('/recipients/<uuid:recipient_id>/decline')
 @jwt_required()
 def recipient_declined(recipient_id):
     recipient = _recipient_for_active_tenant(recipient_id)
@@ -473,7 +488,11 @@ def recipient_declined(recipient_id):
         )
     except PermissionError as exc:
         return fail('FORBIDDEN', str(exc), 403)
+    except (SignatureDocumentUnavailable, SignatureStateConflict) as exc:
+        db.session.rollback()
+        return fail('SIGNATURE_STATE_CONFLICT', str(exc), 409)
     except ValueError as exc:
+        db.session.rollback()
         return fail(
             'SIGNATURE_ACTION_FAILED',
             str(exc),
@@ -486,7 +505,7 @@ def recipient_declined(recipient_id):
     )
 
 
-@signature_bp.get('/recipients/<recipient_id>/discussion')
+@signature_bp.get('/recipients/<uuid:recipient_id>/discussion')
 @jwt_required()
 def recipient_discussion(recipient_id):
     from app.services.signature_discussion_service import get_or_create_discussion
@@ -499,7 +518,7 @@ def recipient_discussion(recipient_id):
     return success(discussion.to_dict())
 
 
-@signature_bp.post('/recipients/<recipient_id>/discussion/comments')
+@signature_bp.post('/recipients/<uuid:recipient_id>/discussion/comments')
 @jwt_required()
 def recipient_discussion_comment(recipient_id):
     from app.services.signature_discussion_service import add_comment
@@ -517,13 +536,17 @@ def recipient_discussion_comment(recipient_id):
         return fail('VALIDATION_ERROR', err.messages, 422)
     except PermissionError as exc:
         return fail('FORBIDDEN', str(exc), 403)
+    except (SignatureDocumentUnavailable, SignatureStateConflict) as exc:
+        db.session.rollback()
+        return fail('SIGNATURE_STATE_CONFLICT', str(exc), 409)
     except ValueError as exc:
+        db.session.rollback()
         return fail('DISCUSSION_COMMENT_FAILED', str(exc), 400)
     return success({'discussion': discussion.to_dict(), 'comment': comment.to_dict()}, 'Comment added', 201)
 
 
 
-@signature_bp.get('/recipients/<recipient_id>/discussion/mentions')
+@signature_bp.get('/recipients/<uuid:recipient_id>/discussion/mentions')
 @jwt_required()
 def recipient_discussion_mentions(recipient_id):
     from app.services.signature_discussion_service import mention_candidates
@@ -542,7 +565,7 @@ def recipient_discussion_mentions(recipient_id):
 
 
 @signature_bp.patch(
-    '/recipients/<recipient_id>/discussion/comments/<comment_id>'
+    '/recipients/<uuid:recipient_id>/discussion/comments/<uuid:comment_id>'
 )
 @jwt_required()
 def recipient_discussion_comment_update(
@@ -569,7 +592,11 @@ def recipient_discussion_comment_update(
         return fail('FORBIDDEN', str(exc), 403)
     except LookupError as exc:
         return fail('DISCUSSION_COMMENT_NOT_FOUND', str(exc), 404)
+    except (SignatureDocumentUnavailable, SignatureStateConflict) as exc:
+        db.session.rollback()
+        return fail('SIGNATURE_STATE_CONFLICT', str(exc), 409)
     except ValueError as exc:
+        db.session.rollback()
         return fail(
             'DISCUSSION_COMMENT_UPDATE_FAILED',
             str(exc),
@@ -586,7 +613,7 @@ def recipient_discussion_comment_update(
 
 
 @signature_bp.delete(
-    '/recipients/<recipient_id>/discussion/comments/<comment_id>'
+    '/recipients/<uuid:recipient_id>/discussion/comments/<uuid:comment_id>'
 )
 @jwt_required()
 def recipient_discussion_comment_delete(
@@ -616,7 +643,7 @@ def recipient_discussion_comment_delete(
     )
 
 
-@signature_bp.patch('/recipients/<recipient_id>/discussion/resolve')
+@signature_bp.patch('/recipients/<uuid:recipient_id>/discussion/resolve')
 @jwt_required()
 def recipient_discussion_resolve(recipient_id):
     from app.services.signature_discussion_service import resolve_discussion
@@ -645,7 +672,7 @@ def _manageable_request(request_id):
     return signature_request
 
 
-@signature_bp.get('/<request_id>/seal/image')
+@signature_bp.get('/<uuid:request_id>/seal/image')
 @jwt_required()
 @permission_required('document:approve')
 def download_company_seal_image(request_id):
@@ -679,7 +706,7 @@ def download_company_seal_image(request_id):
     )
 
 
-@signature_bp.post('/<request_id>/seal/image')
+@signature_bp.post('/<uuid:request_id>/seal/image')
 @jwt_required()
 @permission_required('document:approve')
 def upload_company_seal_image(request_id):
@@ -718,7 +745,7 @@ def upload_company_seal_image(request_id):
     )
 
 
-@signature_bp.patch('/<request_id>/seal/placement')
+@signature_bp.patch('/<uuid:request_id>/seal/placement')
 @jwt_required()
 @permission_required('document:approve')
 def update_company_seal_placement(request_id):
@@ -765,7 +792,7 @@ def update_company_seal_placement(request_id):
     )
 
 
-@signature_bp.post('/<request_id>/seal/apply')
+@signature_bp.post('/<uuid:request_id>/seal/apply')
 @jwt_required()
 @permission_required('document:approve')
 def apply_company_seal(request_id):
@@ -814,7 +841,7 @@ def apply_company_seal(request_id):
     )
 
 
-@signature_bp.get('/<request_id>/evidence')
+@signature_bp.get('/<uuid:request_id>/evidence')
 @jwt_required()
 @permission_required('document:approve')
 def request_evidence(request_id):
@@ -828,7 +855,7 @@ def request_evidence(request_id):
     )
 
 
-@signature_bp.post('/<request_id>/evidence/retry')
+@signature_bp.post('/<uuid:request_id>/evidence/retry')
 @jwt_required()
 @permission_required('document:approve')
 def retry_evidence(request_id):
@@ -840,6 +867,9 @@ def retry_evidence(request_id):
         )
     except PermissionError as exc:
         return fail('FORBIDDEN', str(exc), 403)
+    except (SignatureDocumentUnavailable, SignatureStateConflict) as exc:
+        db.session.rollback()
+        return fail('SIGNATURE_STATE_CONFLICT', str(exc), 409)
     except ValueError as exc:
         db.session.rollback()
         return fail(
@@ -855,7 +885,7 @@ def retry_evidence(request_id):
 
 
 @signature_bp.get(
-    '/<request_id>/artifacts/<artifact_id>/download',
+    '/<uuid:request_id>/artifacts/<uuid:artifact_id>/download',
 )
 @jwt_required()
 @permission_required('document:approve')
@@ -897,7 +927,7 @@ def download_evidence_artifact(
     )
 
 
-@signature_bp.post('/<request_id>/remind')
+@signature_bp.post('/<uuid:request_id>/remind')
 @jwt_required()
 @permission_required('document:approve')
 def remind_request(request_id):
@@ -921,6 +951,9 @@ def remind_request(request_id):
             exc,
             502,
         )
+    except (SignatureDocumentUnavailable, SignatureStateConflict) as exc:
+        db.session.rollback()
+        return fail('SIGNATURE_STATE_CONFLICT', str(exc), 409)
     except ValueError as exc:
         db.session.rollback()
         return fail(
@@ -941,7 +974,7 @@ def remind_request(request_id):
     )
 
 
-@signature_bp.post('/<request_id>/resend')
+@signature_bp.post('/<uuid:request_id>/resend')
 @jwt_required()
 @permission_required('document:approve')
 def resend_request(request_id):
@@ -976,6 +1009,9 @@ def resend_request(request_id):
             exc,
             502,
         )
+    except (SignatureDocumentUnavailable, SignatureStateConflict) as exc:
+        db.session.rollback()
+        return fail('SIGNATURE_STATE_CONFLICT', str(exc), 409)
     except ValueError as exc:
         db.session.rollback()
         return fail(
@@ -994,7 +1030,7 @@ def resend_request(request_id):
     )
 
 
-@signature_bp.patch('/<request_id>/deadline')
+@signature_bp.patch('/<uuid:request_id>/deadline')
 @jwt_required()
 @permission_required('document:approve')
 def update_deadline(request_id):
@@ -1028,6 +1064,9 @@ def update_deadline(request_id):
             exc,
             502,
         )
+    except (SignatureDocumentUnavailable, SignatureStateConflict) as exc:
+        db.session.rollback()
+        return fail('SIGNATURE_STATE_CONFLICT', str(exc), 409)
     except ValueError as exc:
         db.session.rollback()
         return fail(
@@ -1045,7 +1084,7 @@ def update_deadline(request_id):
     )
 
 
-@signature_bp.patch('/<request_id>/cancel')
+@signature_bp.patch('/<uuid:request_id>/cancel')
 @jwt_required()
 @permission_required('document:approve')
 def cancel_request(request_id):
@@ -1079,6 +1118,9 @@ def cancel_request(request_id):
             exc,
             502,
         )
+    except (SignatureDocumentUnavailable, SignatureStateConflict) as exc:
+        db.session.rollback()
+        return fail('SIGNATURE_STATE_CONFLICT', str(exc), 409)
     except ValueError as exc:
         db.session.rollback()
         return fail(
@@ -1139,7 +1181,7 @@ def save_template():
         return fail('TEMPLATE_INVALID', str(exc), 400)
 
 
-@signature_bp.post('/templates/<template_id>/instantiate')
+@signature_bp.post('/templates/<uuid:template_id>/instantiate')
 @jwt_required()
 @permission_required('document:approve')
 def use_template(template_id):
@@ -1160,7 +1202,7 @@ def use_template(template_id):
         return fail('TEMPLATE_INVALID', str(exc), 400)
 
 
-@signature_bp.post('/<request_id>/send')
+@signature_bp.post('/<uuid:request_id>/send')
 @jwt_required()
 @permission_required('document:approve')
 def send_native_draft(request_id):
@@ -1196,3 +1238,23 @@ def send_native_draft(request_id):
     except (ValueError, OSError) as exc:
         db.session.rollback()
         return fail('DRAFT_SEND_FAILED', str(exc), 400)
+
+
+@signature_bp.errorhandler(OSError)
+def signature_storage_unavailable(error):
+    from flask import current_app
+    db.session.rollback()
+    current_app.logger.exception('Signature storage operation failed')
+    return fail('SIGNATURE_STORAGE_UNAVAILABLE', 'Document storage is temporarily unavailable. Please retry.', 503)
+
+
+@signature_bp.before_request
+def validate_workflow_identifiers():
+    from uuid import UUID
+    for name in ('tenant_id', 'document_id', 'employee_id'):
+        value = request.args.get(name)
+        if value:
+            try:
+                UUID(value)
+            except ValueError:
+                return fail('INVALID_IDENTIFIER', f'{name} must be a valid UUID.', 422)

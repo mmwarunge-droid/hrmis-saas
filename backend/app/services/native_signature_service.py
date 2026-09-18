@@ -9,7 +9,6 @@ from functools import lru_cache
 from io import BytesIO
 from pathlib import Path
 
-from flask import current_app
 from pypdf import PdfReader, PdfWriter
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.pdfmetrics import EmbeddedType1Face, Font
@@ -20,6 +19,7 @@ from app.models import SignatureArtifact, SignatureField
 from app.models.base import utcnow
 from app.utils.signature_evidence_storage import (
     save_signature_artifact,
+    SignatureStorageError,
 )
 
 
@@ -49,6 +49,10 @@ def is_pdf_document(document):
     mime = (document.mime_type or '').lower()
     filename = (document.original_filename or '').lower()
     return mime == 'application/pdf' or filename.endswith('.pdf')
+
+
+class SignatureDocumentUnavailable(NativeSignatureError):
+    """The final PDF cannot be generated; no signature was committed."""
 
 
 def canonical_signature_text(recipient, actor=None):
@@ -104,7 +108,9 @@ def source_pdf_bytes(signature_request):
         from app.services.signature_evidence_service import artifact_content, SignatureEvidenceValidationError
         try:
             content = artifact_content(artifact)
-        except SignatureEvidenceValidationError as exc:
+        except SignatureStorageError:
+            raise
+        except (SignatureEvidenceValidationError, OSError, ValueError) as exc:
             raise NativeSignatureError('The source snapshot failed its integrity check.') from exc
     else:
         path = Path(signature_request.document.file_path)
@@ -112,7 +118,10 @@ def source_pdf_bytes(signature_request):
             raise NativeSignatureError(
                 'The source PDF is unavailable for signing.',
             )
-        content = path.read_bytes()
+        try:
+            content = path.read_bytes()
+        except OSError as exc:
+            raise NativeSignatureError('The source PDF is unavailable for signing.') from exc
 
     if not content.startswith(b'%PDF-'):
         raise NativeSignatureError(
@@ -123,10 +132,11 @@ def source_pdf_bytes(signature_request):
 
 def source_page_count(signature_request):
     try:
-        return len(PdfReader(BytesIO(source_pdf_bytes(signature_request))).pages)
-    except NativeSignatureError:
-        if current_app.config.get('TESTING'):
-            return 1
+        count = len(PdfReader(BytesIO(source_pdf_bytes(signature_request))).pages)
+        if not count:
+            raise NativeSignatureError('The source PDF contains no pages.')
+        return count
+    except (NativeSignatureError, SignatureStorageError):
         raise
     except Exception as exc:
         raise NativeSignatureError(
@@ -797,7 +807,7 @@ def _draw_recipient_identity(pdf_canvas, recipient, signature_field, width, heig
 def render_signature_pdf(signature_request):
     try:
         reader = PdfReader(BytesIO(source_pdf_bytes(signature_request)))
-    except NativeSignatureError:
+    except (NativeSignatureError, SignatureStorageError):
         raise
     except Exception as exc:
         raise NativeSignatureError(

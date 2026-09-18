@@ -23,7 +23,7 @@ def _message_payload(
     return {
         'to': to_address,
         'from': current_app.config['MAIL_FROM'],
-        'subject': subject,
+        'subject': ' '.join(subject.splitlines()),
         'text': text_body,
         'html': html_body,
         'reply_to': reply_to,
@@ -70,15 +70,18 @@ def send_email(
     if transport != 'smtp':
         raise EmailDeliveryError(f'Unsupported email transport: {transport}')
 
-    email = EmailMessage()
-    email['From'] = message['from']
-    email['To'] = message['to']
-    email['Subject'] = message['subject']
-    if message.get('reply_to'):
-        email['Reply-To'] = message['reply_to']
-    email.set_content(message['text'])
-    if message.get('html'):
-        email.add_alternative(message['html'], subtype='html')
+    try:
+        email = EmailMessage()
+        email['From'] = message['from']
+        email['To'] = message['to']
+        email['Subject'] = message['subject']
+        if message.get('reply_to'):
+            email['Reply-To'] = message['reply_to']
+        email.set_content(message['text'])
+        if message.get('html'):
+            email.add_alternative(message['html'], subtype='html')
+    except (ValueError, TypeError) as exc:
+        raise EmailDeliveryError('Invalid email header configuration') from exc
 
     try:
         with smtplib.SMTP(
