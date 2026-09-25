@@ -146,7 +146,7 @@ def test_invited_user_creates_private_password_before_first_login(
     assert login.status_code == 200
 
 
-def test_resending_invitation_invalidates_previous_link(
+def test_resending_invitation_keeps_previous_link_valid_until_activation(
     client,
     app,
     admin_user,
@@ -176,6 +176,8 @@ def test_resending_invitation_invalidates_previous_link(
     )
     assert replacement_token != original_token
 
+    # Email delivery can be delayed or reordered. A resend must not make an
+    # earlier, still-unexpired invitation fail before the user activates.
     old_link = app.test_client().post(
         '/api/auth/invitations/validate',
         json={'token': original_token},
@@ -184,8 +186,23 @@ def test_resending_invitation_invalidates_previous_link(
         '/api/auth/invitations/validate',
         json={'token': replacement_token},
     )
-    assert old_link.status_code == 400
+    assert old_link.status_code == 200
     assert new_link.status_code == 200
+
+    activation = app.test_client().post(
+        '/api/auth/invitations/accept',
+        json={
+            'token': replacement_token,
+            'password': 'ReinvitePrivatePass456!',
+        },
+    )
+    assert activation.status_code == 200
+
+    replay_old = app.test_client().post(
+        '/api/auth/invitations/validate',
+        json={'token': original_token},
+    )
+    assert replay_old.status_code == 400
 
     with app.app_context():
         user = User.query.filter_by(email='reinvite@acme.test').one()
@@ -194,10 +211,8 @@ def test_resending_invitation_invalidates_previous_link(
             purpose=AccountToken.PURPOSE_ACCOUNT_INVITE,
         ).order_by(AccountToken.created_at.asc()).all()
         assert len(tokens) == 2
-        assert tokens[0].consumed_at is not None
-        assert tokens[1].consumed_at is None
+        assert all(token.consumed_at is not None for token in tokens)
         assert user.invitation_sent_at is not None
-
 
 
 def test_expired_invitation_is_rejected(
@@ -319,7 +334,7 @@ def test_email_failure_preserves_invited_account_for_resend(
         assert active_invites == 1
 
 
-def test_admin_shares_fresh_invitation_link_for_invited_user(
+def test_admin_shares_fresh_invitation_link_without_breaking_previous_link(
     client,
     app,
     admin_user,
@@ -370,7 +385,7 @@ def test_admin_shares_fresh_invitation_link_for_invited_user(
         json={'token': replacement_token},
     )
 
-    assert old_link.status_code == 400
+    assert old_link.status_code == 200
     assert new_link.status_code == 200
 
     with app.app_context():
@@ -384,13 +399,81 @@ def test_admin_shares_fresh_invitation_link_for_invited_user(
         ).order_by(AccountToken.created_at.asc()).all()
 
         assert len(tokens) == 2
-        assert tokens[0].consumed_at is not None
+        assert tokens[0].consumed_at is None
         assert tokens[1].consumed_at is None
         assert user.invitation_sent_at is not None
 
         assert AuditLog.query.filter_by(
             action='user.access_link_shared',
         ).count() == 1
+
+    activation = app.test_client().post(
+        '/api/auth/invitations/accept',
+        json={
+            'token': original_token,
+            'password': 'ShareInvitePrivatePass456!',
+        },
+    )
+    assert activation.status_code == 200
+
+    replacement_after_activation = app.test_client().post(
+        '/api/auth/invitations/validate',
+        json={'token': replacement_token},
+    )
+    assert replacement_after_activation.status_code == 400
+
+
+def test_resend_delivery_failure_preserves_previous_valid_invitation(
+    client,
+    app,
+    admin_user,
+    monkeypatch,
+):
+    headers = _login_admin(client)
+    created = client.post(
+        '/api/users',
+        headers=headers,
+        json={
+            'email': 'resend-delivery-failure@acme.test',
+            'first_name': 'Resend',
+            'last_name': 'Failure',
+            'roles': ['EMPLOYEE'],
+        },
+    )
+    assert created.status_code == 201
+    user_id = created.get_json()['data']['id']
+    original_token = _invitation_token(app.extensions['mail_outbox'][-1])
+
+    def fail_delivery(*_args, **_kwargs):
+        raise EmailDeliveryError('test delivery failure')
+
+    monkeypatch.setattr(
+        'app.routes.user_routes.send_account_invitation_email',
+        fail_delivery,
+    )
+
+    resent = client.post(
+        f'/api/users/{user_id}/invitation/resend',
+        headers=headers,
+    )
+    assert resent.status_code == 503
+
+    original_link = app.test_client().post(
+        '/api/auth/invitations/validate',
+        json={'token': original_token},
+    )
+    assert original_link.status_code == 200
+
+    with app.app_context():
+        user = User.query.filter_by(
+            email='resend-delivery-failure@acme.test'
+        ).one()
+        tokens = AccountToken.query.filter_by(
+            user_id=user.id,
+            purpose=AccountToken.PURPOSE_ACCOUNT_INVITE,
+        ).all()
+        assert len(tokens) == 1
+        assert tokens[0].consumed_at is None
 
 
 def test_admin_shares_password_reset_link_for_active_user(

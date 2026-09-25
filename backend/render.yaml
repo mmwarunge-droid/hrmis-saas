@@ -113,9 +113,13 @@ services:
         value: "30"
       - key: EMAIL_VERIFICATION_TOKEN_HOURS
         value: "24"
+      - key: ACCOUNT_INVITE_TOKEN_HOURS
+        value: "48"
       - key: PASSWORD_RESET_URL
         sync: false
       - key: EMAIL_VERIFICATION_URL
+        sync: false
+      - key: ACCOUNT_INVITE_URL
         sync: false
 
       - key: MFA_REQUIRED_ROLES

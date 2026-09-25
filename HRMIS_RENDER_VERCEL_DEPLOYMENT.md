@@ -36,6 +36,7 @@ CORS_ORIGINS=https://app.example.com
 JWT_COOKIE_DOMAIN=.example.com
 PASSWORD_RESET_URL=https://app.example.com/reset-password
 EMAIL_VERIFICATION_URL=https://app.example.com/verify-email
+ACCOUNT_INVITE_URL=https://app.example.com/activate-account
 
 MFA_ENCRYPTION_KEYS=<generated Fernet key>
 MFA_RECOVERY_CODE_PEPPER=<generated independent random secret>
@@ -152,6 +153,7 @@ JWT_COOKIE_DOMAIN=.example.com
 JWT_COOKIE_SAMESITE=Lax
 PASSWORD_RESET_URL=https://app.example.com/reset-password
 EMAIL_VERIFICATION_URL=https://app.example.com/verify-email
+ACCOUNT_INVITE_URL=https://app.example.com/activate-account
 ```
 
 Do not add a trailing slash.
@@ -166,10 +168,11 @@ Do not add a trailing slash.
 6. Test an authenticated POST operation.
 7. Request and complete email verification.
 8. Request and complete password reset.
-9. Upload a document.
-10. Redeploy the API and confirm the uploaded document remains available.
-11. Confirm logout, logout-all, and individual session revocation.
-12. Confirm `/health` and `/ready` remain successful.
+9. Create an invited employee, resend/share the invitation, and confirm both delivered links remain valid until one is used.
+10. Upload a document.
+11. Redeploy the API and confirm the uploaded document remains available.
+12. Confirm logout, logout-all, and individual session revocation.
+13. Confirm `/health` and `/ready` remain successful.
 
 ## Browser cookie verification
 

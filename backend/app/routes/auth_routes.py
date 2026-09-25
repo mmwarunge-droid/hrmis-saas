@@ -214,7 +214,7 @@ def validate_account_invitation():
         context = account_invitation_context(payload['token'])
     except ValidationError as err:
         return fail('VALIDATION_ERROR', err.messages, 422)
-    except AccountTokenError:
+    except AccountTokenError as exc:
         db.session.rollback()
         log_event(
             'auth.account_invitation_rejected',
@@ -225,6 +225,7 @@ def validate_account_invitation():
                     (request.get_json(silent=True) or {}).get('token')
                 ),
                 'stage': 'validate',
+                'reason': exc.reason,
             },
         )
         db.session.commit()
@@ -252,7 +253,7 @@ def accept_invitation():
             payload['token'],
             payload['password'],
         )
-    except AccountTokenError:
+    except AccountTokenError as exc:
         db.session.rollback()
         log_event(
             'auth.account_invitation_rejected',
@@ -261,6 +262,7 @@ def accept_invitation():
             metadata={
                 'token_fingerprint': token_fingerprint(payload.get('token')),
                 'stage': 'accept',
+                'reason': exc.reason,
             },
         )
         db.session.commit()

@@ -22,6 +22,10 @@ from app.utils.security import hash_password, verify_password
 class AccountTokenError(ValueError):
     public_message = 'The token is invalid or has expired'
 
+    def __init__(self, reason: str = 'invalid_or_expired'):
+        super().__init__(self.public_message)
+        self.reason = reason
+
 
 class PasswordReuseError(ValueError):
     pass
@@ -109,6 +113,7 @@ def issue_account_token(
     purpose: str,
     *,
     target_email: str | None = None,
+    invalidate_existing: bool = True,
 ) -> tuple[AccountToken, str]:
     if purpose not in AccountToken.PURPOSES:
         raise ValueError(f'Unsupported account token purpose: {purpose}')
@@ -122,9 +127,11 @@ def issue_account_token(
 
     raw_token = secrets.token_urlsafe(32)
 
-    # Serialize credential issuance for this identity. Without locking the
-    # User row, two concurrent issuers can both invalidate the same predecessor
-    # set and then insert separate unconsumed tokens for the same purpose.
+    # Serialize credential issuance for this identity. Replacement-style
+    # credentials (password reset, email verification, identity-changing
+    # invitations) rely on this lock so concurrent issuers cannot both leave
+    # a replacement token active. Invitation resends may deliberately preserve
+    # earlier links until one of them is successfully consumed.
     db.session.execute(
         select(User.id)
         .where(User.id == user.id)
@@ -132,14 +139,15 @@ def issue_account_token(
     ).scalar_one()
 
     now = utcnow()
-    AccountToken.query.filter(
-        AccountToken.user_id == user.id,
-        AccountToken.purpose == purpose,
-        AccountToken.consumed_at.is_(None),
-    ).update(
-        {AccountToken.consumed_at: now},
-        synchronize_session=False,
-    )
+    if invalidate_existing:
+        AccountToken.query.filter(
+            AccountToken.user_id == user.id,
+            AccountToken.purpose == purpose,
+            AccountToken.consumed_at.is_(None),
+        ).update(
+            {AccountToken.consumed_at: now},
+            synchronize_session=False,
+        )
     account_token = AccountToken(
         tenant_id=user.tenant_id,
         user_id=user.id,
@@ -283,7 +291,7 @@ def _valid_account_token(
     for_update: bool = True,
 ) -> AccountToken:
     if not raw_token:
-        raise AccountTokenError(AccountTokenError.public_message)
+        raise AccountTokenError('missing_token')
 
     statement = select(AccountToken).where(
         AccountToken.token_hash == _hash_token(raw_token),
@@ -293,22 +301,26 @@ def _valid_account_token(
         statement = statement.with_for_update()
     account_token = db.session.execute(statement).scalar_one_or_none()
 
-    user = account_token.user if account_token else None
-    tenant_unavailable = bool(
-        user
-        and user.tenant_id
-        and (not user.tenant or user.tenant.status != 'active')
-    )
+    if not account_token:
+        raise AccountTokenError('not_found')
+    if account_token.consumed_at is not None:
+        raise AccountTokenError('consumed')
+    if to_utc_naive(account_token.expires_at) <= utcnow():
+        raise AccountTokenError('expired')
+
+    user = account_token.user
+    if not user:
+        raise AccountTokenError('user_missing')
+    if not user.is_active:
+        raise AccountTokenError('user_inactive')
+    if user.deleted_at is not None:
+        raise AccountTokenError('user_deleted')
     if (
-        not account_token
-        or account_token.consumed_at is not None
-        or to_utc_naive(account_token.expires_at) <= utcnow()
-        or not user
-        or not user.is_active
-        or user.deleted_at is not None
-        or tenant_unavailable
+        user.tenant_id
+        and (not user.tenant or user.tenant.status != 'active')
     ):
-        raise AccountTokenError(AccountTokenError.public_message)
+        raise AccountTokenError('tenant_unavailable')
+
     return account_token
 
 
@@ -320,7 +332,7 @@ def account_invitation_context(raw_token: str) -> dict:
     )
     user = account_token.user
     if not user.activation_required:
-        raise AccountTokenError(AccountTokenError.public_message)
+        raise AccountTokenError('already_activated')
     return {
         'first_name': user.first_name,
         'full_name': user.full_name,
@@ -344,7 +356,7 @@ def accept_account_invitation(
     )
     user = account_token.user
     if not user.activation_required:
-        raise AccountTokenError(AccountTokenError.public_message)
+        raise AccountTokenError('already_activated')
 
     now = utcnow()
     user.password_hash = hash_password(new_password)

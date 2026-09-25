@@ -424,33 +424,32 @@ def resend_user_invitation(user_id):
             409,
         )
 
+    # A resend is additive: keep previously delivered, unexpired invitation
+    # links valid until one link activates the account. This avoids a common
+    # onboarding race where delayed/out-of-order email delivery makes the link
+    # an employee clicks look "invalid or expired" immediately after a resend.
     account_token, raw_token = issue_account_token(
         user,
         AccountToken.PURPOSE_ACCOUNT_INVITE,
+        invalidate_existing=False,
     )
-    log_event(
-        'user.invitation_resent',
-        'AccountToken',
-        account_token.id,
-        tenant_id=user.tenant_id,
-        actor=current_user,
-        metadata={'user_id': str(user.id)},
-    )
+    # Persist the token before sending it. Because older invitation tokens are
+    # preserved, a mail failure can safely delete only this undelivered token.
     db.session.commit()
 
     try:
         send_account_invitation_email(user, raw_token)
     except EmailDeliveryError:
+        account_token = db.session.get(AccountToken, account_token.id)
+        if account_token is not None and account_token.consumed_at is None:
+            db.session.delete(account_token)
         log_event(
             'user.invitation_delivery_failed',
             'User',
             user.id,
             tenant_id=user.tenant_id,
             actor=current_user,
-            metadata={
-                'account_token_id': str(account_token.id),
-                'trigger': 'resend',
-            },
+            metadata={'trigger': 'resend'},
         )
         db.session.commit()
         return fail(
@@ -460,6 +459,14 @@ def resend_user_invitation(user_id):
         )
 
     user.invitation_sent_at = utcnow()
+    log_event(
+        'user.invitation_resent',
+        'AccountToken',
+        account_token.id,
+        tenant_id=user.tenant_id,
+        actor=current_user,
+        metadata={'user_id': str(user.id)},
+    )
     log_event(
         'user.invitation_sent',
         'User',
@@ -503,14 +510,27 @@ def _deliver_user_access_link(user):
     account_token, raw_token = issue_account_token(
         user,
         purpose,
+        # Resharing an outstanding invitation must not make an earlier
+        # delivered invitation fail. Password reset remains replacement-only.
+        invalidate_existing=(link_type != 'invitation'),
     )
+
+    if link_type == 'invitation':
+        # Make the emailed token durable before SMTP delivery. Older invitation
+        # links remain active, so a delivery failure can delete just this token.
+        db.session.commit()
 
     try:
         send_link_email(user, raw_token)
     except EmailDeliveryError:
-        # Preserve any previously valid access link if delivery of
-        # its replacement fails.
-        db.session.rollback()
+        if link_type == 'invitation':
+            account_token = db.session.get(AccountToken, account_token.id)
+            if account_token is not None and account_token.consumed_at is None:
+                db.session.delete(account_token)
+        else:
+            # Password reset is replacement-only. Roll back the replacement so
+            # the previously valid reset link remains usable on mail failure.
+            db.session.rollback()
 
         log_event(
             'user.access_link_delivery_failed',
