@@ -36,9 +36,15 @@ def _bool_env(name: str, default: bool = False) -> bool:
 
 def _database_url(default: str) -> str:
     url = os.getenv('DATABASE_URL', default)
-    # Render sometimes exposes postgres://; SQLAlchemy requires postgresql://.
+
+    # Production installs psycopg2-binary. Select that DBAPI explicitly so
+    # SQLAlchemy upgrades cannot silently switch the PostgreSQL driver.
     if url.startswith('postgres://'):
-        url = url.replace('postgres://', 'postgresql://', 1)
+        return url.replace('postgres://', 'postgresql+psycopg2://', 1)
+
+    if url.startswith('postgresql://'):
+        return url.replace('postgresql://', 'postgresql+psycopg2://', 1)
+
     return url
 
 
