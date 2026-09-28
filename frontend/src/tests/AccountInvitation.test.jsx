@@ -113,3 +113,13 @@ test('administrative provisioning forms no longer ask for another user password'
     screen.getByText(/administrator a secure activation link/i),
   ).toBeInTheDocument();
 });
+
+test('invitation validation can recover from a temporary network failure', async () => {
+  authApi.validateInvitation.mockRejectedValueOnce(new Error('offline')).mockResolvedValueOnce({ data: { full_name: 'Jane Doe', email: 'jane@example.com', organization_name: 'Kinetic' } });
+  const user = userEvent.setup();
+  render(<MemoryRouter initialEntries={['/activate-account#token=retry-token']}><ActivateAccount /></MemoryRouter>);
+  await user.click(await screen.findByRole('button', { name: 'Try again' }));
+  expect(await screen.findByText('jane@example.com')).toBeInTheDocument();
+  expect(screen.queryByText(/invalid, expired/)).not.toBeInTheDocument();
+  expect(authApi.validateInvitation).toHaveBeenCalledTimes(2);
+});

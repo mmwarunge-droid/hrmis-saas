@@ -85,3 +85,15 @@ test('supports server-controlled table pagination and sorting', () => {
     direction: 'desc',
   });
 });
+
+test('nested row actions do not also activate the table row', () => {
+  const onRowClick = vi.fn();
+  const onAction = vi.fn();
+  render(<Table columns={[{ key: 'action', label: 'Action', render: () => <button onClick={onAction}>Resend</button> }]} rows={[{ id: '1' }]} onRowClick={onRowClick} />);
+  const action = screen.getByRole('button', { name: 'Resend' });
+  fireEvent.keyDown(action, { key: 'Enter' });
+  fireEvent.keyDown(action, { key: ' ' });
+  fireEvent.click(action);
+  expect(onAction).toHaveBeenCalledTimes(1);
+  expect(onRowClick).not.toHaveBeenCalled();
+});

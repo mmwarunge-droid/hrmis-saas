@@ -47,3 +47,14 @@ it('disables signing when the parent request was closed', async () => {
   await screen.findByText('PDF ready');
   expect(screen.queryByRole('button', { name: /sign & submit/i })).not.toBeInTheDocument();
 });
+
+it.each([
+  ['cancelled', 'This signature request was cancelled.'],
+  ['expired', 'The signing deadline has passed.'],
+  ['completed', 'This signature request is complete.'],
+])('explains why a %s request cannot be signed', async (requestStatus, message) => {
+  signatureApi.recipient.mockResolvedValue({ data: { ...task, request_status: requestStatus } });
+  mount();
+  expect(await screen.findByText(new RegExp(message))).toBeVisible();
+  expect(screen.queryByRole('button', { name: /sign & submit/i })).not.toBeInTheDocument();
+});

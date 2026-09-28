@@ -6,7 +6,7 @@ import {
   UserPlus,
   Target,
 } from 'lucide-react';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { notificationApi } from '../../api/notificationApi.js';
 import Button from '../ui/Button.jsx';
@@ -52,6 +52,10 @@ export default function NotificationMenu() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const menuRef = useRef(null);
+  const triggerRef = useRef(null);
+  const panelId = useId();
+  const [markingRead, setMarkingRead] = useState(false);
+  const [actionError, setActionError] = useState('');
   const navigate = useNavigate();
 
   const load = useCallback(async ({ quiet = false } = {}) => {
@@ -91,6 +95,19 @@ export default function NotificationMenu() {
     return () => document.removeEventListener('mousedown', close);
   }, []);
 
+  useEffect(() => {
+    if (!open) return undefined;
+    const escape = (event) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        setOpen(false);
+        triggerRef.current?.focus();
+      }
+    };
+    document.addEventListener('keydown', escape);
+    return () => document.removeEventListener('keydown', escape);
+  }, [open]);
+
   const openNotification = async (notification) => {
     if (!notification.read_at) {
       try {
@@ -114,18 +131,28 @@ export default function NotificationMenu() {
   };
 
   const readAll = async () => {
-    await notificationApi.readAll();
-    const timestamp = new Date().toISOString();
-    setItems((current) => current.map((item) => ({
-      ...item,
-      read_at: item.read_at || timestamp,
-    })));
-    setUnreadCount(0);
+    if (markingRead) return;
+    setMarkingRead(true);
+    setActionError('');
+    try {
+      await notificationApi.readAll();
+      const timestamp = new Date().toISOString();
+      setItems((current) => current.map((item) => ({
+        ...item,
+        read_at: item.read_at || timestamp,
+      })));
+      setUnreadCount(0);
+    } catch (err) {
+      setActionError(err.error?.message || 'Unable to mark notifications as read. Please try again.');
+    } finally {
+      setMarkingRead(false);
+    }
   };
 
   return (
     <div ref={menuRef} className="relative">
       <Button
+        ref={triggerRef}
         variant="ghost"
         size="sm"
         className="relative px-2"
@@ -133,7 +160,7 @@ export default function NotificationMenu() {
           ? `Notifications, ${unreadCount} unread`
           : 'Notifications'}
         aria-expanded={open}
-        aria-haspopup="menu"
+        aria-controls={open ? panelId : undefined}
         onClick={() => setOpen((value) => !value)}
       >
         <Bell size={18} />
@@ -146,9 +173,10 @@ export default function NotificationMenu() {
 
       {open && (
         <div
-          role="menu"
+          id={panelId}
+          role="region"
           aria-label="Notifications"
-          className="absolute right-0 top-11 w-[min(92vw,390px)] overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xl"
+          className="fixed inset-x-3 top-[68px] max-h-[calc(100dvh-80px)] overflow-y-auto sm:absolute sm:inset-x-auto sm:right-0 sm:top-11 sm:w-[390px] overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xl"
         >
           <div className="flex items-start justify-between gap-3 border-b border-slate-200 px-4 py-3">
             <div>
@@ -164,12 +192,14 @@ export default function NotificationMenu() {
                 type="button"
                 className="text-xs font-semibold text-blue-700 hover:text-blue-900"
                 onClick={readAll}
+                disabled={markingRead}
               >
-                Mark all read
+                {markingRead ? 'Marking read…' : 'Mark all read'}
               </button>
             )}
           </div>
 
+          {actionError && <p role="alert" className="px-4 py-3 text-sm text-red-700">{actionError}</p>}
           <div className="max-h-[420px] overflow-y-auto">
             {loading && (
               <p className="px-4 py-8 text-center text-sm text-slate-500">
@@ -205,7 +235,6 @@ export default function NotificationMenu() {
                 <button
                   key={item.id}
                   type="button"
-                  role="menuitem"
                   onClick={() => openNotification(item)}
                   className={`flex w-full items-start gap-3 border-b border-slate-100 px-4 py-3 text-left last:border-b-0 hover:bg-slate-50 ${item.read_at ? 'bg-white' : 'bg-blue-50/55'}`}
                 >
@@ -214,15 +243,15 @@ export default function NotificationMenu() {
                   </span>
                   <span className="min-w-0 flex-1">
                     <span className="flex items-start gap-2">
-                      <span className="flex-1 text-sm font-semibold text-slate-900">
+                      <span className="min-w-0 flex-1 break-words text-sm font-semibold text-slate-900">
                         {item.title}
                       </span>
                       {!item.read_at && (
-                        <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-blue-700" />
+                        <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-blue-700"><span className="sr-only">Unread</span></span>
                       )}
                     </span>
                     {item.body && (
-                      <span className="mt-1 block text-xs leading-5 text-slate-600">
+                      <span className="mt-1 block break-words text-xs leading-5 text-slate-600">
                         {item.body}
                       </span>
                     )}

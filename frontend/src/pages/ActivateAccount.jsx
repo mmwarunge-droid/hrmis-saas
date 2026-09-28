@@ -1,7 +1,7 @@
 import Form from '../components/forms/Form.jsx';
 import { Eye, EyeOff, KeyRound, MailCheck } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { authApi } from '../api/authApi';
 import Alert from '../components/ui/Alert.jsx';
 import Button from '../components/ui/Button.jsx';
@@ -62,6 +62,7 @@ export default function ActivateAccount() {
     [location.hash],
   );
   const [context, setContext] = useState(null);
+  const [validationAttempt, setValidationAttempt] = useState(0);
   const [form, setForm] = useState({ password: '', confirmPassword: '' });
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmation, setShowConfirmation] = useState(false);
@@ -76,6 +77,8 @@ export default function ActivateAccount() {
     if (!token) return undefined;
 
     setLoading(true);
+    setContext(null);
+    setError('');
     authApi.validateInvitation({ token })
       .then((response) => {
         if (active) setContext(response.data);
@@ -95,7 +98,7 @@ export default function ActivateAccount() {
     return () => {
       active = false;
     };
-  }, [token]);
+  }, [token, validationAttempt]);
 
   const submit = async (event) => {
     event.preventDefault();
@@ -148,6 +151,16 @@ export default function ActivateAccount() {
       )}
 
       {error && <div className="mt-6"><Alert type="error">{error}</Alert></div>}
+
+      {!loading && !context && (
+        <div className="mt-5 space-y-3">
+          <p className="text-sm text-slate-600">If your invitation has expired or was already used, contact your administrator for help.</p>
+          <div className="flex flex-wrap items-center gap-3">
+            {token && <Button type="button" variant="secondary" onClick={() => setValidationAttempt((attempt) => attempt + 1)}>Try again</Button>}
+            <Link to="/login" className="text-sm font-semibold text-blue-700 hover:underline">Back to sign in</Link>
+          </div>
+        </div>
+      )}
 
       {!loading && context && (
         <Form onSubmit={submit} className="mt-6 space-y-4">
