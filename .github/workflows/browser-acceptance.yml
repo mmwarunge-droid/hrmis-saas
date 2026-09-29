@@ -43,8 +43,6 @@ jobs:
       CORS_ORIGINS: http://localhost:5173
       FRONTEND_URL: http://localhost:5173
       DEMO_PASSWORD: BrowserAcceptance2026!
-      # Public disposable-demo credential, shared by seeding and Playwright.
-      DEMO_MFA_SECRET: JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP
       DEMO_REFERENCE_DATE: 2026-08-06
       VITE_API_BASE_URL: http://localhost:5000/api
       E2E_BASE_URL: http://localhost:5173
@@ -57,6 +55,16 @@ jobs:
           python-version: "3.12"
           cache: pip
           cache-dependency-path: backend/requirements.txt
+      - name: Generate disposable MFA secret
+        shell: bash
+        run: |
+          python - <<'PYTHON' >> "$GITHUB_ENV"
+          import base64
+          import secrets
+
+          secret = base64.b32encode(secrets.token_bytes(20)).decode().rstrip("=")
+          print(f"DEMO_MFA_SECRET={secret}")
+          PYTHON
       - uses: actions/setup-node@v4
         with:
           node-version: "22.16.0"
