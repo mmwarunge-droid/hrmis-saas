@@ -43,6 +43,8 @@ jobs:
       CORS_ORIGINS: http://localhost:5173
       FRONTEND_URL: http://localhost:5173
       DEMO_PASSWORD: BrowserAcceptance2026!
+      # Public disposable-demo credential, shared by seeding and Playwright.
+      DEMO_MFA_SECRET: JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP
       DEMO_REFERENCE_DATE: 2026-08-06
       VITE_API_BASE_URL: http://localhost:5000/api
       E2E_BASE_URL: http://localhost:5173
