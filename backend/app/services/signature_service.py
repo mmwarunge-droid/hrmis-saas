@@ -1,3 +1,7 @@
+"""Signing orchestration across recipients, fields, events, and artifacts.
+Lifecycle mutations serialize on the parent request. Native completion must
+produce its PDF before committing success; mail runs after that commit."""
+
 from datetime import timedelta
 
 from flask import current_app, render_template, has_request_context, request
@@ -297,6 +301,10 @@ def _deliver_email(
     recipient=None,
     failure_event='signature.email_delivery_failed',
 ):
+    """Schedule mail after commit using captured values, not live ORM objects.
+
+    Scheduling is not proof of delivery. Failure audit persistence uses
+    a separate session because the authoritative transaction has ended."""
     from sqlalchemy.orm import Session
     from sqlalchemy.exc import SQLAlchemyError
     from app.utils.transaction_effects import after_commit
@@ -1362,6 +1370,10 @@ class SignatureStateConflict(ValueError):
 
 
 def _lock_signature_request(request_id):
+    """Refresh and lock the parent before evaluating a lifecycle transition.
+
+    Recipient mutations share this lock so concurrent final signers cannot
+    each create a completion artifact from stale relationship state."""
     workflow = (SignatureRequest.query.filter_by(id=request_id)
                 .populate_existing().with_for_update().one())
     db.session.expire(workflow, ['recipients'])
@@ -1369,6 +1381,7 @@ def _lock_signature_request(request_id):
 
 
 def _lock_recipient_request(recipient):
+    """Acquire the parent lock first, then refresh recipient state."""
     signature_request = _lock_signature_request(recipient.signature_request_id)
     db.session.refresh(recipient)
     db.session.expire(signature_request, ['recipients'])

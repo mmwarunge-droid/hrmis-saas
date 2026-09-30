@@ -60,6 +60,11 @@ class ProviderCallback:
 
 
 class SignatureProvider(ABC):
+    """External signing boundary implemented by provider-specific adapters.
+
+    Adapters return normalized request/session/artifact/callback payloads.
+    Callers own domain reconciliation and persistence; retryable provider
+    failures remain distinct from invalid callbacks and configuration errors."""
     provider_name: str
 
     @abstractmethod

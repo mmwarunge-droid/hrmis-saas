@@ -1,3 +1,6 @@
+"""Document visibility, upload metadata, and signing-source preparation. Apply
+access filtering before pagination; storage access alone is not authorization."""
+
 import hashlib
 
 from flask_jwt_extended import current_user

@@ -1,3 +1,8 @@
+/**
+ * Validate an invitation before collecting activation details. Validation retry
+ * clears stale error state; the backend owns token validity and single-use rules.
+ * Public failures must not disclose whether another identity exists.
+ */
 import Form from '../components/forms/Form.jsx';
 import { Eye, EyeOff, KeyRound, MailCheck } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';

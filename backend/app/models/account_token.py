@@ -3,6 +3,10 @@ from app.models.base import GUID, ReprMixin, TimestampMixin, to_utc_naive, utcno
 
 
 class AccountToken(db.Model, TimestampMixin, ReprMixin):
+    """Persist only the token hash, purpose, expiry, and consumption state.
+
+    The active property checks time/consumption only; service validation
+    also checks user/tenant status and locks the token before mutation."""
     __tablename__ = 'account_tokens'
 
     PURPOSE_PASSWORD_RESET = 'password_reset'

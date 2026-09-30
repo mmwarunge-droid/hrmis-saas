@@ -1,3 +1,7 @@
+/**
+ * Persist the active organization and add it to supported API requests.
+ * Explicit request scope takes precedence; client scope is never a security boundary.
+ */
 const ACTIVE_TENANT_STORAGE_KEY = 'kinetic.activeTenantId';
 const LEGACY_ACTIVE_TENANT_STORAGE_KEY = 'ace.activeTenantId';
 

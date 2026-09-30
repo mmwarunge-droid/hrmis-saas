@@ -1,3 +1,8 @@
+/**
+ * Poll and display the current user's notification feed. Read-all updates local
+ * unread state only after API success; failure remains visible and retryable.
+ * The panel uses region/button semantics and returns focus on Escape.
+ */
 import {
   Bell,
   CheckCheck,

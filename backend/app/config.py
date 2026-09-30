@@ -1,3 +1,7 @@
+"""Environment configuration and production validation. Bare PostgreSQL URLs
+select the declared psycopg2 driver; explicit driver URLs are preserved.
+Values are loaded at import time, so configure the environment before startup."""
+
 import base64
 import hashlib
 import os

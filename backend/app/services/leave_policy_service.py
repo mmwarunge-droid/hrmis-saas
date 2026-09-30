@@ -1,3 +1,6 @@
+"""Tenant policy configuration and balance initialization. The standard pack is
+an application default; administrators own their organization policy choices."""
+
 import calendar
 from datetime import date
 from decimal import Decimal, ROUND_HALF_UP

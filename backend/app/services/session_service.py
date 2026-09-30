@@ -1,3 +1,6 @@
+"""Database-backed JWT sessions with rotating refresh fingerprints. Redis caches
+revocation hints; database session state remains authoritative."""
+
 import hashlib
 import logging
 import secrets
@@ -67,6 +70,10 @@ def _issue_tokens(user: User, auth_session: AuthSession) -> tuple[str, str, str]
 
 
 def create_auth_session(user: User, ip_address=None, user_agent=None, mfa_verified: bool = False):
+    """Create and commit a session and its access/refresh tokens.
+
+    Only a hash of the refresh JTI is stored. Returned tokens belong in
+    authentication cookies, not browser persistent storage."""
     provisional_hash = secrets.token_hex(32)
     auth_session = AuthSession(
         tenant_id=user.tenant_id,
@@ -89,6 +96,10 @@ def create_auth_session(user: User, ip_address=None, user_agent=None, mfa_verifi
 
 
 def rotate_auth_session(user: User, jwt_data: dict):
+    """Lock the session and commit a rotated refresh fingerprint.
+
+    Reusing an old refresh token revokes the session and raises
+    RefreshTokenReuseError; do not silently retry that credential."""
     session_id = jwt_data.get('sid')
     refresh_jti = jwt_data.get('jti')
     if not session_id or not refresh_jti:
@@ -123,6 +134,9 @@ def upgrade_auth_session_mfa(
     user: User,
     jwt_data: dict,
 ) -> tuple[AuthSession, str, str]:
+    """Prepare MFA-verified session tokens without committing.
+
+    The caller commits this update together with MFA verification state."""
     auth_session = get_session_for_token(
         jwt_data,
         lock=True,
@@ -149,6 +163,7 @@ def upgrade_auth_session_mfa(
 
 
 def revoke_session(auth_session: AuthSession, reason: str, token_jti=None, token_expires_at=None) -> None:
+    """Mark revoked and update the Redis hint without committing SQL."""
     if auth_session.revoked_at is None:
         auth_session.revoked_at = utcnow()
         auth_session.revoked_reason = reason

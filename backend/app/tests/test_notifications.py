@@ -118,3 +118,33 @@ def test_actionable_notification_sends_email_and_rejects_external_url(
             assert 'internal application path' in str(exc)
         else:
             raise AssertionError('External notification URLs must be rejected')
+
+
+def test_notification_email_failure_preserves_committed_notification(
+    app, tenant, admin_user, monkeypatch,
+):
+    from app.services import notification_service
+    from app.utils.email import EmailDeliveryError
+
+    def unavailable(*args, **kwargs):
+        raise EmailDeliveryError('Simulated SMTP outage')
+
+    monkeypatch.setattr(notification_service, 'send_email', unavailable)
+    with app.app_context():
+        admin = db.session.merge(admin_user)
+        notification = notification_service.create_notification(
+            tenant_id=tenant.id,
+            user_id=admin.id,
+            title='Review remains available',
+            action_url='/tasks',
+            commit=True,
+        )
+        notification_id = notification.id
+        db.session.remove()
+        persisted = db.session.get(Notification, notification_id)
+        assert persisted is not None
+        assert persisted.read_at is None
+        assert persisted.metadata_json['email_delivery'] == {
+            'queued': False,
+            'transport': app.config['MAIL_TRANSPORT'],
+        }

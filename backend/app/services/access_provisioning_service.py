@@ -1,3 +1,6 @@
+"""Link existing employees to invited accounts. Account, link, token, and audit
+state commit before delivery so SMTP cannot undo successful provisioning."""
+
 from app.extensions import db
 from app.models import AccountToken, Employee, User
 from app.models.base import utcnow

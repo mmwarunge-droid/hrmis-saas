@@ -1,3 +1,6 @@
+"""Hashed, expiring tokens for account lifecycle transitions. Public token errors
+remain generic while internal reasons support audit diagnostics."""
+
 import hashlib
 import html
 import secrets
@@ -115,6 +118,11 @@ def issue_account_token(
     target_email: str | None = None,
     invalidate_existing: bool = True,
 ) -> tuple[AccountToken, str]:
+    """Create a hashed token under a user-row lock and flush, without committing.
+
+    Only the returned raw token can be delivered. Resend callers may disable
+    invalidation so earlier unexpired invitations survive delivery failure.
+    Successful activation consumes outstanding account tokens."""
     if purpose not in AccountToken.PURPOSES:
         raise ValueError(f'Unsupported account token purpose: {purpose}')
     if (
@@ -350,6 +358,10 @@ def accept_account_invitation(
     raw_token: str,
     new_password: str,
 ) -> tuple[User, int]:
+    """Prepare activation after validating an invitation.
+
+    Sets the password, consumes outstanding account tokens, and revokes
+    sessions. The route owns the final audit and database commit."""
     account_token = _valid_account_token(
         raw_token,
         AccountToken.PURPOSE_ACCOUNT_INVITE,

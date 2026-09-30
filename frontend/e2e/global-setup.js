@@ -1,3 +1,8 @@
+/**
+ * Reuse ignored employee auth state only after validating it against the local API.
+ * Delete .auth/employee.json for fresh-session acceptance. This suite mutates its
+ * disposable seed; the API readiness/session probe expects localhost:5000.
+ */
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';

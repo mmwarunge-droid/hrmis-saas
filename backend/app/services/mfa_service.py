@@ -1,3 +1,6 @@
+"""Encrypted TOTP enrollment, one-use challenges, and hashed recovery codes.
+Redis challenge consumption is external to the caller-owned SQL transaction."""
+
 import base64
 import hashlib
 import hmac
@@ -335,6 +338,11 @@ def _use_recovery_code(user: User, code: str) -> bool:
 
 
 def verify_mfa_challenge(challenge_token: str, code: str) -> tuple[User, str, dict]:
+    """Verify TOTP or an unused recovery code and consume the Redis challenge.
+
+    SQL verification state is not committed here. The caller finishes
+    session creation or upgrade; Redis consumption is not rolled back
+    if a later SQL operation fails."""
     payload, user = _load_challenge(challenge_token, 'verify')
     if user.mfa_enabled_at is None:
         raise MfaError('mfa_not_enabled')

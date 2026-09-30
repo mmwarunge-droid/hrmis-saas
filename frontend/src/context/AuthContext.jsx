@@ -1,3 +1,8 @@
+/**
+ * Owns the current server-authenticated user and login/MFA transitions.
+ * Password acceptance may still require MFA before a user session is published.
+ * JWTs stay in cookies; this context is presentation state, not authorization.
+ */
 import { createContext, useCallback, useEffect, useMemo, useState } from 'react';
 import { authApi } from '../api/authApi';
 import {
@@ -7,6 +12,7 @@ import {
 
 export const AuthContext = createContext(null);
 
+/** Publish the authenticated user only after the server completes required MFA. */
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);

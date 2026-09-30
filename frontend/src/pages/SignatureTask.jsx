@@ -1,3 +1,9 @@
+/**
+ * Recipient signing workflow with separate task and PDF loading/retry states.
+ * Failed submissions retain entries. A local submission guard limits duplicate
+ * clicks; backend locks and idempotency remain authoritative. Closed requests
+ * cannot submit, and successful signing reloads authoritative server state.
+ */
 import Form from '../components/forms/Form.jsx';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {

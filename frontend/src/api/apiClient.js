@@ -1,3 +1,9 @@
+/**
+ * Shared cookie-authenticated transport. Injects CSRF and active-tenant context,
+ * normalizes API errors, and associates requests with the submitting workflow.
+ * Responses expose the API envelope directly (binary responses remain blobs).
+ * Mutations are not automatically replayed after session expiry.
+ */
 import { requestWorkflow, workflowRequest, workflowResponse, normalizeApiError, hasUnsavedWork, notifySessionExpiry } from '../utils/formFeedback.js';
 import axios from 'axios';
 

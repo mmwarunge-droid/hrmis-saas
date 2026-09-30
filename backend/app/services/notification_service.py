@@ -1,3 +1,7 @@
+"""Durable in-app notifications with optional best-effort post-commit mail.
+Notifications share the caller transaction unless commit=True is requested;
+email status is persisted separately after the authoritative commit."""
+
 from collections.abc import Iterable
 from html import escape
 from types import SimpleNamespace
@@ -71,6 +75,11 @@ def create_notification(
     email_delivery=None,
     commit=False,
 ):
+    """Add a notification for an active recipient and optionally schedule mail.
+
+    Ordinary recipients must belong to the tenant; platform administrators
+    may receive their own tenant-scoped notifications. Returns None for
+    ineligible recipients. By default the caller owns the commit."""
     if not tenant_id or not user_id:
         return None
     if priority not in VALID_PRIORITIES:
@@ -102,7 +111,7 @@ def create_notification(
     if should_email:
         db.session.flush()
         notification_id = notification.id
-        recipient = SimpleNamespace(email=user.email)
+        recipient = SimpleNamespace(id=user.id, email=user.email)
         metadata_snapshot = dict(notification.metadata_json or {})
         notification.metadata_json = {**metadata_snapshot, 'email_delivery': {'status': 'pending'}}
 
