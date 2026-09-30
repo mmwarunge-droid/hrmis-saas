@@ -1,4 +1,5 @@
 import { ChevronLeft, ChevronRight, X } from 'lucide-react';
+import { useEffect, useRef } from 'react';
 import { NavLink } from 'react-router-dom';
 import { navigationGroups, visibleNavigation } from '../../config/navigation.js';
 import useAuth from '../../hooks/useAuth.js';
@@ -112,6 +113,42 @@ function SidebarContent({ collapsed, mobile, onClose, onToggleCollapsed }) {
 }
 
 export default function Sidebar({ open = false, onClose, collapsed = false, onToggleCollapsed }) {
+  const drawerRef = useRef(null);
+  const closeRef = useRef(onClose);
+  useEffect(() => { closeRef.current = onClose; }, [onClose]);
+  useEffect(() => {
+    if (!open) return undefined;
+    const previousFocus = document.activeElement;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    const focusable = () => [...drawerRef.current.querySelectorAll('a[href], button:not([disabled]), select:not([disabled])')];
+    focusable()[0]?.focus();
+    const keydown = (event) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        closeRef.current?.();
+      }
+      if (event.key !== 'Tab') return;
+      const elements = focusable();
+      const first = elements[0];
+      const last = elements.at(-1);
+      if (event.shiftKey && (document.activeElement === first || !drawerRef.current.contains(document.activeElement))) {
+        event.preventDefault(); last?.focus();
+      } else if (!event.shiftKey && (document.activeElement === last || !drawerRef.current.contains(document.activeElement))) {
+        event.preventDefault(); first?.focus();
+      }
+    };
+    const desktop = window.matchMedia('(min-width: 1024px)');
+    const resize = () => { if (desktop.matches) closeRef.current?.(); };
+    desktop.addEventListener('change', resize);
+    document.addEventListener('keydown', keydown);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      document.removeEventListener('keydown', keydown);
+      desktop.removeEventListener('change', resize);
+      previousFocus?.focus();
+    };
+  }, [open]);
   return (
     <>
       <aside className={`fixed inset-y-0 left-0 z-40 hidden border-r border-slate-200 bg-white transition-[width] duration-200 lg:block ${collapsed ? 'w-[76px]' : 'w-[236px]'}`}>
@@ -119,7 +156,7 @@ export default function Sidebar({ open = false, onClose, collapsed = false, onTo
       </aside>
       {open && (
         <div className="fixed inset-0 z-50 bg-slate-950/40 backdrop-blur-[2px] lg:hidden" onMouseDown={onClose}>
-          <aside className="kinetic-drawer-enter h-full w-[286px] max-w-[88vw] border-r border-slate-200 bg-white shadow-2xl" onMouseDown={(event) => event.stopPropagation()}>
+          <aside ref={drawerRef} role="dialog" aria-modal="true" aria-label="Navigation" className="kinetic-drawer-enter h-full w-[286px] max-w-[88vw] border-r border-slate-200 bg-white shadow-2xl" onMouseDown={(event) => event.stopPropagation()}>
             <SidebarContent mobile onClose={onClose} />
           </aside>
         </div>

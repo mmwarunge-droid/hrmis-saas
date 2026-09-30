@@ -276,7 +276,7 @@ export default function Goals() {
       </div>
 
       <Card>
-        <div className="grid gap-3 lg:grid-cols-[minmax(220px,1fr)_170px_170px_170px_auto]">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_repeat(3,minmax(0,0.7fr))_auto]">
           <Input
             aria-label="Search goals"
             icon={Search}

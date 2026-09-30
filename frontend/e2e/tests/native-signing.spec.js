@@ -37,7 +37,9 @@ async function login(page, email, mfa = false) {
   if (mfa) {
     const input = page.getByLabel('Authenticator or recovery code');
     await expect(input).toBeVisible();
-    await input.fill(otp(process.env.E2E_DEMO_MFA_SECRET || 'JBSWY3DPEHPK3PXP'));
+    const mfaSecret = process.env.DEMO_MFA_SECRET || process.env.E2E_DEMO_MFA_SECRET;
+    if (!mfaSecret) throw new Error('Set DEMO_MFA_SECRET to the same disposable secret used by demo-seed.');
+    await input.fill(otp(mfaSecret));
     await page.getByRole('button', { name: 'Verify', exact: true }).click();
   }
   await expect(page).not.toHaveURL(/login|mfa/);

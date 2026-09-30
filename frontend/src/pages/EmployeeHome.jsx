@@ -553,7 +553,7 @@ export default function EmployeeHome() {
         </div>
       </Card>
 
-      <section className="grid gap-6 xl:grid-cols-2">
+      <section className="grid grid-cols-1 gap-6 xl:grid-cols-2">
         {order
           .filter((section) => enabled.has(section) && sectionRenderers[section])
           .map((section) => (

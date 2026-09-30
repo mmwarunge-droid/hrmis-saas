@@ -151,10 +151,13 @@ export default function Table({
             {!loading && visibleRows.map((row, index) => (
               <tr
                 key={row[rowKey] || index}
-                onClick={() => onRowClick?.(row)}
+                onClick={(event) => {
+                  if (!event.target.closest('button, a, input, select, textarea, [role="button"]')) onRowClick?.(row);
+                }}
                 onKeyDown={(event) => {
                   if (
                     onRowClick
+                    && event.target === event.currentTarget
                     && (event.key === 'Enter' || event.key === ' ')
                   ) {
                     event.preventDefault();

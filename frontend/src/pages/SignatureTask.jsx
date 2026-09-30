@@ -350,6 +350,17 @@ export default function SignatureTask() {
       <main className="mx-auto max-w-[1680px] p-4 lg:p-6">
         {error && <div className="mb-4"><Alert type="error">{error}</Alert></div>}
         {success && <div className="mb-4"><Alert type="success">{success}</Alert></div>}
+        {closed && !signed && (
+          <div className="mb-4">
+            <Alert type="info">
+              {task.request_status === 'cancelled' ? 'This signature request was cancelled.'
+                : task.request_status === 'expired' || task.status === 'expired' || (task.due_at && new Date(task.due_at).getTime() <= Date.now()) ? 'The signing deadline has passed.'
+                  : task.request_status === 'completed' ? 'This signature request is complete.'
+                    : 'This signature request is closed.'}
+              {' '}No further signature can be submitted. Contact the requester if you need a new request.
+            </Alert>
+          </div>
+        )}
 
         <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_390px]">
           <section className="min-w-0 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">

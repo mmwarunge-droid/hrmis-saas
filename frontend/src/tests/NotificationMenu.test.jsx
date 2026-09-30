@@ -157,3 +157,26 @@ test('falls back to tasks for legacy signature notifications without an action U
     expect(screen.getByTestId('location')).toHaveTextContent('/tasks');
   });
 });
+
+test('keeps unread state on failure and lets the user retry marking all read', async () => {
+  notificationApi.readAll.mockRejectedValueOnce(new Error('offline'));
+  render(<MemoryRouter><NotificationMenu /></MemoryRouter>);
+  fireEvent.click(await screen.findByRole('button', { name: 'Notifications, 2 unread' }));
+  fireEvent.click(await screen.findByRole('button', { name: 'Mark all read' }));
+  expect(await screen.findByRole('alert')).toHaveTextContent('Unable to mark notifications as read');
+  expect(screen.getByRole('button', { name: 'Notifications, 2 unread' })).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Mark all read' }));
+  await waitFor(() => expect(screen.queryByRole('alert')).not.toBeInTheDocument());
+  await waitFor(() => expect(screen.getByRole('button', { name: 'Notifications' })).toBeInTheDocument());
+});
+
+test('Escape dismisses notifications and returns focus to the trigger', async () => {
+  render(<MemoryRouter><NotificationMenu /></MemoryRouter>);
+  const trigger = await screen.findByRole('button', { name: 'Notifications, 2 unread' });
+  fireEvent.click(trigger);
+  const action = await screen.findByRole('button', { name: 'Mark all read' });
+  action.focus();
+  fireEvent.keyDown(action, { key: 'Escape' });
+  expect(screen.queryByRole('region', { name: 'Notifications' })).not.toBeInTheDocument();
+  expect(trigger).toHaveFocus();
+});
