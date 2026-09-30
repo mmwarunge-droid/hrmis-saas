@@ -102,7 +102,7 @@ def create_notification(
     if should_email:
         db.session.flush()
         notification_id = notification.id
-        recipient = SimpleNamespace(email=user.email)
+        recipient = SimpleNamespace(id=user.id, email=user.email)
         metadata_snapshot = dict(notification.metadata_json or {})
         notification.metadata_json = {**metadata_snapshot, 'email_delivery': {'status': 'pending'}}
 
