@@ -291,6 +291,10 @@ def complete_recipient_fields(
     signature_text,
     field_values=None,
 ):
+    """Validate and fill only this recipient's assigned fields, without commit.
+
+    Identity, signature, and signing date are server-controlled; editable
+    values still require type and required-field validation."""
     if not recipient.fields:
         raise NativeSignatureError(
             'No signing fields are configured for this signatory.',
@@ -903,6 +907,11 @@ def render_signature_pdf(signature_request):
 
 
 def create_signed_document_artifact(signature_request):
+    """Reuse or render the final PDF and flush artifact metadata, without commit.
+
+    The caller holds the request lock and owns the signing transaction.
+    Rendering/storage failure must abort completion; newly written bytes
+    are registered for rollback cleanup."""
     existing = SignatureArtifact.query.filter_by(
         signature_request_id=signature_request.id,
         artifact_type='signed_document',

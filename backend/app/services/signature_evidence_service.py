@@ -236,6 +236,10 @@ def queue_signature_evidence(
 
 
 def claim_signature_evidence_jobs(limit=None):
+    """Claim due or stale evidence jobs with SKIP LOCKED.
+
+    Commits processing leases before returning request IDs so other workers
+    can claim different jobs while external downloads run."""
     now = utcnow()
     lock_timeout = int(current_app.config.get(
         'SIGNATURE_EVIDENCE_LOCK_TIMEOUT_SECONDS',

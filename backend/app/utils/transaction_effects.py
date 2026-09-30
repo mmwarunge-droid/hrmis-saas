@@ -20,10 +20,18 @@ def _register(kind, callback):
 
 
 def after_commit(callback):
+    """Register an in-process callback for the outer transaction commit.
+
+    Requires an application/session context. This is not a durable outbox:
+    process exit can lose delivery. Callbacks must handle their own errors
+    because the authoritative transaction cannot be rolled back."""
     _register('commit', callback)
 
 
 def on_rollback(callback):
+    """Register cleanup for rollback of the current transaction or savepoint.
+
+    Use for newly written artifacts, not existing files reused by a retry."""
     _register('rollback', callback)
 
 

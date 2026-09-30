@@ -1,3 +1,6 @@
+"""Poll provider evidence jobs whose leases are committed before external I/O.
+SIGTERM/SIGINT stop future loop iterations; service retry state survives restart."""
+
 import argparse
 import logging
 import signal
