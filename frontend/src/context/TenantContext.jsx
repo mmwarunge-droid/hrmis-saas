@@ -1,3 +1,7 @@
+/**
+ * Owns the platform administrator's selected organization. Switching respects
+ * unsaved workflow guards. The backend independently validates tenant access.
+ */
 import { requestWorkflowExit } from '../utils/formFeedback.js';
 import {
   createContext,

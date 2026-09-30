@@ -1,7 +1,14 @@
+/**
+ * Revision-aware server drafts for an authenticated owner. Saves are serialized;
+ * a generation counter invalidates queued writes after discard. A stored candidate
+ * must be resumed or discarded before saving. Secret-like values and files are
+ * excluded from snapshots; the server also validates payloads independently.
+ */
 import { useContext, useEffect, useRef, useState } from 'react';
 import { AuthContext } from '../../context/AuthContext.jsx';
 import { formDraftApi } from '../../api/formDraftApi.js';
 
+/** Serialize a stable comparison snapshot, omitting credentials and binary input. */
 export function draftSnapshot(data) {
   return JSON.stringify(data, (key, value) => {
     if (/password|secret|token|otp|recovery.?code|signature_image/i.test(key)) return undefined;
@@ -13,6 +20,8 @@ export function draftSnapshot(data) {
     return value;
   });
 }
+/** Persist config.data under config.key; config.onRestore receives resumed data.
+ * Returns draft actions/status. A failed save resolves false and preserves entries. */
 export default function useFormDraft(config, { paused = false } = {}) {
   const auth = useContext(AuthContext);
   const enabled = Boolean(auth?.user && config?.key);

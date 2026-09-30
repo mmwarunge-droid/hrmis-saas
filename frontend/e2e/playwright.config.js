@@ -1,3 +1,5 @@
+// Keep runs isolated: shared auth state and mutable demo records are not safe
+// for overlapping suites. Override --output for each independent local run.
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 

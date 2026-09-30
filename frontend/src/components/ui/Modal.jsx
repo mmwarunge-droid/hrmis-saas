@@ -1,3 +1,8 @@
+/**
+ * Portal dialog with focus containment, restoration, and background scroll locking.
+ * Only the topmost dialog owns keyboard closure. Workflow guards may delay or
+ * reject close while requests or unsaved changes remain.
+ */
 import { WorkflowContext } from '../forms/WorkflowContext.js';
 import WorkflowFeedback from '../forms/WorkflowFeedback.jsx';
 import { captureWorkflow, registerWorkflow, errorState } from '../../utils/formFeedback.js';

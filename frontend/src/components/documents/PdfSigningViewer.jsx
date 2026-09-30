@@ -1,3 +1,9 @@
+/**
+ * Render PDF pages with normalized field overlays and cancel work on cleanup.
+ * Vite aliases the API to the compatibility build; keep its legacy worker paired.
+ * Copy byte input before worker transfer so retries do not reuse a detached buffer.
+ * Selection callbacks identify a field; they do not persist signing state.
+ */
 import {
   useEffect,
   useMemo,
@@ -223,6 +229,8 @@ function PdfPage({
   );
 }
 
+/** Display URL or byte input with field overlays. onFieldSelect receives a field ID;
+ * fieldValues are previews owned by the caller, not persisted values. */
 export default function PdfSigningViewer({
   url,
   fields = [],

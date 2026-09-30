@@ -1,3 +1,8 @@
+/**
+ * Responsive navigation drawer. Mobile opening contains focus and locks body
+ * scrolling; Escape closes and restores focus. Entering desktop layout clears
+ * drawer state so mobile interaction locks cannot survive the breakpoint.
+ */
 import { ChevronLeft, ChevronRight, X } from 'lucide-react';
 import { useEffect, useRef } from 'react';
 import { NavLink } from 'react-router-dom';

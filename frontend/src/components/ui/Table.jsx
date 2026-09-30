@@ -1,3 +1,7 @@
+/**
+ * Shared row activation and table presentation. Nested links and controls own
+ * their click/keyboard actions so they do not also activate the containing row.
+ */
 import { ArrowDown, ArrowUp, ChevronsUpDown } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import Pagination from './Pagination.jsx';

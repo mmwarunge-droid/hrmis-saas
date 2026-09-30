@@ -1,3 +1,8 @@
+/**
+ * Coordinate form-owned requests, normalized failures, and guarded exits.
+ * Request ownership lets asynchronous API outcomes reach the initiating form
+ * before it reports success or discards unsaved entries.
+ */
 const owners = new Map();
 let current = null;
 let turn = 0;

@@ -1,3 +1,7 @@
+/**
+ * Connect workflow exit checks to data-router navigation. Forms also guard
+ * applicable anchor navigation; this component requires router blocking support.
+ */
 import { useContext, useEffect } from 'react';
 import { UNSAFE_DataRouterContext, useBlocker } from 'react-router-dom';
 import { hasUnsavedWork, requestWorkflowExit } from '../../utils/formFeedback.js';

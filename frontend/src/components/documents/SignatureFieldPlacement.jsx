@@ -1,3 +1,9 @@
+/**
+ * Edit recipient-owned field geometry in normalized page coordinates. Pointer
+ * deltas are divided by the displayed page size, keeping placement stable across
+ * zoom and responsive layouts. Parent callbacks own the recipient/field draft;
+ * the server validates geometry, recipients, and required fields on submission.
+ */
 import {
   useEffect,
   useMemo,
@@ -263,6 +269,8 @@ function PageThumbnail({
   );
 }
 
+/** Translate pointer movement into normalized geometry and notify the parent.
+ * onChange receives recipient index, field index, and a partial geometry update. */
 function FieldBox({
   field,
   fieldIndex,

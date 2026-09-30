@@ -1,3 +1,8 @@
+/**
+ * Shared mutation workflow: validation, pending requests, feedback, and drafts.
+ * Submit callbacks must await their work and report failure rather than swallowing
+ * it. Dirty navigation and modal closure remain guarded while a workflow is active.
+ */
 import { useContext, useEffect, useId, useRef, useState, useMemo } from 'react';
 import { captureWorkflow, errorState, registerWorkflow } from '../../utils/formFeedback.js';
 import WorkflowFeedback from './WorkflowFeedback.jsx';
