@@ -1,3 +1,7 @@
+"""Shared input normalization. Validation does not authorize tenant access;
+routes/services must still check the actor before using deserialized IDs.
+"""
+
 from marshmallow import Schema, fields
 
 

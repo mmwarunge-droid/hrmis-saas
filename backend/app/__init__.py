@@ -1,3 +1,6 @@
+"""Flask application composition and request lifecycle. Request metadata is
+registered before extensions so early failures retain diagnostic context."""
+
 import json
 import logging
 import os

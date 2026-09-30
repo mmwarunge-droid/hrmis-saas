@@ -1,3 +1,6 @@
+"""Account creation and password authentication with persisted lockout state.
+Password verification alone does not establish an MFA-verified session."""
+
 import secrets
 from datetime import timedelta
 

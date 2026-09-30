@@ -1,3 +1,6 @@
+"""Shared UUID, timestamp, tenant, and soft-delete columns. These mixins define
+persistence only; tenant and deleted-row filtering remain query duties."""
+
 import uuid
 from datetime import datetime, timezone
 

@@ -1,3 +1,7 @@
+"""Decimal entitlement calculations and ledger-backed accrual processing. Policy
+dates, eligibility, proration, and carryover determine earned balances; ledger
+identity prevents repeat runs from granting the same credit."""
+
 import calendar
 from datetime import date, timedelta
 from decimal import Decimal, ROUND_HALF_UP

@@ -1,3 +1,6 @@
+"""HTTP role, permission, and tenant boundaries. Tenant columns do not filter
+queries automatically; routes must select trusted tenant scope explicitly."""
+
 from functools import wraps
 
 from flask import request

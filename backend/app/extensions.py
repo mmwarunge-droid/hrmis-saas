@@ -9,7 +9,10 @@ from flask_sqlalchemy import SQLAlchemy
 
 
 class InMemoryRedis:
-    """Small Redis-compatible store used only by the isolated test config."""
+    """Process-local Redis subset for tests and explicit memory:// development.
+
+    Expiry values are stored but not enforced. This cannot validate real TTL
+    behavior or coordinate multiple processes; use Redis for those checks."""
 
     def __init__(self):
         self._values = {}

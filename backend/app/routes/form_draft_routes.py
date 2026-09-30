@@ -1,3 +1,6 @@
+"""Owner-scoped drafts with revision checks. Secret-like keys, excessive nesting,
+and oversized payloads are rejected; conflicts preserve the newer stored draft."""
+
 import json
 import re
 from uuid import UUID
