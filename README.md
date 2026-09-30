@@ -14,6 +14,10 @@ A multi-tenant HRMIS SaaS platform designed as the digital operating layer for h
 - **Database:** PostgreSQL with UUID primary keys, foreign keys, indexes, check constraints, soft deletes, and audit timestamps.
 - **Deployment:** Vercel frontend, separately hosted Flask API, PostgreSQL, and GitHub Actions CI.
 
+## Developer onboarding
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for prerequisites, disposable test environments, validation, and PR expectations. The [architecture guide](docs/DEVELOPER_ARCHITECTURE.md) explains transaction, tenant, account, signing, and deployment boundaries. [Documentation coverage](docs/DOCUMENTATION_COVERAGE.md) records the source review scope.
+
 ## Local setup
 
 ```bash
