@@ -540,9 +540,14 @@ def _mark_permanent_failure(signature_request, error):
 
 
 def process_signature_evidence(request_id):
-    signature_request = db.session.get(
-        SignatureRequest,
-        request_id,
+    # Hold the request row throughout external I/O. A time-based lease alone
+    # cannot exclude another claimant when a provider download exceeds its TTL.
+    # SKIP LOCKED claimers skip this row even after the lease becomes stale.
+    signature_request = (
+        SignatureRequest.query.filter_by(id=request_id)
+        .populate_existing()
+        .with_for_update()
+        .first()
     )
 
     if not signature_request:
@@ -551,6 +556,7 @@ def process_signature_evidence(request_id):
         )
 
     if signature_request.evidence_status == 'verified':
+        db.session.commit()
         return signature_request
 
     if signature_request.evidence_status != 'processing':
@@ -558,7 +564,25 @@ def process_signature_evidence(request_id):
             'Signature evidence job has not been claimed.',
         )
 
+    claimed_attempt = signature_request.evidence_attempts
     created_paths = []
+
+    def reload_owned_attempt():
+        # Rollback releases the I/O lock. Reacquire and fence the failure update
+        # if a stale lease was reclaimed in that small interval.
+        row = (
+            SignatureRequest.query.filter_by(id=request_id)
+            .populate_existing()
+            .with_for_update()
+            .first()
+        )
+        if row is None:
+            raise SignatureEvidenceError('Signature request does not exist.')
+        owned = (
+            row.evidence_status == 'processing'
+            and row.evidence_attempts == claimed_attempt
+        )
+        return row, owned
 
     try:
         event = _downloadable_event(signature_request)
@@ -666,11 +690,9 @@ def process_signature_evidence(request_id):
         SignatureProviderRetryableError,
     ) as exc:
         db.session.rollback()
-        signature_request = db.session.get(
-            SignatureRequest,
-            request_id,
-        )
-        _schedule_retry(signature_request, exc)
+        signature_request, owned = reload_owned_attempt()
+        if owned:
+            _schedule_retry(signature_request, exc)
         db.session.commit()
         return signature_request
     except (
@@ -687,11 +709,9 @@ def process_signature_evidence(request_id):
                     'Could not delete uncommitted evidence artifact',
                 )
 
-        signature_request = db.session.get(
-            SignatureRequest,
-            request_id,
-        )
-        _mark_permanent_failure(signature_request, exc)
+        signature_request, owned = reload_owned_attempt()
+        if owned:
+            _mark_permanent_failure(signature_request, exc)
         db.session.commit()
         return signature_request
     except Exception as exc:
@@ -708,11 +728,9 @@ def process_signature_evidence(request_id):
                     'Could not delete uncommitted evidence artifact',
                 )
 
-        signature_request = db.session.get(
-            SignatureRequest,
-            request_id,
-        )
-        _schedule_retry(signature_request, exc)
+        signature_request, owned = reload_owned_attempt()
+        if owned:
+            _schedule_retry(signature_request, exc)
         db.session.commit()
         return signature_request
 

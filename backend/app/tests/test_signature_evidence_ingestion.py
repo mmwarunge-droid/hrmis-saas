@@ -1,4 +1,5 @@
 import hashlib
+from uuid import uuid4
 
 from sqlalchemy import inspect
 
@@ -59,7 +60,10 @@ def _request_fixture(
     admin_user,
     tmp_path,
 ):
-    source = tmp_path / 'source-contract.pdf'
+    marker = uuid4().hex
+    provider_request_id = f'provider-request-{marker}'
+    provider_signer_id = f'provider-signer-{marker}'
+    source = tmp_path / f'source-contract-{marker}.pdf'
     source.write_bytes(b'%PDF-1.7 source contract')
     source_checksum = hashlib.sha256(
         source.read_bytes(),
@@ -81,7 +85,7 @@ def _request_fixture(
             title='Evidence contract',
             document_type='contract',
             original_filename='source-contract.pdf',
-            stored_filename='source-contract.pdf',
+            stored_filename=source.name,
             file_path=str(source),
             mime_type='application/pdf',
             size_bytes=source.stat().st_size,
@@ -102,7 +106,7 @@ def _request_fixture(
             status='in_progress',
             current_sequence=1,
             provider='dropbox_sign',
-            provider_request_id='provider-request-evidence',
+            provider_request_id=provider_request_id,
             provider_status='downloadable',
             provider_test_mode=False,
             assurance_level='qes',
@@ -121,7 +125,7 @@ def _request_fixture(
             role_label='Employee',
             sequence=1,
             status='signed',
-            provider_recipient_id='provider-signer-evidence',
+            provider_recipient_id=provider_signer_id,
             provider_status='signed',
             signed_at=utcnow(),
         )
@@ -131,19 +135,19 @@ def _request_fixture(
             tenant_id=tenant.id,
             signature_request_id=signature_request.id,
             provider='dropbox_sign',
-            provider_event_id='downloadable-event-1',
-            provider_request_id='provider-request-evidence',
+            provider_event_id=f'downloadable-{marker}',
+            provider_request_id=provider_request_id,
             event_type='signature_request_downloadable',
             event_time=utcnow(),
             payload_sha256='a' * 64,
             payload_json={
                 'signature_request': {
                     'signature_request_id': (
-                        'provider-request-evidence'
+                        provider_request_id
                     ),
                     'signatures': [{
                         'signature_id': (
-                            'provider-signer-evidence'
+                            provider_signer_id
                         ),
                         'signer_email_address': (
                             'signer@example.test'
