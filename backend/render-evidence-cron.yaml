@@ -182,8 +182,6 @@ services:
         value: "1800"
       - key: SIGNATURE_EVIDENCE_LOCK_TIMEOUT_SECONDS
         value: "900"
-      - key: SIGNATURE_EVIDENCE_WORKER_POLL_SECONDS
-        value: "5"
       - key: SIGNATURE_EVIDENCE_WORKER_BATCH_SIZE
         value: "10"
 
