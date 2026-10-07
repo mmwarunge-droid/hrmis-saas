@@ -33,7 +33,7 @@ The row transaction can last as long as provider/storage I/O and can delay callb
 - Production read-only aggregate job at 2026-10-07 04:42:44 UTC: evidence backlog **0**. One historical QES request has workflow status `failed`, evidence status `not_required`, and no downloadable callback. No production HR data was changed.
 - Targeted acceptance exercises one job and duplicate rerun; eleven jobs across two batches; retrieval-not-ready, no early retry, successful retry and exhaustion; fresh lease exclusion and abandoned lease recovery; concurrent runners with both fresh and expired leases.
 - PostgreSQL overlap tests use a real disposable PostgreSQL 16 instance, independent sessions and a download held open while another runner claims work. The expected result is one provider download, two artifacts, one completion event and one attempt.
-- Final worker suite: 14 targeted tests passed, including PostgreSQL cases and scheduler exit-code tests; an additional rollback/reclaim race test is validated separately. 28 related provider/QES/seal tests passed.
+- Final worker suite: 15 targeted tests passed, including PostgreSQL cases, scheduler exit-code tests and the rollback/reclaim race. 28 related provider/QES/seal tests passed.
 - Local measured one-job execution: 0.280 seconds; ten-job batch: 0.206 seconds. These use simulated provider responses and local artifact storage; they do not certify external provider or S3 latency.
 - Three fresh `python signature_evidence_worker.py --once` processes against an empty migrated local PostgreSQL database exited 0 and logged `claimed=0`: 1.088, 1.159 and 1.227 seconds (mean 1.158 seconds). Render startup duration is measured separately.
 - Ruff and diff whitespace checks pass. No browser changes are involved.
@@ -62,4 +62,12 @@ Provider references: [cron behavior and billing](https://render.com/docs/cronjob
 
 ## Execution checkpoint
 
-Pending final acceptance and replacement deployment. This document does not itself claim the original worker has been suspended or any savings realized.
+Application/test revision: `022c6ed`, published on `ops/evidence-worker-cron`. Main remains `36a52f280049fc81c1570e01f324e544c1658eff`; no API deployment was triggered. The descriptor and this checkpoint are updated in a follow-up commit on the same worker-only branch.
+
+Current worker is still running with its original `main` branch and auto-deploy configuration. The replacement was **not created**: automatic approval review rejected the Render create-service call as a production infrastructure mutation involving sensitive environment copying and requiring explicit approval. The command was blocked before execution. There is no cron service ID or live replacement execution evidence yet. No environment variables were copied and no existing service was suspended, deleted or reconfigured.
+
+The 42 existing worker environment keys were inventoried. The prepared creation copies their exact values in memory without printing or persisting secrets. Target source is `ops/evidence-worker-cron`, with automatic deployment off during this controlled rollout. No new environment group is required. Original service metadata is retained locally; no credential values are included in the repository.
+
+**GO for the tested implementation and replacement design; NO-GO for production retirement until explicit creation/cutover approval and live replacement verification.** Local one-shot timing is not a claim of measured Render cron startup or real provider download duration. The only live executions in this task were two read-only aggregate diagnostic jobs; they exited successfully. The second (`job-db2srdid0e5s73ea5amg`) confirmed zero backlog. Repeat the read-only gate immediately before the later cutover.
+
+Approval needed to create `hrmis-saas-evidence-cron` (approximately $1/month minimum), securely copy existing worker variables, verify manual and automatic runs, and then suspend—but retain—`srv-d9kh4efavr4c73d000c0`. Do not change any other infrastructure. Savings remain projected until suspension.

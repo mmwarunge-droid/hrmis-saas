@@ -8,6 +8,8 @@ services:
     plan: starter
     region: frankfurt
     rootDir: backend
+    branch: ops/evidence-worker-cron
+    autoDeploy: false
     buildCommand: pip install -r requirements.txt
     startCommand: python signature_evidence_worker.py --once
     schedule: "*/5 * * * *"
