@@ -299,6 +299,7 @@ export default function Employees() {
         </Link>
       ),
     },
+    { key: 'org_chart', label: 'Hierarchy', render: (row) => ['active', 'probation'].includes(row.employment_status) ? <Link className="text-blue-700 underline" to={`/org-chart?employee=${row.id}`}>View in Org Chart</Link> : 'Not in active chart' },
     { key: 'job_title', label: 'Job title', sortable: true, render: (row) => row.job_title || 'Not assigned' },
     { key: 'department_id', label: 'Department', sortable: true, sortValue: (row) => departmentNames[row.department_id] || '', render: (row) => departmentNames[row.department_id] || 'Unassigned' },
     { key: 'work_location', label: 'Location', sortable: true, render: (row) => row.work_location || '—' },
@@ -445,6 +446,7 @@ export default function Employees() {
                   <div><dt className="text-slate-400">Location</dt><dd className="mt-1 truncate font-semibold text-slate-700">{employee.work_location || 'Not set'}</dd></div>
                 </dl>
               </Link>
+              {['active', 'probation'].includes(employee.employment_status) && <Link className="mt-3 block text-sm text-blue-700 underline" to={`/org-chart?employee=${employee.id}`}>View in Org Chart</Link>}
             </Card>
           ))}
           </div>

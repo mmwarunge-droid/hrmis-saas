@@ -129,7 +129,13 @@ def _assert_valid_manager(employee, manager_id, tenant_id):
     if not manager_id:
         return
 
+    # Serialize manager changes per tenant so concurrent inverse assignments
+    # cannot both validate against the old graph. Held until transaction end.
+    Tenant.query.filter_by(id=tenant_id).with_for_update().one()
     manager = _assert_tenant_fk(Employee, manager_id, tenant_id, 'manager_id')
+    db.session.refresh(manager)
+    if manager.employment_status not in {'active', 'probation'}:
+        raise ValueError('The reporting manager must be active or on probation')
     visited = set()
     current = manager
 
@@ -147,7 +153,7 @@ def _assert_valid_manager(employee, manager_id, tenant_id):
         if not current.manager_id:
             break
 
-        current = Employee.query.filter_by(
+        current = Employee.query.populate_existing().filter_by(
             id=current.manager_id,
             tenant_id=tenant_id,
             deleted_at=None,

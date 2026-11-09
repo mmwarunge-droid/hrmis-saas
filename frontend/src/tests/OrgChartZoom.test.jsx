@@ -57,10 +57,10 @@ test('zooms only the organization chart canvas', async () => {
     </MemoryRouter>,
   );
 
-  await screen.findByText('Amina Otieno');
+  await screen.findByRole('button', { name: 'View Amina Otieno' });
 
   const canvas = screen.getByLabelText('Organization chart canvas');
-  const tree = canvas.querySelector('.org-tree');
+  const tree = canvas.querySelector('.org-chart-surface');
 
   expect(tree).toHaveStyle({
     transform: 'scale(1)',
@@ -100,7 +100,7 @@ test('resets the organization chart zoom to 100 percent', async () => {
     </MemoryRouter>,
   );
 
-  await screen.findByText('Amina Otieno');
+  await screen.findByRole('button', { name: 'View Amina Otieno' });
 
   await user.click(
     screen.getByRole('button', {
@@ -128,19 +128,19 @@ test('fits a wider organization chart into the viewport', async () => {
     </MemoryRouter>,
   );
 
-  await screen.findByText('Amina Otieno');
+  await screen.findByRole('button', { name: 'View Amina Otieno' });
 
   const canvas = screen.getByLabelText('Organization chart canvas');
-  const tree = canvas.querySelector('.org-tree');
+  const tree = canvas.querySelector('.org-chart-surface');
 
   Object.defineProperty(canvas, 'clientWidth', {
     configurable: true,
-    value: 600,
+    value: 300,
   });
 
-  Object.defineProperty(tree, 'scrollWidth', {
+  Object.defineProperty(canvas, 'clientHeight', {
     configurable: true,
-    value: 1200,
+    value: 1000,
   });
 
   await user.click(
@@ -149,9 +149,9 @@ test('fits a wider organization chart into the viewport', async () => {
     }),
   );
 
-  expect(screen.getByText('50%')).toBeInTheDocument();
+  expect(screen.getByText('84%')).toBeInTheDocument();
   expect(tree).toHaveStyle({
-    transform: 'scale(0.5)',
+    transform: 'scale(0.84)',
   });
 });
 
