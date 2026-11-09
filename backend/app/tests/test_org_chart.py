@@ -179,3 +179,25 @@ def test_manager_update_refreshes_chart_counts_and_keeps_job_history(client, aut
     history = client.get(f"/api/employees/{report['id']}/job-history", headers=auth_headers)
     assert history.status_code == 200
     assert leader["id"] in history.get_data(as_text=True)
+
+
+def test_profile_edit_can_retain_existing_inactive_manager(client, auth_headers, app):
+    from app.tests.test_employees import _create_employee
+
+    leader = _create_employee(client, auth_headers, employee_number="LEAD", email="lead@test.example")
+    report = _create_employee(
+        client, auth_headers, employee_number="REPORT", email="report@test.example", manager_id=leader["id"]
+    )
+    assert (
+        client.patch(
+            f"/api/employees/{leader['id']}", headers=auth_headers, json={"employment_status": "inactive"}
+        ).status_code
+        == 200
+    )
+    response = client.patch(
+        f"/api/employees/{report['id']}",
+        headers=auth_headers,
+        json={"manager_id": leader["id"], "work_location": "Mombasa"},
+    )
+    assert response.status_code == 200
+    assert response.get_json()["data"]["work_location"] == "Mombasa"

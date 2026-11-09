@@ -1,5 +1,7 @@
 # Interactive org chart implementation report — 9 November 2026
 
+The subsequent [integration review](org-chart-integration-review.md) records full-stack synthetic acceptance and fixes beyond `beec746`; it supersedes the pre-integration validation boundary below. The [PR description](org-chart-pull-request.md) is prepared locally and remains unpublished pending approval.
+
 ## Delivery and scope
 
 Implemented on dedicated branch `feat/interactive-org-chart`, based on fetched main `36a52f2`, in `/tmp/hrmis-org-chart`. The original IDE checkout and prior infrastructure-audit work are preserved. No production service, environment variable, employee record or database schema was changed. No dependency was installed into the application.

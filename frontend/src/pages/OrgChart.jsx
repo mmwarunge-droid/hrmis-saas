@@ -126,7 +126,11 @@ export default function OrgChart() {
                 .map((p) => p.id),
             ),
           );
-        setFocusId(params.get('employee') || index.roots[0] || null);
+        setFocusId(
+          index.people.has(selected)
+            ? selected
+            : params.get('employee') || index.roots[0] || null,
+        );
       })
       .catch((err) => {
         if (active)

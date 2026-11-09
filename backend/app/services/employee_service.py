@@ -126,15 +126,21 @@ def _assert_tenant_fk(model, object_id, tenant_id, field_name):
 
 
 def _assert_valid_manager(employee, manager_id, tenant_id):
+    if employee is None and not manager_id:
+        return
+    # NO KEY UPDATE serializes reporting edits without blocking foreign-key
+    # KEY SHARE checks from unrelated employee/leave/document inserts.
+    # Refresh the edited employee after waiting so history uses current state.
+    Tenant.query.filter_by(id=tenant_id).with_for_update(key_share=True).one()
+    if employee is not None:
+        db.session.refresh(employee)
     if not manager_id:
         return
 
-    # Serialize manager changes per tenant so concurrent inverse assignments
-    # cannot both validate against the old graph. Held until transaction end.
-    Tenant.query.filter_by(id=tenant_id).with_for_update().one()
     manager = _assert_tenant_fk(Employee, manager_id, tenant_id, 'manager_id')
     db.session.refresh(manager)
-    if manager.employment_status not in {'active', 'probation'}:
+    unchanged = employee is not None and str(employee.manager_id) == str(manager_id)
+    if not unchanged and manager.employment_status not in {'active', 'probation'}:
         raise ValueError('The reporting manager must be active or on probation')
     visited = set()
     current = manager
@@ -410,11 +416,17 @@ def update_employee(employee, payload, commit: bool = True):
             'department_id',
         )
     if 'manager_id' in payload:
-        _assert_valid_manager(
-            employee,
-            payload.get('manager_id'),
-            tenant_id,
-        )
+        if str(payload.get('manager_id') or '') == str(employee.manager_id or ''):
+            # Full profile forms include the unchanged manager. Treat this as
+            # a no-op, not a graph write: do not contend on the tenant lock or
+            # overwrite a concurrent reporting edit with this loaded value.
+            payload.pop('manager_id')
+        else:
+            _assert_valid_manager(
+                employee,
+                payload.get('manager_id'),
+                tenant_id,
+            )
 
     proposed_job_title = payload.get('job_title', employee.job_title)
     proposed_employment_status = payload.get(
