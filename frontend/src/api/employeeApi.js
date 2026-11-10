@@ -16,5 +16,5 @@ export const employeeApi = {
   remove: (id) => apiClient.delete(`/employees/${id}`),
   departments: (params = {}) => apiClient.get('/employees/departments', { params }),
   options: () => apiClient.get('/employees/options'),
-  orgChart: () => apiClient.get('/employees/org-chart'),
+  orgChart: (params = {}) => apiClient.get('/employees/org-chart', { params }),
 };

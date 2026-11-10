@@ -3,7 +3,7 @@ from flask_jwt_extended import current_user, jwt_required
 from marshmallow import ValidationError
 from sqlalchemy import and_, func, or_
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import selectinload
+from sqlalchemy.orm import load_only, selectinload
 
 from app.extensions import db
 from app.models import Department, Employee, JobHistory, Role, User, UserRole
@@ -419,7 +419,13 @@ def employee_options():
 def org_chart():
     employees = (
         tenant_query(Employee)
-        .options(selectinload(Employee.department))
+        .options(
+            load_only(Employee.id, Employee.tenant_id, Employee.manager_id,
+                      Employee.first_name, Employee.last_name, Employee.employee_number,
+                      Employee.profile_photo_url, Employee.job_title, Employee.department_id,
+                      Employee.work_location, Employee.employment_status, Employee.email, Employee.hire_date),
+            selectinload(Employee.department).load_only(Department.id, Department.tenant_id, Department.name),
+        )
         .filter(
             Employee.deleted_at.is_(None),
             Employee.employment_status.in_(['active', 'probation']),
@@ -428,62 +434,13 @@ def org_chart():
         .all()
     )
 
-    employees_by_id = {str(employee.id): employee for employee in employees}
-    children_by_manager = {employee_id: [] for employee_id in employees_by_id}
-    roots = []
+    from app.services.org_chart_service import build_org_chart
 
-    for employee in employees:
-        manager_id = str(employee.manager_id) if employee.manager_id else None
-        if manager_id and manager_id in employees_by_id:
-            children_by_manager[manager_id].append(employee)
-        else:
-            roots.append(employee)
-
-    visited = set()
-
-    def serialize(employee, ancestors=None):
-        ancestors = ancestors or set()
-        employee_id = str(employee.id)
-        if employee_id in ancestors:
-            return None
-
-        visited.add(employee_id)
-        next_ancestors = {*ancestors, employee_id}
-        children = []
-
-        for report in children_by_manager.get(employee_id, []):
-            node = serialize(report, next_ancestors)
-            if node is not None:
-                children.append(node)
-
-        manager = employees_by_id.get(str(employee.manager_id)) if employee.manager_id else None
-        return {
-            'id': employee_id,
-            'full_name': employee.full_name,
-            'profile_photo_url': employee.profile_photo_url,
-            'job_title': employee.job_title,
-            'department_name': employee.department.name if employee.department else None,
-            'manager_id': str(employee.manager_id) if employee.manager_id else None,
-            'manager_name': manager.full_name if manager else None,
-            'work_location': employee.work_location,
-            'employment_status': employee.employment_status,
-            'direct_report_count': len(children),
-            'children': children,
-        }
-
-    tree = [node for root in roots if (node := serialize(root)) is not None]
-
-    # Defensive fallback for legacy cyclic data: surface any unvisited people
-    # instead of returning a blank chart.
-    for employee in employees:
-        if str(employee.id) not in visited:
-            node = serialize(employee)
-            if node is not None:
-                tree.append(node)
-
-    def depth(node):
-        return 1 + max((depth(child) for child in node['children']), default=0)
-
+    result = build_org_chart(employees)
+    if request.args.get('format') == 'flat':
+        result.pop('roots')
+    else:
+        result.pop('items')
     inactive_positions = (
         tenant_query(Employee)
         .options(selectinload(Employee.department))
@@ -499,23 +456,15 @@ def org_chart():
         {
             'id': f'vacant:{employee.id}',
             'job_title': employee.job_title,
-            'department_name': employee.department.name if employee.department else None,
+            'department_name': employee.department.name if employee.department and employee.department.tenant_id == employee.tenant_id else None,
             'former_employee_id': str(employee.id),
             'status': 'vacant',
         }
         for employee in inactive_positions
     ]
 
-    return success({
-        'roots': tree,
-        'vacancies': vacancies,
-        'meta': {
-            'total': len(employees),
-            'root_count': len(tree),
-            'manager_count': sum(bool(children_by_manager[employee_id]) for employee_id in employees_by_id),
-            'max_depth': max((depth(root) for root in tree), default=0),
-        },
-    })
+    result['vacancies'] = vacancies
+    return success(result)
 
 
 @employee_bp.get('/departments')
