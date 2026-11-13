@@ -44,7 +44,7 @@ describe('MyProfile', () => {
     });
   });
 
-  it('lets an employee update details and upload a profile photo', async () => {
+  it('lets an employee update details and upload profile photo and cover images', async () => {
     render(
       <MemoryRouter>
         <MyProfile />
@@ -73,5 +73,10 @@ describe('MyProfile', () => {
     await waitFor(() => {
       expect(employeeHomeApi.uploadProfileImage).toHaveBeenCalledWith('photo', photo);
     });
+
+    await waitFor(() => expect(screen.getByLabelText('Upload profile cover')).not.toBeDisabled());
+    const cover = new File(['cover'], 'cover.png', { type: 'image/png' });
+    fireEvent.change(screen.getByLabelText('Upload profile cover'), { target: { files: [cover] } });
+    await waitFor(() => expect(employeeHomeApi.uploadProfileImage).toHaveBeenCalledWith('cover', cover));
   });
 });

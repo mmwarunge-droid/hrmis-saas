@@ -1,3 +1,4 @@
+import ProfileHeader from '../components/employees/ProfileHeader.jsx';
 import Form from '../components/forms/Form.jsx';
 import { useEffect, useState } from 'react';
 import {
@@ -147,16 +148,33 @@ export default function MyProfile() {
       {error && <Alert type="error">{error}</Alert>}
       {message && <Alert type="success">{message}</Alert>}
 
-      <Card padded={false} className="overflow-hidden">
-        <div
-          className="relative h-40 bg-gradient-to-br from-slate-950 via-blue-950 to-blue-800"
-          style={cover ? {
-            backgroundImage: `linear-gradient(110deg, rgba(2,6,23,.72), rgba(8,47,73,.32)), url(${cover})`,
-            backgroundPosition: 'center',
-            backgroundSize: 'cover',
-          } : undefined}
-        >
-          <label className="absolute right-5 top-5 cursor-pointer rounded-lg border border-white/20 bg-slate-950/60 px-4 py-2 text-sm font-semibold text-white backdrop-blur transition hover:bg-slate-950/80">
+      <ProfileHeader
+        coverClassName="bg-gradient-to-br from-slate-950 via-blue-950 to-blue-800"
+        coverStyle={cover ? {
+          backgroundImage: `linear-gradient(110deg, rgba(2,6,23,.72), rgba(8,47,73,.32)), url(${cover})`,
+          backgroundPosition: 'center',
+          backgroundSize: 'cover',
+        } : undefined}
+        avatarSize="7rem"
+        avatar={<>
+          {personImage(viewer)}
+          <label className="absolute -bottom-2 -right-2 grid h-10 w-10 cursor-pointer place-items-center rounded-lg bg-blue-700 text-white shadow-lg transition hover:bg-blue-600 focus-within:ring-4 focus-within:ring-blue-200">
+            <input
+              aria-label="Upload profile photo"
+              type="file"
+              accept="image/png,image/jpeg,image/webp"
+              className="sr-only"
+              disabled={Boolean(uploading)}
+              onChange={upload('photo')}
+            />
+            <Camera size={17} />
+          </label>
+        </>}
+        eyebrow="My profile"
+        name={viewer.full_name}
+        subtitle={<>{viewer.job_title || 'Employee'}{viewer.department_name ? ` · ${viewer.department_name}` : ''}</>}
+        actions={<>
+          <label className="relative inline-flex min-h-10 cursor-pointer items-center rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-800 transition hover:bg-slate-50 focus-within:ring-4 focus-within:ring-blue-200">
             <input
               aria-label="Upload profile cover"
               type="file"
@@ -170,44 +188,11 @@ export default function MyProfile() {
               {uploading === 'cover' ? 'Uploading…' : 'Change cover'}
             </span>
           </label>
-        </div>
-
-        <div className="relative px-6 pb-6 md:px-8">
-          <div className="-mt-14 flex flex-wrap items-end justify-between gap-5">
-            <div className="flex flex-wrap items-end gap-5">
-              <div className="relative">
-                {personImage(viewer)}
-                <label className="absolute -bottom-2 -right-2 grid h-10 w-10 cursor-pointer place-items-center rounded-lg bg-blue-700 text-white shadow-lg transition hover:bg-blue-600">
-                  <input
-                    aria-label="Upload profile photo"
-                    type="file"
-                    accept="image/png,image/jpeg,image/webp"
-                    className="sr-only"
-                    disabled={Boolean(uploading)}
-                    onChange={upload('photo')}
-                  />
-                  <Camera size={17} />
-                </label>
-              </div>
-              <div className="pb-1">
-                <p className="text-xs font-bold uppercase tracking-[0.18em] text-blue-700">
-                  My profile
-                </p>
-                <h1 className="mt-1 text-3xl font-bold text-slate-950">{viewer.full_name}</h1>
-                <p className="mt-1 text-sm text-slate-500">
-                  {viewer.job_title || 'Employee'}
-                  {viewer.department_name ? ` · ${viewer.department_name}` : ''}
-                </p>
-              </div>
-            </div>
-            <Link to={`/employees/${viewer.id}`}>
-              <Button variant="secondary">
-                <ExternalLink size={16} /> View public profile
-              </Button>
-            </Link>
-          </div>
-        </div>
-      </Card>
+          <Button as={Link} to={`/employees/${viewer.id}`} variant="secondary">
+            <ExternalLink size={16} /> View public profile
+          </Button>
+        </>}
+      />
 
       <Form draft={{ key: `profile.${viewer?.id || 'me'}`, title: 'My profile', data: form, onRestore: setForm }} onSubmit={save} className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
         <Card>
