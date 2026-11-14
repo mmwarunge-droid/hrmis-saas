@@ -13,6 +13,7 @@ import { Link } from 'react-router-dom';
 import { employeeHomeApi } from '../api/employeeHomeApi.js';
 import Alert from '../components/ui/Alert.jsx';
 import Avatar from '../components/ui/Avatar.jsx';
+import Badge from '../components/ui/Badge.jsx';
 import Button from '../components/ui/Button.jsx';
 import Card from '../components/ui/Card.jsx';
 import Input from '../components/ui/Input.jsx';
@@ -172,6 +173,11 @@ export default function MyProfile() {
         </>}
         eyebrow="My profile"
         name={viewer.full_name}
+        status={viewer.employment_status ? (
+          <Badge tone={{ active: 'green', probation: 'amber', terminated: 'red' }[viewer.employment_status] || 'slate'}>
+            {viewer.employment_status}
+          </Badge>
+        ) : null}
         subtitle={<>{viewer.job_title || 'Employee'}{viewer.department_name ? ` · ${viewer.department_name}` : ''}</>}
         actions={<>
           <label className="relative inline-flex min-h-10 cursor-pointer items-center rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-800 transition hover:bg-slate-50 focus-within:ring-4 focus-within:ring-blue-200">

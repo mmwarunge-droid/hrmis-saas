@@ -21,6 +21,7 @@ const viewer = {
   email: 'amina@example.test',
   phone: '',
   job_title: 'Operations Analyst',
+  employment_status: 'active',
   department_name: 'Operations',
   work_location: 'Nairobi',
   preferred_name: '',
@@ -53,6 +54,8 @@ describe('MyProfile', () => {
 
     expect(await screen.findByRole('heading', { name: 'Amina Otieno' }))
       .toBeInTheDocument();
+
+    expect(screen.getByText('active').closest('[data-profile-identity]')).not.toBeNull();
 
     fireEvent.change(screen.getByLabelText('Preferred name'), {
       target: { value: 'Mina' },

@@ -5,6 +5,12 @@ import { join } from 'node:path';
 import { mockProfile } from './fixtures.js';
 import { verify } from './geometry.js';
 
+const baseURL = new URL(process.env.E2E_BASE_URL || 'http://localhost:5193');
+if (!['localhost', '127.0.0.1'].includes(baseURL.hostname)) {
+  throw new Error('Profile zoom tests require a disposable loopback server');
+}
+const tabPattern = `${baseURL.origin}/*`;
+
 for (const scale of [1.25, 1.5, 2]) {
   test(`native Chromium tab zoom ${scale * 100}% keeps both profile headers below their covers`, async () => {
     // A temporary local-only extension invokes native browser zoom, not CSS zoom,
@@ -12,7 +18,7 @@ for (const scale of [1.25, 1.5, 2]) {
     const root = mkdtempSync(join(tmpdir(), 'profile-zoom-'));
     const extension = join(root, 'extension');
     mkdirSync(extension);
-    writeFileSync(join(extension, 'manifest.json'), JSON.stringify({ manifest_version: 3, name: 'Local profile zoom check', version: '1.0', permissions: ['tabs'], host_permissions: ['http://localhost:5193/*'], background: { service_worker: 'background.js' } }));
+    writeFileSync(join(extension, 'manifest.json'), JSON.stringify({ manifest_version: 3, name: 'Local profile zoom check', version: '1.0', permissions: ['tabs'], host_permissions: [tabPattern], background: { service_worker: 'background.js' } }));
     writeFileSync(join(extension, 'background.js'), 'chrome.runtime.onInstalled.addListener(() => {});');
     let context;
     try {
@@ -24,18 +30,18 @@ for (const scale of [1.25, 1.5, 2]) {
       const page = await context.newPage();
       await mockProfile(page, { full_name: 'Mary Example with a long family name for zoom testing', job_title: 'Senior People Operations and Organizational Development Specialist' });
       for (const path of ['/employees/synthetic-person', '/profile']) {
-        await page.goto(`http://localhost:5193${path}`);
-        await worker.evaluate(async () => {
-          const [tab] = await chrome.tabs.query({ url: 'http://localhost:5193/*' });
+        await page.goto(`${baseURL.origin}${path}`);
+        await worker.evaluate(async (pattern) => {
+          const [tab] = await chrome.tabs.query({ url: pattern });
           await chrome.tabs.setZoom(tab.id, 1);
-        });
+        }, tabPattern);
         await expect.poll(() => page.evaluate(() => devicePixelRatio)).toBe(1);
         const normalWidth = await page.evaluate(() => innerWidth);
-        const applied = await worker.evaluate(async (zoom) => {
-          const [tab] = await chrome.tabs.query({ url: 'http://localhost:5193/*' });
+        const applied = await worker.evaluate(async ({ zoom, pattern }) => {
+          const [tab] = await chrome.tabs.query({ url: pattern });
           await chrome.tabs.setZoom(tab.id, zoom);
           return chrome.tabs.getZoom(tab.id);
-        }, scale);
+        }, { zoom: scale, pattern: tabPattern });
         expect(applied).toBe(scale);
         await expect.poll(() => page.evaluate(() => devicePixelRatio)).toBe(scale);
         expect(Math.abs(await page.evaluate(() => innerWidth) - normalWidth / scale)).toBeLessThanOrEqual(2);

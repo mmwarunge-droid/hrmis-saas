@@ -24,6 +24,7 @@ for (const path of ['/employees/synthetic-person', '/profile']) {
         await mockProfile(page, variant.data, variant.readOnly, variant.tenantCover);
         await page.goto(path);
         const header = await verify(page);
+        await expect(header.locator('[data-profile-identity]').getByText(variant.data.employment_status || 'active', { exact: true })).toBeVisible();
         if (path.startsWith('/employees')) {
           await expect(header.getByRole('button', { name: 'Edit employee' })).toHaveCount(variant.readOnly ? 0 : 1);
           await expect(header.getByRole('button', { name: 'Provision access' })).toHaveCount(variant.readOnly ? 0 : 1);

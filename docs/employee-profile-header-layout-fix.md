@@ -51,7 +51,7 @@ The native-zoom tests use a temporary local-only Chromium extension to call the 
 
 ## Release boundary
 
-No code was pushed, merged or deployed. No production employee records, tenant settings, database schema, backend code or infrastructure was changed. Existing IDE modifications and PR #78 remain untouched. Additional recurring infrastructure cost: **$0/month**. Reverting the frontend changes restores the prior layout without any data or schema rollback.
+At the 13 November implementation checkpoint, no code was pushed, merged or deployed. No production employee records, tenant settings, database schema, backend code or infrastructure was changed. Existing IDE modifications and PR #78 remain untouched. Additional recurring infrastructure cost: **$0/month**. Reverting the frontend changes restores the prior layout without any data or schema rollback.
 
 
 ## Final validation and screenshots
@@ -72,3 +72,14 @@ No code was pushed, merged or deployed. No production employee records, tenant s
 Modified application paths: `frontend/src/components/employees/ProfileHeader.jsx`, its scoped `ProfileHeader.css`, and `frontend/src/pages/{EmployeeDetails,MyProfile,EmployeeHome}.jsx`. Test changes: `frontend/src/tests/{ProfileHeader,MyProfile}.test.jsx`, `frontend/e2e/profile-header.config.js`, and `frontend/e2e/profile-header/{fixtures,geometry,layout.spec,zoom.spec}.js`. This report and the synthetic screenshots complete the review artifacts.
 
 The original reference screenshot was described in the task but not supplied as an image file; before/after evidence comes from the repository's actual UI. Visual and mocked interaction verification does not certify production authentication, backend storage writes, real-device touch behavior, Safari/iOS or a complete accessibility audit. No separate native localization behavior exists to certify. **Ready for review; publication and deployment require explicit approval.**
+
+
+## Publication preparation — 14 November 2026
+
+Main remains `36a52f2`; PR #78 is still open at `7ad2941`. A temporary `git merge-tree` combination with the header implementation found no conflicts and passed two synthetic browser journeys from the new org-chart details panel into EmployeeDetails at 390px and 1440px. This did not merge either branch or change the org-chart PR. Three native-zoom scenarios also passed against that combined tree.
+
+The existing Browser Acceptance workflow now runs the dedicated 23-test profile geometry/zoom suite after its normal acceptance suite, using the already configured `E2E_BASE_URL` and existing local CI server. No hosting service, production setting, dependency or recurring cost is added. The test extension remains restricted to loopback URLs. Remote results will be recorded in the pull request.
+
+The publication request explicitly requires status badges on both profiles. MyProfile now renders the existing `viewer.employment_status` field through the shared Badge component (active/probation/terminated colors match EmployeeDetails); absent status is omitted rather than fabricated. No backend or authorization change is involved. The browser matrix now explicitly requires the correct identity badge on both pages.
+
+Publication follow-up validation: all 25 combined-tree browser scenarios passed (23 header scenarios plus 2 org-chart navigation scenarios), along with three affected unit tests and ESLint. MyProfile screenshots were refreshed to include its status badge. These checks use synthetic API fixtures; no production records were accessed.
