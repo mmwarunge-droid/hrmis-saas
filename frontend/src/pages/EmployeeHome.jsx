@@ -483,9 +483,9 @@ export default function EmployeeHome() {
           </div>
 
           <div className="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-white/10 bg-white/10 p-4 backdrop-blur-md">
-            <div className="flex items-center gap-3">
+            <div className="flex min-w-0 max-w-full flex-wrap items-center gap-3">
               <PersonAvatar person={viewer} size="lg" />
-              <div>
+              <div className="min-w-0 [overflow-wrap:anywhere]">
                 <p className="font-bold">{viewer.full_name}</p>
                 <p className="text-sm text-slate-200">{viewer.job_title || 'Employee'}</p>
               </div>

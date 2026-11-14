@@ -1,3 +1,4 @@
+import ProfileHeader from '../components/employees/ProfileHeader.jsx';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Briefcase,
@@ -350,53 +351,38 @@ export default function EmployeeDetails() {
       {error && <Alert type="error">{error}</Alert>}
       {success && <Alert type="success">{success}</Alert>}
 
-      <Card padded={false} className="overflow-hidden">
-        <div
-          className="h-32 bg-gradient-to-r from-blue-800 via-blue-700 to-sky-600 md:h-40"
-          style={employee.profile_cover_url ? {
-            backgroundImage: `linear-gradient(90deg, rgba(30,64,175,.55), rgba(3,105,161,.25)), url(${employee.profile_cover_url})`,
-            backgroundPosition: 'center',
-            backgroundSize: 'cover',
-          } : undefined}
-        />
-        <div className="px-5 md:px-6">
-          <div className="-mt-10 flex flex-col gap-4 pb-5 sm:flex-row sm:items-end sm:justify-between">
-            <div className="flex min-w-0 items-end gap-4">
-              <Avatar name={employee.full_name} src={employee.profile_photo_url} size="xl" className="ring-4 ring-white" />
-              <div className="min-w-0 pb-1">
-                <div className="flex flex-wrap items-center gap-2">
-                  <h1 className="truncate text-2xl font-bold tracking-[-0.025em] text-slate-950">{employee.full_name}</h1>
-                  <Badge tone={toneForStatus(employee.employment_status)}>{employee.employment_status}</Badge>
-                </div>
-                <p className="mt-1 truncate text-sm font-medium text-slate-600">
-                  {employee.job_title || 'Role not assigned'}
-                  {departmentNames[employee.department_id] ? ` · ${departmentNames[employee.department_id]}` : ''}
-                </p>
-              </div>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {!employee.user_id && canProvisionAccess && employee.employment_status !== 'terminated' && (
-                <>
-                  <Button variant="secondary" onClick={() => setAccessOpen(true)}><KeyRound size={15} /> Provision access</Button>
-                  <Button variant="ghost" onClick={openLink}><UserRoundCheck size={15} /> Link existing</Button>
-                </>
-              )}
-              {hasPermission('employee:update') && (
-                <Button
-                  onClick={() => {
-                    setFormError('');
-                    setDuplicateJobTitleConfirmation(null);
-                    setOpen(true);
-                  }}
-                >
-                  <Pencil size={15} /> Edit employee
-                </Button>
-              )}
-            </div>
-          </div>
-          <Tabs items={tabs} value={activeTab} onChange={setTab} ariaLabel="Employee profile sections" idPrefix="employee-sections" />
-        </div>
-      </Card>
+      <ProfileHeader
+        coverClassName="bg-gradient-to-r from-blue-800 via-blue-700 to-sky-600"
+        coverStyle={employee.profile_cover_url ? {
+          backgroundImage: `linear-gradient(90deg, rgba(30,64,175,.55), rgba(3,105,161,.25)), url(${employee.profile_cover_url})`,
+          backgroundPosition: 'center',
+          backgroundSize: 'cover',
+        } : undefined}
+        avatar={<Avatar name={employee.full_name} src={employee.profile_photo_url} size="xl" className="ring-4 ring-white" />}
+        name={employee.full_name}
+        status={<Badge tone={toneForStatus(employee.employment_status)}>{employee.employment_status}</Badge>}
+        subtitle={<>{employee.job_title || 'Role not assigned'}{departmentNames[employee.department_id] ? ` · ${departmentNames[employee.department_id]}` : ''}</>}
+        actions={<>
+          {!employee.user_id && canProvisionAccess && employee.employment_status !== 'terminated' && (
+            <>
+              <Button variant="secondary" onClick={() => setAccessOpen(true)}><KeyRound size={15} /> Provision access</Button>
+              <Button variant="ghost" onClick={openLink}><UserRoundCheck size={15} /> Link existing</Button>
+            </>
+          )}
+          {hasPermission('employee:update') && (
+            <Button
+              onClick={() => {
+                setFormError('');
+                setDuplicateJobTitleConfirmation(null);
+                setOpen(true);
+              }}
+            >
+              <Pencil size={15} /> Edit employee
+            </Button>
+          )}
+        </>}
+        tabs={<Tabs items={tabs} value={activeTab} onChange={setTab} ariaLabel="Employee profile sections" idPrefix="employee-sections" />}
+      />
 
       <div className="grid gap-5 lg:grid-cols-[260px_minmax(0,1fr)]">
         <aside className="space-y-4">
