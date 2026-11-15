@@ -3,6 +3,7 @@ from io import BytesIO
 
 from app.extensions import db
 from app.models import OnboardingResource, Tenant
+from app.models.base import utcnow
 
 
 def _minimal_mp4(duration_seconds):
@@ -389,7 +390,8 @@ def test_training_retake_reuses_content_and_preserves_attempt_history(
         headers=auth_headers,
         json={
             'reason': 'Annual policy refresh',
-            'due_date': '2026-09-30',
+            # Keep this pending-retake scenario independent of the calendar.
+            'due_date': (utcnow().date() + timedelta(days=30)).isoformat(),
         },
     )
     assert retake.status_code == 201, retake.get_json()
