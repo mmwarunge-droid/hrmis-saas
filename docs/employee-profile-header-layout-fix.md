@@ -83,3 +83,9 @@ The existing Browser Acceptance workflow now runs the dedicated 23-test profile 
 The publication request explicitly requires status badges on both profiles. MyProfile now renders the existing `viewer.employment_status` field through the shared Badge component (active/probation/terminated colors match EmployeeDetails); absent status is omitted rather than fabricated. No backend or authorization change is involved. The browser matrix now explicitly requires the correct identity badge on both pages.
 
 Publication follow-up validation: all 25 combined-tree browser scenarios passed (23 header scenarios plus 2 org-chart navigation scenarios), along with three affected unit tests and ESLint. MyProfile screenshots were refreshed to include its status badge. These checks use synthetic API fixtures; no production records were accessed.
+
+## Mobile integration test correction — 18 November 2026
+
+The additional Org Chart → Employee Details geometry check compared viewport coordinates sampled at different times during smooth scrolling. The helper now takes one atomic geometry snapshot after bounded layout readiness; strict cover-boundary assertions and the existing tolerance remain unchanged. No application CSS, components, backend behavior, permissions or employee data changed.
+
+The existing header CI suite now discovers the mobile/desktop chart-to-profile checks, a smooth-scroll regression that also rejects a deliberate real overlap, and a bounded diagnostic-timeout negative control. See [the investigation report](profile-header-mobile-investigation.md) for reproduction limits, frame measurements, screenshot and final validation. Publication of this correction is authorized; merging and production deployment remain subject to separate explicit approval.
