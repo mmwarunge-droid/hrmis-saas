@@ -117,6 +117,9 @@ jobs:
         env:
           E2E_DEMO_PASSWORD: BrowserAcceptance2026!
         run: npm test
+      - name: Run profile header geometry and native zoom checks
+        working-directory: frontend/e2e
+        run: npx playwright test --config profile-header.config.js
       - name: Upload browser artifacts
         if: failure()
         uses: actions/upload-artifact@v4
@@ -125,5 +128,6 @@ jobs:
           path: |
             frontend/e2e/test-results
             frontend/e2e/playwright-report
+            /tmp/hrmis-profile-header-results
             /tmp/kinetic-api.log
             /tmp/kinetic-frontend.log

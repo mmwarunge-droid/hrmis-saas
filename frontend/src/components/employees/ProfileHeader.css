@@ -1,0 +1,9 @@
+/* Scoped to profile actions, including caller-supplied links/upload labels. */
+.profile-header [data-profile-actions] > * {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+.profile-header [data-profile-actions] svg {
+  flex-shrink: 0;
+}

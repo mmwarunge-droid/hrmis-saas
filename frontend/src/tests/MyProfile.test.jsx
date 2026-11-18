@@ -21,6 +21,7 @@ const viewer = {
   email: 'amina@example.test',
   phone: '',
   job_title: 'Operations Analyst',
+  employment_status: 'active',
   department_name: 'Operations',
   work_location: 'Nairobi',
   preferred_name: '',
@@ -44,7 +45,7 @@ describe('MyProfile', () => {
     });
   });
 
-  it('lets an employee update details and upload a profile photo', async () => {
+  it('lets an employee update details and upload profile photo and cover images', async () => {
     render(
       <MemoryRouter>
         <MyProfile />
@@ -53,6 +54,8 @@ describe('MyProfile', () => {
 
     expect(await screen.findByRole('heading', { name: 'Amina Otieno' }))
       .toBeInTheDocument();
+
+    expect(screen.getByText('active').closest('[data-profile-identity]')).not.toBeNull();
 
     fireEvent.change(screen.getByLabelText('Preferred name'), {
       target: { value: 'Mina' },
@@ -73,5 +76,10 @@ describe('MyProfile', () => {
     await waitFor(() => {
       expect(employeeHomeApi.uploadProfileImage).toHaveBeenCalledWith('photo', photo);
     });
+
+    await waitFor(() => expect(screen.getByLabelText('Upload profile cover')).not.toBeDisabled());
+    const cover = new File(['cover'], 'cover.png', { type: 'image/png' });
+    fireEvent.change(screen.getByLabelText('Upload profile cover'), { target: { files: [cover] } });
+    await waitFor(() => expect(employeeHomeApi.uploadProfileImage).toHaveBeenCalledWith('cover', cover));
   });
 });
